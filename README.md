@@ -428,11 +428,11 @@ The system can generate a low-stock notification when inventory falls below the 
 
 # 🏭 Equipment History
 
-Every piece of equipment has its own maintenance history.
+Every piece of equipment has its own maintenance history..
 
 Example:
 
-```text
+``text
 CNC-04
 
 September 21
@@ -503,7 +503,7 @@ Technical Documentation
 
 EquipFixAI can maintain different versions of documents.
 
-Example:
+Examples:
 
 ```text
 CNC-04 Manual
@@ -1328,3 +1328,6 @@ WebSockets
 ## 💡 One-Line Project Description
 
 > **EquipFixAI is a RAG-powered industrial maintenance management platform that provides source-referenced AI troubleshooting while connecting equipment failures, work orders, technicians, maintenance records, spare parts, safety procedures, and real-time operational analytics in one system.**
+
+
+*Updated by AI*
