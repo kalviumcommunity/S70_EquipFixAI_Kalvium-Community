@@ -1,0 +1,17 @@
+--- Page 1 ---
+# ROBOTIC WELDER CELL DAILY INSPECTION & CALIBRATION (SOP-ROB-01)
+Equipment: 6-Axis Articulated Robotic Welding Cell (ROBOT-01)
+Document ID: SOP-WELD-2026-V1
+Classification: Standard Operating Procedure
+
+SECTION 1: DAILY CELL INSPECTION & TORCH MAINTENANCE
+1. Inspect torch tip nozzle for spatter accumulation. Clean with anti-spatter reamer and apply ceramic nozzle shield.
+2. Verify contact tip diameter (Part: TIP-WELD-045). If bore elongation exceeds 1.4 mm, replace contact tip immediately.
+3. Check wire feed drive rolls tension (gauge setting: 3.5 bar). Inspect guide liner for copper dusting or kinked wire.
+4. Verify shielding gas flow rate: 18 to 22 CFH (75/25 Argon/CO2 mixture).
+
+--- Page 5 ---
+SECTION 2: CALIBRATION & TCP (TOOL CENTER POINT) ALIGNMENT
+1. Mount pointer fixture to teach tool center point.
+2. Run TCP automated calibration routine at 10% velocity override.
+3. Verify positional repeat accuracy is within +/- 0.08 mm. If deviation exceeds 0.15 mm, perform 6-axis motor zeroing calibration.

@@ -1,0 +1,53 @@
+--- Page 1 ---
+# CNC-04 HIGH-PRECISION SPINDLE UNIT OPERATION & MAINTENANCE MANUAL
+Model Series: CNC-04-MAX
+Manufacturer: Industrial Precision Machining Corp
+Document Code: DOC-MAN-CNC04-2026
+Version: 1.2 (Approved)
+
+SECTION 1: SYSTEM OVERVIEW AND OPERATIONAL SPECIFICATIONS
+The CNC-04 High-Precision Vertical Machining Center is equipped with a direct-drive 15,000 RPM cartridge spindle. 
+The spindle assembly consists of hybrid ceramic angular contact ball bearings, dual labyrinth air-purged seals, 
+and an integrated thermistor loop for continuous temperature monitoring.
+
+Operating Parameters:
+- Maximum Rated Spindle Speed: 15,000 RPM
+- Continuous Power Output: 22 kW
+- Nominal Bearing Operating Temperature: 28°C - 42°C
+- Maximum Allowable Spindle Runout (at spindle nose): 0.003 mm
+- Required Coolant Flow: Minimum 15 L/min at 3.5 bar
+
+--- Page 12 ---
+SECTION 4: DIAGNOSTIC ALARMS AND ERROR CODES
+
+### Error Code E-204: Spindle Bearing Over-Temperature & Excessive Vibration
+Description:
+The spindle diagnostic module triggers Alarm E-204 when the integrated PT100 thermistor registers a temperature 
+exceeding 68°C for more than 4 seconds, or when accelerometer vibrations exceed 4.5 mm/s RMS.
+
+Root Causes:
+1. Spindle bearing race degradation, brinelling, or cage fracture due to operational fatigue or heavy shock loads.
+2. Contamination of spindle bearing grease reservoir by water-soluble cutting coolant due to failed labyrinth air-seal pressure.
+3. Lack of lubrication or blockage in the automatic grease dispenser unit (ISO VG 68 synthetic spindle grease).
+4. Tool holder unbalance exceeding ISO 1940 Grade G2.5 at 12,000 RPM.
+
+--- Page 24 ---
+SECTION 6: STEP-BY-STEP REPAIR & BEARING REPLACEMENT PROCEDURE
+
+For Error Code E-204 or bearing mechanical seizure, perform the following repair sequence:
+Step 1: Perform complete electrical and pneumatic Lockout/Tagout according to Plant Safety SOP SP-12 before disassembling housing.
+Step 2: Unclamp tool holder, disconnect spindle cooling lines, and drain residual coolant from the jacket.
+Step 3: Remove the 8 front flange hex bolts using a 6mm Allen socket.
+Step 4: Mount the hydraulic puller tool (Tool Code: PULL-CNC04) and extract the front bearing retainer collar.
+Step 5: Inspect spindle shaft for runout or scoring. Measure runout using a 0.001mm dial test indicator. Maximum allowable shaft runout is 0.005 mm. If runout exceeds 0.008 mm, the spindle shaft must be re-ground.
+Step 6: Install replacement matched bearing set (Spare Part: BRG-204-SKF, Matched Duplex Angular Contact Bearing Set).
+Step 7: Re-grease bearings with precisely 4.2 grams of Klüberplex BEM 34-132 high-speed grease.
+Step 8: Reinstall front flange bolts. Torque bolts in a criss-cross star pattern in two stages: initial torque to 20 Nm, final torque to 45 Nm.
+Step 9: Reconnect thermistor harness TH-1. Verify sensor resistance is nominal 10.0 kΩ at 25°C ambient.
+
+--- Page 42 ---
+SECTION 9: PREVENTIVE MAINTENANCE SCHEDULE & TOLERANCES
+- Every 200 Operating Hours: Inspect air-seal pressure regulator (minimum 0.25 MPa clean dry air required).
+- Every 1,000 Operating Hours: Spindle vibration spectrum analysis (vibration velocity RMS must remain < 1.8 mm/s).
+- Every 4,000 Operating Hours: Complete bearing runout inspection and lubrication reservoir flush.
+- Lubrication Specification: Mobil Velocite No. 6 or Klüberplex BEM 34-132.
