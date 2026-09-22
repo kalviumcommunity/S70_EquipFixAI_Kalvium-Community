@@ -1,0 +1,20 @@
+--- Page 1 ---
+# HYDRAULIC STAMPING PRESS TROUBLESHOOTING GUIDE (PRESS-01)
+Equipment: 200-Ton Hydraulic Stamping Press
+Document ID: TS-PRESS-2026-V1
+Classification: Troubleshooting Guide & Diagnostics
+
+SECTION 1: HYDRAULIC PRESSURE LOSS AND CYCLE TIME ANOMALIES
+Symptom: Ram fails to achieve full 200-ton tonnage or ram extension stroke stalls midway.
+
+Root Causes:
+1. Main proportional pressure relief valve spool binding due to particulate contamination in hydraulic oil (ISO 4406 cleanliness class > 19/17/14).
+2. Piston seal extrusion or degradation on the main cylinder, leading to internal bypass oil leakage.
+3. Variable displacement axial piston pump cavitation caused by clogged suction strainer or aerated oil reservoir.
+
+Recommended Checks & Corrective Actions:
+1. ⚠️ WARNING: Depressurize high-pressure hydraulic accumulator before loosening gauge ports.
+2. Install 0-400 bar digital test pressure gauge on primary manifold test port TP-1.
+3. Measure holding pressure during clamping stroke. Minimum acceptable pressure is 210 bar.
+4. If pressure drops below 180 bar, inspect proportional relief valve VR-1 and flush valve spool with mineral spirits.
+5. Inspect return line filter differential pressure indicator; replace 10-micron filter element (Part: FLT-HYD-10U) if red flag is raised.

@@ -1,0 +1,34 @@
+--- Page 1 ---
+# PLANT SAFETY STANDARD OPERATING PROCEDURE (SOP-SP-12)
+Title: Hazardous Energy Control & Lockout/Tagout (LOTO) for Machine Tool Spindle & Drive Systems
+Department: Environmental Health & Safety (EHS) / Plant Maintenance
+Document ID: SOP-EHS-SP12-2026
+Compliance: OSHA 29 CFR 1910.147 / ISO 14118
+
+SECTION 1: MANDATORY SAFETY PREREQUISITES & SCOPE
+This safety procedure applies to all maintenance technicians, electricians, and supervisors performing mechanical disassembly, 
+spindle replacement, belt adjustments, or electrical troubleshooting on CNC machining centers (including CNC-01, CNC-02, CNC-04).
+
+⚠️ DANGER: HIGH VOLTAGE AND STORED MECHANICAL HAZARD
+CNC spindle motors operate at 480V 3-Phase AC power and retain stored electrical charge in DC-bus capacitor banks for up to 10 minutes 
+after power cutoff. High-pressure pneumatic counterbalances also maintain stored kinetic energy. 
+Failure to follow Lockout/Tagout will result in electrocution, crushing injury, or severe limb amputation.
+
+--- Page 3 ---
+SECTION 2: REQUIRED PERSONAL PROTECTIVE EQUIPMENT (PPE)
+All personnel entering the spindle maintenance boundary must wear:
+1. ANSI Z87.1 certified impact-resistant safety glasses with side shields.
+2. EN 388 Level 4 cut-resistant nitrile-coated mechanical gloves.
+3. Steel-toe safety boots with ASTM F2413 electrical hazard rating.
+4. Arc-rated face shield if opening primary 480V distribution cabinet MDP-3.
+
+--- Page 5 ---
+SECTION 3: STEP-BY-STEP LOCKOUT/TAGOUT ISOLATION PROTOCOL
+Step 1: Notify the machine operator and shift supervisor before initiating machine shutdown.
+Step 2: Press the emergency stop push-button on the main CNC operator console to park the Z-axis carriage.
+Step 3: ⚠️ WARNING: Switch main disconnect circuit breaker on Plant Distribution Panel MDP-3 (Breaker #14) to the OFF position.
+Step 4: Attach approved red lockout hasp, personal safety padlock (Key Code LOTO-EHS), and high-visibility danger tag with technician name and date.
+Step 5: ⚠️ WARNING: Test incoming terminals L1, L2, L3 using a calibrated digital multimeter. Verify zero electrical voltage (< 1.0 VAC/VDC).
+Step 6: ⚠️ CAUTION: Close the manual air supply ball valve on the secondary pneumatic manifold and depress the manual dump valve to bleed pressure down to exactly 0 PSI.
+Step 7: Verify zero energy state by attempting to power on the machine control console. Machine must remain completely unpowered.
+Step 8: Only after steps 1 through 7 are verified may mechanical disassembly or bearing replacement begin.
