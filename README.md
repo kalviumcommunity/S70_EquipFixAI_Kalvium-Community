@@ -1269,33 +1269,109 @@ This creates a complete **AI-powered industrial maintenance ecosystem**.
 
 The project is being developed as an AI-powered industrial maintenance management platform with RAG capabilities.
 
-### Planned development stages
+### Phase 1: Completed Foundation & Quickstart
 
 ```text
-[ ] Authentication & RBAC
-[ ] Database design
-[ ] Equipment management
-[ ] Incident management
-[ ] Work-order system
-[ ] Technician work logs
-[ ] Document management
-[ ] RAG document ingestion
-[ ] Vector database
-[ ] AI troubleshooting
-[ ] Source citations
-[ ] Safety-aware responses
-[ ] Spare-parts management
-[ ] Preventive maintenance
-[ ] Real-time notifications
-[ ] Manager analytics
-[ ] Audit logging
-[ ] Testing
-[ ] Deployment
+[x] Authentication & RBAC (JWT + 4 distinct roles)
+[x] Database design (16 tables/models with PostgreSQL/SQLAlchemy)
+[x] Equipment management (8 industrial machines, statuses, specs, history)
+[x] Incident management (reporting, triage, severity, assignment)
+[x] Work-order system (assignment, progress tracking, logs)
+[x] Technician work logs (diagnostics, actions taken, timeline)
+[x] Spare-parts inventory (atomic deduction, low-stock triggers)
+[x] Maintenance records & supervisor approval flow
+[x] Preventive maintenance schedules & WO dispatch
+[x] Real-time WebSockets notifications & live UI toasts
+[x] Manager executive analytics (downtime, costs, recurring failures)
+[x] Audit logging (immutable action trail with state snapshots)
+[x] Automated testing (10/10 pytest test suite passing)
+[x] Containerization (Docker Compose for Postgres + Backend + Frontend)
+[ ] Phase 2: RAG document embeddings & vector search retrieval
 ```
 
 ---
 
-# 📄 License
+# 🚀 Quickstart Guide (Phase 1)
+
+EquipFixAI can be run either with **Docker Compose** or directly **locally**.
+
+### Pre-configured Seed Accounts
+All accounts use the password: **`password123`**
+- **Operator:** `operator1` (John Miller — Machining floor)
+- **Technician:** `tech1` (Ravi Sharma — Senior technician)
+- **Technician:** `tech2` (Carlos Mendez — Field technician)
+- **Supervisor:** `super1` (Sarah Connor — Shop floor supervisor)
+- **Manager:** `manager1` (David Vance — Plant operations manager)
+
+---
+
+### Option A: Running with Docker Compose (Recommended for Full Production Stack)
+
+1. Start all services (PostgreSQL + FastAPI Backend + React Frontend):
+   ```bash
+   docker-compose up --build
+   ```
+2. Access the applications:
+   - **Frontend Dashboard:** [http://localhost:5173](http://localhost:5173)
+   - **Backend API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+   - **PostgreSQL Database:** `localhost:5432` (`postgres` / `postgres`)
+
+---
+
+### Option B: Running Locally (Fastest Development & Evaluation)
+
+#### 1. Backend Setup (FastAPI + SQLAlchemy)
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Seed database with realistic industrial data (Users, 8 Machines, Parts, Incidents, Logs):
+python seed.py
+
+# Start backend server:
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+Backend API will be running at [http://127.0.0.1:8000](http://127.0.0.1:8000) (Interactive Swagger Docs at `/docs`).
+
+#### 2. Frontend Setup (React + Vite + React Router + Recharts)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Frontend will be running at [http://localhost:5173](http://localhost:5173).
+
+---
+
+### 🧪 Running Automated Pytest Suite
+EquipFixAI features a comprehensive automated test suite testing auth, RBAC permissions, multi-role incident and work order lifecycles, atomic inventory deductions, low-stock notifications, supervisor approvals, and audit logging:
+
+```bash
+cd backend
+PYTHONPATH=. pytest -v tests/
+```
+
+---
+
+### 📡 Implemented API Modules (Phases 1, 2, & 3)
+- **`/api/auth`**: JWT authentication, login, current authenticated user profile (`/me`).
+- **`/api/machines`**: Equipment fleet listing, status filter, machine history, and unified chronological lifecycle timeline (`/machines/{id}/timeline`).
+- **`/api/incidents`**: Incident reporting with attachment uploads (Operator), technician assignment (Supervisor), priority updates.
+- **`/api/work-orders`**: Work order lifecycle (`ASSIGNED` -> `IN_PROGRESS` -> `RESOLVED`), troubleshooting work logs, atomic parts deduction, completion submission.
+- **`/api/maintenance`**: Official maintenance records listing, supervisor approval/rejection pipeline, preventive maintenance schedules, automated schedule scan (`/schedules/check-due`) with duplicate prevention.
+- **`/api/parts`**: Spare parts inventory management, low-stock alerts, restock transactions, usage history.
+- **`/api/documents`**: Equipment manuals, SOPs, safety guides repository, version history, automated text extraction and vector chunk indexing (`/documents/{id}/ingest`).
+- **`/api/ai`**: RAG AI troubleshooting engine (`/query`), structured fact queries, safety-priority document retrieval, citation generation, technician feedback (`/feedback`), and prompt injection guardrails.
+- **`/api/search`**: Cross-entity global search across machines, incidents, work orders, maintenance records, parts, technicians, and documents with role filtering.
+- **`/api/reports`**: Management reporting exports in CSV and JSON (`/reports/maintenance.csv`, `/reports/incidents.csv`, `/reports/downtime.csv`, `/reports/technicians.csv`).
+- **`/api/upload`**: Secure file upload handler with MIME type validation, extension whitelist, 10MB limit, and path traversal defense.
+- **`/api/notifications`**: Live notification center, category filtering, mark read, mark all read.
+- **`/api/audit-logs`**: Comprehensive system audit trail with before/after state snapshots.
+- **`/api/analytics`**: Plant-wide live SQL aggregations, downtime breakdown by machine, recurring subsystem failure analysis, and monthly maintenance trends.
+- **`/api/users`**: Employee directory, user creation, role assignment, and detailed employee work history & MTTR (`/users/{id}/work-history`).
+- **`/api/ws`**: Authenticated real-time WebSocket connection (`/api/ws?token=...`) with role-targeted event dispatching (`incident.created`, `work_order.updated`, `maintenance.approved`, `machine.status_changed`, `inventory.low_stock`, `notification.created`).
 
 This project is developed for educational and demonstration purposes.
 
