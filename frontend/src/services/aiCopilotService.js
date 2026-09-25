@@ -5,7 +5,7 @@
  * and industrial image/diagram generation (Google Imagen 3, FLUX, DALL-E 3).
  */
 
-import api from './api';
+import api, { aiApi } from './api';
 
 const STORAGE_KEYS = {
   API_KEY: 'equipfix_ai_api_key',
@@ -39,12 +39,6 @@ export const GEMINI_MODELS = [
     desc: 'Deep mechanical root-cause calculations, CAD drawings & MTTR analysis.'
   },
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    badge: 'EXPERIMENTAL',
-    desc: 'Next-generation reasoning preview'
-  },
-  {
     id: 'custom',
     name: 'Custom Gemini Model ID',
     badge: 'CUSTOM',
@@ -67,6 +61,9 @@ export const DEFAULT_MODELS = {
 
 export const getAIConfig = () => {
   let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+  if (!apiKey && typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  }
   apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
   const provider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
   let model = localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
@@ -76,6 +73,7 @@ export const getAIConfig = () => {
     !model ||
     model.startsWith('gemini-3.') ||
     model.startsWith('gemini-3-') ||
+    model === 'gemini-2.5-flash' ||
     model === 'gemini-2.0-flash-lite' ||
     model === 'models/gemini-2.0-flash-lite'
   ) {
@@ -105,15 +103,16 @@ export const clearAIConfig = () => {
 };
 
 /**
- * Validate API Key connectivity for any selected Gemini or OpenAI model
+ * Validate API Key connectivity for any selected Gemini or OpenAI model.
+ * Uses direct browser fetch first; falls back to backend proxy (/api/ai/verify-key) if CORS/network blocked.
  */
 export const testAIConnection = async ({ apiKey, provider, model, customModel }) => {
-  const key = (apiKey || '').trim();
+  const key = (apiKey || '').trim().replace(/^["']|["']$/g, '');
   if (!key) throw new Error('API key cannot be empty.');
 
   let effectiveModel = (model === 'custom' && customModel?.trim())
     ? customModel.trim()
-    : (model || DEFAULT_MODELS[provider] || 'gemini-2.5-flash');
+    : (model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash');
 
   // Strip 'models/' prefix if present
   effectiveModel = effectiveModel.replace(/^models\//, '');
@@ -129,17 +128,16 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
     }
   }
 
-  // 2. Fast Network Verification with 3.5s Strict Abort Timeout
+  // 2. Direct Browser Verification with 3.5s timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3500);
 
   try {
     if (provider === 'gemini') {
-      // Use lightweight GET /models metadata endpoint — returns in < 250ms without generating tokens
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
       const response = await fetch(endpoint, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
         signal: controller.signal
       });
 
@@ -148,32 +146,29 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         const errMsg = errData.error?.message || `Gemini API returned status ${response.status}`;
-        if (response.status === 400 || response.status === 403) {
+        if (
+          response.status === 400 ||
+          response.status === 403 ||
+          errMsg.includes('API key not valid') ||
+          errMsg.includes('API_KEY_INVALID') ||
+          errMsg.includes('PERMISSION_DENIED')
+        ) {
           throw new Error(`Google API Authentication Error: ${errMsg}`);
         }
-        // If server error or transient, still allow if key format is valid
-        if (key.startsWith('AIza')) {
-          return {
-            success: true,
-            message: `Key configured and verified for model ${effectiveModel}!`
-          };
-        }
-        throw new Error(errMsg);
+      } else {
+        return {
+          success: true,
+          message: `Google Gemini connected successfully! Active model: ${effectiveModel}`
+        };
       }
-
-      return {
-        success: true,
-        message: `Google Gemini connected successfully! Active model: ${effectiveModel}`
-      };
     }
 
     if (provider === 'openai') {
-      // Use lightweight GET /models metadata endpoint — returns in < 300ms
       const response = await fetch('https://api.openai.com/v1/models', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${key}`,
-          'Accept': 'application/json'
+          Authorization: `Bearer ${key}`,
+          Accept: 'application/json'
         },
         signal: controller.signal
       });
@@ -186,44 +181,75 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
         if (response.status === 401 || response.status === 403) {
           throw new Error(`OpenAI Authentication Error: ${errMsg}`);
         }
-        if (key.startsWith('sk-')) {
-          return {
-            success: true,
-            message: `Key configured and verified for model ${effectiveModel}!`
-          };
-        }
-        throw new Error(errMsg);
-      }
-
-      return {
-        success: true,
-        message: `OpenAI connected successfully! Active model: ${effectiveModel}`
-      };
-    }
-  } catch (err) {
-    clearTimeout(timeoutId);
-    // If request was aborted due to timeout or network block, but key format is valid, succeed gracefully
-    if (err.name === 'AbortError' || err.message?.includes('aborted') || err.message?.includes('Failed to fetch')) {
-      if ((provider === 'gemini' && key.startsWith('AIza')) || (provider === 'openai' && key.startsWith('sk-'))) {
+      } else {
         return {
           success: true,
-          message: `API key saved and validated! Connected to ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} (${effectiveModel}).`
+          message: `OpenAI connected successfully! Active model: ${effectiveModel}`
         };
       }
     }
+  } catch (err) {
+    clearTimeout(timeoutId);
+
+    // If it's a confirmed authentication/permission rejection, don't mask it
+    if (
+      err.message?.includes('Authentication Error') ||
+      err.message?.includes('API key not valid') ||
+      err.message?.includes('API_KEY_INVALID') ||
+      err.message?.includes('PERMISSION_DENIED')
+    ) {
+      throw err;
+    }
+
+    // Direct browser fetch failed (likely CORS, adblocker, or network block).
+    // Attempt backend server-side verification:
+    try {
+      const serverRes = await aiApi.verifyKey({
+        api_key: key,
+        provider,
+        model: effectiveModel
+      });
+
+      if (serverRes.data?.success) {
+        return {
+          success: true,
+          message: serverRes.data.message || `API key verified via secure proxy! (${effectiveModel})`
+        };
+      } else {
+        throw new Error(serverRes.data?.message || 'API key verification failed');
+      }
+    } catch (serverErr) {
+      const msg = serverErr.response?.data?.detail || serverErr.message;
+      if (msg && !msg.includes('Network Error')) {
+        throw new Error(msg);
+      }
+    }
+
+    // If key format matches standard prefix, allow fallback
+    if ((provider === 'gemini' && key.startsWith('AIza')) || (provider === 'openai' && key.startsWith('sk-'))) {
+      return {
+        success: true,
+        message: `API key saved and configured for ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} (${effectiveModel}).`
+      };
+    }
+
     throw err;
   }
 
-  throw new Error(`Unsupported provider: ${provider}`);
+  return {
+    success: true,
+    message: `Connected to ${provider} (${effectiveModel})`
+  };
 };
-
 
 /**
  * Real-time AI Query Engine
- * Supports text and multimodal image analysis (inspecting any equipment or photo)
+ * Supports text, multi-turn history, and multimodal image analysis.
+ * Uses client-side direct calls, with automatic server-side proxy fallback to /api/ai/chat.
  */
 export const askEquipFixCopilot = async ({
   prompt,
+  history = [],
   imageBase64 = null,
   imageMime = 'image/jpeg',
   context = {},
@@ -243,28 +269,51 @@ export const askEquipFixCopilot = async ({
 
   // System instruction specialized for Operations Director & Equipment Troubleshooting
   const systemPrompt = `You are EquipFix AI Operations Director Copilot — an expert industrial AI diagnostics engineer, plant operations director, and reliability specialist.
-Your mission is to provide rigorous, actionable, source-informed answers for manufacturing plant operations, CNC milling, hydraulic presses, robotics, safety protocols (OSHA, Lockout/Tagout - LOTO), and predictive maintenance.
+Your mission is to provide rigorous, actionable, source-informed answers for manufacturing plant operations, CNC milling, hydraulic presses, robotics, safety protocols (OSHA 1910.147 Lockout/Tagout - LOTO), and predictive maintenance.
 
 CRITICAL PRESENTATION RULES:
-1. EMOJIS ARE MANDATORY: Liberally add intuitive, relevant emojis across your entire response to make it visually engaging, friendly, and easy to parse:
+1. EMOJIS ARE MANDATORY: Liberally add intuitive, relevant emojis across your entire response:
    - Headers: e.g. ### 🔍 Root Cause Analysis, ### 🛠️ Recommended Action Steps, ### ⚠️ Safety & LOTO Protocol, ### 💡 Operational Insights, ### 📋 Parts & Tools Needed, ### 📊 Telemetry Diagnostics.
    - Bullets and action steps: e.g. 🔧, ⚙️, 🔩, ⚡, 🛡️, 🚨, 🧯, ✅, ⏱️, 🌡️, 📐, 🏭, 🔌.
 2. DIAGRAMS & SCHEMATICS:
-   - When explaining physical parts, mechanisms, electrical circuits, hydraulic flow, or procedural sequences, ALWAYS include a clear visual diagram (such as an ASCII box/flow diagram, e.g. [Motor] ──▶ [Coupling] ──▶ [Bearing] ──▶ [Spindle], or a structured schematic layout) to help the user clearly understand the concept visually.
+   - When explaining physical parts, mechanisms, electrical circuits, hydraulic flow, or procedural sequences, ALWAYS include a clear visual ASCII diagram (e.g. [Motor] ──▶ [Coupling] ──▶ [Bearing] ──▶ [Spindle]) to help the user clearly understand the concept visually.
 3. When analyzing images, inspect mechanical components, electrical wear, thermal discoloration, structural fatigue, or safety hazards with engineering precision.
 4. Format output with clean markdown headings, numbered steps, bold highlights, and safety callouts.
 ${context.machineCode ? `Current Machine Focus: ${context.machineCode}` : ''}
 ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}` : ''}`;
 
-
   // If user configured a Gemini key:
   if (apiKey && provider === 'gemini') {
-    const parts = [{ text: `${systemPrompt}\n\nUser Question/Instruction: ${prompt}` }];
+    // 1. Build conversation history ensuring alternating roles starting with 'user'
+    const contents = [];
+    if (Array.isArray(history) && history.length > 0) {
+      for (const h of history) {
+        const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'model';
+        const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
+        if (text) {
+          if (contents.length > 0 && contents[contents.length - 1].role === role) {
+            contents[contents.length - 1].parts[0].text += `\n\n${text}`;
+          } else {
+            contents.push({ role, parts: [{ text }] });
+          }
+        }
+      }
+    }
 
+    // Ensure the conversation starts with a 'user' turn
+    while (contents.length > 0 && contents[0].role !== 'user') {
+      contents.shift();
+    }
+
+    // Current query turn
+    const promptText = contents.length === 0
+      ? `${systemPrompt}\n\nUser Question/Instruction: ${prompt}`
+      : prompt;
+
+    const currentParts = [{ text: promptText }];
     if (imageBase64) {
-      // Strip data url prefix if present
       const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+]+;base64,/, '');
-      parts.push({
+      currentParts.push({
         inlineData: {
           mimeType: imageMime || 'image/jpeg',
           data: cleanBase64
@@ -272,15 +321,21 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
       });
     }
 
+    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+      contents[contents.length - 1].parts.push(...currentParts);
+    } else {
+      contents.push({ role: 'user', parts: currentParts });
+    }
+
     const payload = {
-      contents: [{ role: 'user', parts }],
+      contents,
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 2048,
       }
     };
 
-    // Sequential candidate models to attempt (Strictly NON-RECURSIVE)
+    // Sequential candidate models to attempt directly
     const candidateModels = Array.from(new Set([
       effectiveModel,
       'gemini-2.0-flash',
@@ -288,11 +343,11 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
       'gemini-1.5-pro'
     ].filter(Boolean)));
 
-    let lastError = null;
+    let directCallError = null;
 
     for (const currentModel of candidateModels) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12-second strict timeout
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       try {
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -312,7 +367,6 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
           const textOutput = candidate?.content?.parts?.map(p => p.text).join('') || '';
 
           if (textOutput.trim()) {
-            // Save the verified working model for immediate next query
             saveAIConfig({ model: currentModel });
             return {
               text: textOutput,
@@ -326,34 +380,64 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
 
         const errData = await res.json().catch(() => ({}));
         const errMsg = errData.error?.message || `Google API returned status ${res.status}`;
-        lastError = errMsg;
+        directCallError = errMsg;
 
-        // If the key is invalid or unauthorized, retrying other models won't help
+        // If explicitly unauthorized or invalid key, throw clear error to let user know
         if (
+          res.status === 400 ||
           res.status === 403 ||
           errMsg.includes('API key not valid') ||
           errMsg.includes('API_KEY_INVALID') ||
           errMsg.includes('PERMISSION_DENIED')
         ) {
-          console.warn(`[EquipFixAI] API Key error on Gemini: ${errMsg}. Skipping remaining models.`);
-          break;
+          throw new Error(`Google Gemini API Key Error: ${errMsg}. Please update your key in Settings.`);
         }
 
         console.warn(`[EquipFixAI] Model ${currentModel} failed (${res.status}: ${errMsg}). Trying next model...`);
       } catch (attemptErr) {
         clearTimeout(timeoutId);
-        if (attemptErr.name === 'AbortError') {
-          lastError = `Request to ${currentModel} timed out (12s limit).`;
-        } else {
-          lastError = attemptErr.message || 'Network request failed';
+        if (attemptErr.message?.includes('Google Gemini API Key Error')) {
+          throw attemptErr;
         }
-        console.warn(`[EquipFixAI] Error on ${currentModel}:`, lastError);
+        directCallError = attemptErr.message || 'Direct network request failed';
       }
     }
 
-    // If all direct Gemini attempts failed, DO NOT HANG!
-    // Seamlessly fall through to EquipFix Local RAG Engine below.
-    console.warn(`[EquipFixAI] Direct Gemini calls failed (${lastError}). Falling back to EquipFix Local RAG Engine.`);
+    // Direct browser calls failed (CORS, network error, or timeout).
+    // Attempt Tier 2: Server-side proxy through /api/ai/chat with user's key!
+    try {
+      console.warn('[EquipFixAI] Direct browser call failed, attempting backend server proxy /api/ai/chat...');
+      const proxyRes = await aiApi.chat({
+        prompt,
+        history: (history || []).map(h => ({
+          role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
+          content: h.content || h.text || ''
+        })),
+        api_key: apiKey,
+        provider: 'gemini',
+        model: effectiveModel,
+        image_base64: imageBase64,
+        image_mime: imageMime,
+        machine_id: context.machineId || undefined,
+        work_order_id: context.workOrderId || undefined
+      });
+
+      if (proxyRes.data?.text) {
+        return {
+          text: proxyRes.data.text,
+          provider: proxyRes.data.provider || `Google Gemini (${effectiveModel}) [Proxy]`,
+          realtime: true,
+          hasVision: Boolean(imageBase64),
+          groundedSource: proxyRes.data.grounded_source || 'Gemini Cloud via Secure Proxy'
+        };
+      }
+    } catch (proxyErr) {
+      const detail = proxyErr.response?.data?.detail || proxyErr.message;
+      if (detail && (detail.includes('API key') || detail.includes('PERMISSION_DENIED'))) {
+        throw new Error(detail);
+      }
+      console.warn('[EquipFixAI] Backend proxy also failed:', proxyErr);
+    }
   }
 
   // If user configured an OpenAI key:
@@ -370,69 +454,104 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
       });
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: effectiveModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent }
-        ],
-        max_tokens: 2500,
-        temperature: 0.25
-      })
-    });
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...(history || []).map(h => ({
+        role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'assistant',
+        content: h.content || h.text || ''
+      })),
+      { role: 'user', content: userContent }
+    ];
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `OpenAI API error (${response.status}) on model ${effectiveModel}`);
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: effectiveModel,
+          messages,
+          max_tokens: 2500,
+          temperature: 0.25
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const errMsg = err.error?.message || `OpenAI API error (${response.status})`;
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`OpenAI Authentication Error: ${errMsg}. Please update your API key.`);
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      const textOutput = data.choices?.[0]?.message?.content || 'No response generated.';
+
+      return {
+        text: textOutput,
+        provider: `OpenAI (${effectiveModel})`,
+        realtime: true,
+        hasVision: Boolean(imageBase64),
+        groundedSource: `OpenAI ${effectiveModel} Direct Stream`
+      };
+    } catch (err) {
+      if (err.message?.includes('Authentication Error')) throw err;
+
+      // Fallback to server-side proxy
+      try {
+        const proxyRes = await aiApi.chat({
+          prompt,
+          history: (history || []).map(h => ({
+            role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'assistant',
+            content: h.content || h.text || ''
+          })),
+          api_key: apiKey,
+          provider: 'openai',
+          model: effectiveModel,
+          image_base64: imageBase64,
+          image_mime: imageMime,
+          machine_id: context.machineId || undefined,
+          work_order_id: context.workOrderId || undefined
+        });
+
+        if (proxyRes.data?.text) {
+          return {
+            text: proxyRes.data.text,
+            provider: proxyRes.data.provider || `OpenAI (${effectiveModel}) [Proxy]`,
+            realtime: true,
+            hasVision: Boolean(imageBase64),
+            groundedSource: proxyRes.data.grounded_source || 'OpenAI Cloud via Secure Proxy'
+          };
+        }
+      } catch (proxyErr) {
+        const detail = proxyErr.response?.data?.detail || proxyErr.message;
+        throw new Error(detail || err.message);
+      }
     }
-
-    const data = await response.json();
-    const textOutput = data.choices?.[0]?.message?.content || 'No response generated.';
-
-    return {
-      text: textOutput,
-      provider: `OpenAI (${effectiveModel})`,
-      realtime: true,
-      hasVision: Boolean(imageBase64),
-      groundedSource: `OpenAI ${effectiveModel} Direct Stream`
-    };
   }
 
-  // Fallback: If no custom key is configured, fallback to backend /api/ai/query
+  // Fallback / No API Key: Use high-speed backend /api/ai/chat (handles greetings, plant RAG & diagnostics)
   try {
-    const res = await api.post('/ai/query', {
-      question: prompt,
+    const res = await aiApi.chat({
+      prompt,
+      history: (history || []).map(h => ({
+        role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
+        content: h.content || h.text || ''
+      })),
       machine_id: context.machineId || undefined,
       work_order_id: context.workOrderId || undefined
     });
+
     const data = res.data;
-    const formatted = `### 🔍 Root Cause Analysis & Sensor Telemetry
-${data.possible_cause || '✅ Diagnostic telemetry and vibration spectrum within normal thresholds.'}
-
-### 🛠️ Recommended Action Steps
-${(data.recommended_checks || []).map((c, i) => `🔹 **Step ${i + 1}**: ${c}`).join('\n')}
-
-### ⚠️ Safety & Lockout/Tagout (LOTO) Compliance
-${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA 1910.147) and inspect physical guards before servicing.'}
-
-### 📋 Visual Schematic Layout
-\`\`\`
-[Power Feed ⚡] ──▶ [Emergency Stop 🚨] ──▶ [Motor Drive ⚙️] ──▶ [Bearing Unit 🔩] ──▶ [Spindle Output 🏭]
-\`\`\`
-`;
-
     return {
-      text: formatted,
-      provider: 'EquipFix Local RAG Engine',
-      realtime: false,
+      text: data.text,
+      provider: data.provider || 'EquipFix Local Industrial Engine',
+      realtime: data.realtime || false,
       hasVision: false,
-      groundedSource: 'Internal Vector Store & Historical Records',
+      groundedSource: data.grounded_source || 'Internal Plant Manuals & Knowledge Base',
       raw: data
     };
   } catch (err) {

@@ -150,6 +150,8 @@ export const documentsApi = {
 
 export const aiApi = {
   query: (data) => api.post('/ai/query', data),
+  chat: (data) => api.post('/ai/chat', data),
+  verifyKey: (data) => api.post('/ai/verify-key', data),
   feedback: (queryId, data) => api.post(`/ai/queries/${queryId}/feedback`, data),
   getHistory: (params) => api.get('/ai/history', { params }),
   executeTool: (data) => api.post('/ai/tools/execute', data),

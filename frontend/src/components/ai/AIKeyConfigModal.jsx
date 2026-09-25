@@ -39,36 +39,22 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
 
   const handleVerifyAndSave = async (e) => {
     if (e) e.preventDefault();
-    const cleanKey = apiKey.trim();
+    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
     if (!cleanKey) {
       setTestResult({ success: false, message: 'Please enter a valid API key.' });
       return;
     }
 
     if (model === 'custom' && !customModel.trim()) {
-      setTestResult({ success: false, message: 'Please enter your custom model ID (e.g. gemini-2.5-flash).' });
+      setTestResult({ success: false, message: 'Please enter your custom model ID (e.g. gemini-2.0-flash).' });
       return;
     }
-
-    // Always immediately persist key so it is never lost
-    saveAIConfig({ apiKey: cleanKey, provider, model, customModel });
 
     setTesting(true);
     setTestResult(null);
 
     try {
-      // Race test with 2.8s max timeout
-      const testPromise = testAIConnection({ apiKey: cleanKey, provider, model, customModel });
-      const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            message: `Key configured for ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} (${model})!`
-          });
-        }, 2500);
-      });
-
-      const res = await Promise.race([testPromise, timeoutPromise]);
+      const res = await testAIConnection({ apiKey: cleanKey, provider, model, customModel });
       saveAIConfig({ apiKey: cleanKey, provider, model, customModel });
       setTestResult({ success: true, message: `✅ ${res.message || 'Key verified successfully!'} Opening chat...` });
       if (onConfigSaved) {
@@ -77,11 +63,11 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       // Auto-close modal and redirect straight to chat
       setTimeout(() => {
         onClose();
-      }, 450);
+      }, 500);
     } catch (err) {
       setTestResult({
         success: false,
-        message: err.message || 'Verification timed out or failed. You can still use Instant Save to proceed.'
+        message: err.message || 'Verification failed. Please check your API key.'
       });
     } finally {
       setTesting(false);
@@ -90,7 +76,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
 
   const handleInstantSave = (e) => {
     if (e) e.preventDefault();
-    const cleanKey = apiKey.trim();
+    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
     if (!cleanKey) {
       setTestResult({ success: false, message: 'Please enter a valid API key.' });
       return;
@@ -244,7 +230,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
-                  Gemini 2.5, 2.0 Flash, 2.0 Thinking & Imagen 3
+                  Gemini 2.0 Flash, 1.5 Flash, 1.5 Pro & Imagen 3
                 </span>
               </button>
 

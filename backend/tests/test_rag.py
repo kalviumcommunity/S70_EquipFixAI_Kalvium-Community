@@ -293,3 +293,31 @@ def test_document_content_and_search(client: TestClient, db_session: Session, se
     assert "loto_steps" in content_data
     assert isinstance(content_data["loto_steps"], list)
     assert len(content_data["raw_content"]) > 0
+
+
+def test_ai_chat_and_verify_key(client: TestClient, db_session: Session, seeded_users):
+    """Test conversational /api/ai/chat endpoint and /api/ai/verify-key validation."""
+    headers = get_auth_header("tech_user", UserRole.TECHNICIAN.value)
+
+    # 1. Test conversational greeting without key
+    chat_res = client.post("/api/ai/chat", json={"message": "hello"}, headers=headers)
+    assert chat_res.status_code == 200
+    chat_data = chat_res.json()
+    assert "text" in chat_data
+    assert "EquipFix AI Operations Director" in chat_data["text"]
+    assert chat_data["provider"] == "EquipFix Industrial Engine"
+
+    # 2. Test plant technical question
+    tech_res = client.post("/api/ai/chat", json={"message": "How do I isolate electrical power?"}, headers=headers)
+    assert tech_res.status_code == 200
+    tech_data = tech_res.json()
+    assert "text" in tech_data
+    assert "LOTO" in tech_data["text"] or "Root Cause" in tech_data["text"]
+
+    # 3. Test verify-key validation with invalid key format
+    ver_res = client.post("/api/ai/verify-key", json={"api_key": "invalid_test_key", "provider": "gemini"}, headers=headers)
+    assert ver_res.status_code == 200
+    ver_data = ver_res.json()
+    assert "success" in ver_data
+    assert ver_data["success"] is False
+    assert "failed" in ver_data["message"].lower() or "error" in ver_data["message"].lower()

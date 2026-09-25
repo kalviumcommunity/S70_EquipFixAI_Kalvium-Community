@@ -343,7 +343,7 @@ I am ready for real-time equipment diagnostics, safety protocols, and plant oper
   const handleConfigSaved = (newCfg) => {
     setAiConfig(newCfg);
     setActiveTab('DIAGNOSTICS'); // Redirect straight to chat view!
-    setCopiedStatus(`API Key verified & activated! Model: ${newCfg.model || 'Gemini 2.5 Flash'}`);
+    setCopiedStatus(`API Key verified & activated! Model: ${newCfg.model || 'Gemini 2.0 Flash'}`);
     setTimeout(() => setCopiedStatus(null), 4000);
 
     // Add confirmation message to chat thread
@@ -353,7 +353,7 @@ I am ready for real-time equipment diagnostics, safety protocols, and plant oper
         id: `sys-${Date.now()}`,
         role: 'assistant',
         content: `### ⚡ Real-Time AI Connected
-Active model updated to **${newCfg.model || 'Gemini 2.5 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).
+Active model updated to **${newCfg.model || 'Gemini 2.0 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).
 Direct multimodal streaming inference is now active. Send any diagnostic prompt below!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         provider: `${newCfg.provider.toUpperCase()} ENGINE`
@@ -438,38 +438,23 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     }, 50);
 
     try {
-      let aiText = '';
-      let providerLabel = '';
+      // Build conversation history excluding greetings, error notices, and system messages
+      const conversationHistory = messages
+        .filter(m => m.id !== 'welcome' && !m.id.startsWith('sys-') && !m.id.startsWith('ai-err-') && m.content)
+        .slice(-8)
+        .map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          content: m.content
+        }));
 
-      if (activeConfig.apiKey) {
-        const result = await askEquipFixCopilot({
-          prompt: q,
-          context: { machineCode, incidentSummary, machineId, workOrderId }
-        });
-        aiText = result.text;
-        providerLabel = result.provider;
-      } else {
-        const res = await aiApi.query({
-          question: q,
-          machine_id: machineId || undefined,
-          work_order_id: workOrderId || undefined
-        });
-        const data = res.data;
-        aiText = `### 🔍 Root Cause Analysis & Sensor Telemetry
-${data.possible_cause || '✅ Diagnostic telemetry and vibration spectrum within normal thresholds.'}
+      const result = await askEquipFixCopilot({
+        prompt: q,
+        history: conversationHistory,
+        context: { machineCode, incidentSummary, machineId, workOrderId }
+      });
 
-### 🛠️ Recommended Action Steps
-${(data.recommended_checks || []).map((c, i) => `🔹 **Step ${i + 1}**: ${c}`).join('\n')}
-
-### ⚠️ Safety & Lockout/Tagout (LOTO) Compliance
-${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA 1910.147) and inspect physical guards before servicing.'}
-
-### 📋 Visual Assembly Layout
-\`\`\`
-[Power Feed ⚡] ──▶ [Emergency Stop 🚨] ──▶ [Motor Drive ⚙️] ──▶ [Bearing Unit 🔩] ──▶ [Spindle Output 🏭]
-\`\`\``;
-        providerLabel = 'Internal RAG Engine';
-      }
+      const aiText = result.text;
+      const providerLabel = result.provider;
 
       // Append assistant message to thread
       const assistantMsg = {
@@ -491,6 +476,7 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
       }
     } catch (err) {
       const errorMsg = err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.';
+      const isKeyErr = /api key|unauthorized|permission_denied|quota|auth/i.test(errorMsg);
       setError(errorMsg);
       // Append an assistant message so user sees the diagnostic feedback and is not left hanging
       setMessages((prev) => [
@@ -498,9 +484,10 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
         {
           id: `ai-err-${Date.now()}`,
           role: 'assistant',
-          content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Tip: Check your API key under **Configure API Key** or ask another diagnostic question.*`,
+          content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Click **Configure AI Key** below to verify or update your API credentials.*`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          provider: 'System Diagnostics'
+          provider: 'System Diagnostics',
+          isKeyError: isKeyErr
         }
       ]);
     } finally {
@@ -1041,6 +1028,28 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
                           gap: '8px',
                           flexWrap: 'wrap'
                         }}>
+                          {(msg.isKeyError || (msg.content && msg.content.includes('Configure AI Key'))) && (
+                            <button
+                              type="button"
+                              onClick={() => setShowConfigModal(true)}
+                              className="btn btn-primary btn-sm"
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '4px 10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '6px'
+                              }}
+                            >
+                              <Key size={12} />
+                              <span>Configure AI Key</span>
+                            </button>
+                          )}
+
                           {!messageDiagrams[msg.id]?.diagramUrl && !messageDiagrams[msg.id]?.loading && (
                             <button
                               type="button"

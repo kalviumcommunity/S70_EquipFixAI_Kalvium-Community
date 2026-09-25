@@ -72,3 +72,47 @@ class AIQueryHistoryItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AIChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    message: Optional[str] = None
+    prompt: Optional[str] = None
+    question: Optional[str] = None
+    api_key: Optional[str] = None
+    provider: Optional[str] = "gemini"
+    model: Optional[str] = None
+    machine_id: Optional[int] = None
+    work_order_id: Optional[int] = None
+    history: Optional[List[AIChatMessage]] = []
+    image_base64: Optional[str] = None
+    image_mime: Optional[str] = "image/jpeg"
+
+    def get_message(self) -> str:
+        return (self.message or self.prompt or self.question or "").strip()
+
+
+class AIChatResponse(BaseModel):
+    text: str
+    provider: str
+    model: str
+    realtime: bool = True
+    grounded_source: Optional[str] = None
+    query_id: Optional[int] = None
+
+
+class AIVerifyKeyRequest(BaseModel):
+    api_key: str
+    provider: Optional[str] = "gemini"
+    model: Optional[str] = "gemini-2.0-flash"
+
+
+class AIVerifyKeyResponse(BaseModel):
+    success: bool
+    message: str
+    provider: str
+    model: Optional[str] = None
