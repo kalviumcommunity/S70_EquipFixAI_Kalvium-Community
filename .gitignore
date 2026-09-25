@@ -12,6 +12,8 @@ frontend/dist/
 build/
 .cache/
 .pytest_cache/
+.vite/
+frontend/.vite/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -48,3 +50,7 @@ Thumbs.db
 # Temp scripts
 create_prs.sh
 *.gif
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep

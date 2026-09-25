@@ -1,5 +1,6 @@
 import os
-os.environ["DATABASE_URL"] = "sqlite:///./backend/test_app.db"
+TEST_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "test_app.db")
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +17,7 @@ from app.models.enums import UserRole, MachineStatus
 from app.auth.security import get_password_hash, create_access_token
 
 # Use SQLite in-memory / temporary file for test isolation
-SQLALCHEMY_DATABASE_URL = "sqlite:///./backend/test_app.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"
 test_engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )

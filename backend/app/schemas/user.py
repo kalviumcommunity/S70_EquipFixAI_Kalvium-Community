@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel
 from app.models.enums import UserRole
 
@@ -81,7 +81,7 @@ class UserRegister(BaseModel):
     password: str
     department: Optional[str] = None
     employee_id: Optional[str] = None
-    role_name: UserRole = UserRole.OPERATOR
+    role_name: Union[UserRole, str] = UserRole.OPERATOR
 
 
 class ForgotPasswordRequest(BaseModel):

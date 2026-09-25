@@ -5,7 +5,7 @@ import { useWebSocket } from '../context/WebSocketContext';
 import { Users, Plus, Shield, CheckCircle, UserCheck, History, Clock, Package, Wrench } from 'lucide-react';
 
 export const UsersPage = () => {
-  const { addToast } = useWebSocket();
+  const { addToast, lastEvent } = useWebSocket();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export const UsersPage = () => {
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [lastEvent]);
 
   const handleRoleChange = async (userId, newRole) => {
     try {
