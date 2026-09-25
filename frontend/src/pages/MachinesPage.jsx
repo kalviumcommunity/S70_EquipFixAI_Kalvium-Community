@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { machinesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/ToastContainer';
+import { useWebSocket } from '../context/WebSocketContext';
 import { Cpu, Search, Plus, Eye, History, CheckCircle, AlertTriangle } from 'lucide-react';
+import { TelemetryConsole } from '../components/telemetry/TelemetryConsole';
+import { PlantMachineHealthGrid } from '../components/machines/PlantMachineHealthGrid';
 
 export const MachinesPage = () => {
   const { hasRole } = useAuth();
   const { addToast } = useToast();
+  const { lastEvent } = useWebSocket();
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -46,7 +50,7 @@ export const MachinesPage = () => {
 
   useEffect(() => {
     loadMachines();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, lastEvent]);
 
   const viewMachineDetail = async (machine) => {
     setSelectedMachine(machine);
@@ -110,6 +114,17 @@ export const MachinesPage = () => {
           </button>
         )}
       </div>
+
+      {/* Live Telemetry Diagnostic Oscilloscope & Condition Simulation */}
+      <div style={{ marginBottom: '24px' }}>
+        <TelemetryConsole />
+      </div>
+
+      {/* Real-time Shop Floor Equipment Grid */}
+      <PlantMachineHealthGrid
+        initialMachines={machines}
+        onSelectMachine={(m) => viewMachineDetail(m)}
+      />
 
       {/* Filter and Search Bar */}
       <div className="card" style={{ padding: '14px 20px', marginBottom: '20px' }}>

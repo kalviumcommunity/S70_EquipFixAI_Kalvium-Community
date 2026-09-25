@@ -4,9 +4,11 @@ import {
   CheckCircle2, Sparkles, Sliders, RefreshCw, Radio
 } from 'lucide-react';
 import { AICopilotModal } from '../ai/AICopilotModal';
+import { machinesApi } from '../../services/api';
+import { useWebSocket } from '../../context/WebSocketContext';
 
 export const TelemetryConsole = () => {
-  const [machineStatus, setMachineStatus] = useState('RUNNING'); // 'RUNNING' | 'WARNING' | 'CRITICAL'
+  const [machineStatus, setMachineStatus] = useState('RUNNING'); // 'RUNNING' | 'WARNING' | 'DOWN' | 'CRITICAL'
   const [rpm, setRpm] = useState(12400);
   const [temp, setTemp] = useState(48.2);
   const [vibration, setVibration] = useState(1.8);
@@ -14,6 +16,17 @@ export const TelemetryConsole = () => {
   const [waveOffset, setWaveOffset] = useState(0);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const { lastEvent, addToast } = useWebSocket();
+
+  // Listen to plant-wide real-time machine status updates
+  useEffect(() => {
+    if (lastEvent?.event === 'machine.status_changed' && lastEvent.data?.machine_code === 'CNC-04') {
+      const incomingStatus = lastEvent.data.status;
+      setMachineStatus(incomingStatus);
+    }
+  }, [lastEvent]);
 
   // Live telemetry pulse
   useEffect(() => {
@@ -28,7 +41,7 @@ export const TelemetryConsole = () => {
         setTemp(+(74.5 + (Math.random() * 1.5)).toFixed(1));
         setVibration(+(5.4 + (Math.random() * 0.8)).toFixed(1));
         setPressure(122 + Math.floor((Math.random() - 0.5) * 8));
-      } else if (machineStatus === 'CRITICAL') {
+      } else if (machineStatus === 'CRITICAL' || machineStatus === 'DOWN') {
         setRpm(3400 + Math.floor((Math.random() - 0.5) * 400));
         setTemp(+(94.2 + (Math.random() * 2.0)).toFixed(1));
         setVibration(+(8.6 + (Math.random() * 1.2)).toFixed(1));
@@ -46,6 +59,28 @@ export const TelemetryConsole = () => {
     }, 80);
     return () => clearInterval(waveInterval);
   }, []);
+
+  const handleSimulateStatus = async (targetStatus) => {
+    setIsUpdating(true);
+    setMachineStatus(targetStatus);
+    try {
+      await machinesApi.updateStatusByCode('CNC-04', targetStatus);
+      addToast({
+        title: 'Telemetry Event Broadcasted',
+        message: `CNC-04 condition updated to ${targetStatus} across all plant stations.`,
+        type: targetStatus === 'RUNNING' ? 'success' : targetStatus === 'WARNING' ? 'warning' : 'error'
+      });
+    } catch (err) {
+      console.error('Failed to update CNC-04 status:', err);
+      addToast({
+        title: 'Simulation Update Failed',
+        message: err.response?.data?.detail || err.message || 'Could not update CNC-04 status',
+        type: 'error'
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleOpenAICopilot = (question = '') => {
     setCopilotQuery(
@@ -91,6 +126,8 @@ export const TelemetryConsole = () => {
 
     return points.join(' ');
   };
+
+  const isDown = machineStatus === 'CRITICAL' || machineStatus === 'DOWN';
 
   const getStatusColor = () => {
     if (machineStatus === 'RUNNING') return { main: '#10b981', light: '#34d399', bg: '#064e3b', border: '#059669' };
@@ -168,17 +205,19 @@ export const TelemetryConsole = () => {
 
           <button
             type="button"
-            onClick={() => setMachineStatus('RUNNING')}
+            disabled={isUpdating}
+            onClick={() => handleSimulateStatus('RUNNING')}
             style={{
               padding: '5px 10px',
               borderRadius: '6px',
               fontSize: '0.725rem',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: isUpdating ? 'wait' : 'pointer',
               backgroundColor: machineStatus === 'RUNNING' ? '#065f46' : '#1e293b',
               color: machineStatus === 'RUNNING' ? '#34d399' : '#94a3b8',
               border: `1px solid ${machineStatus === 'RUNNING' ? '#059669' : '#334155'}`,
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              opacity: isUpdating ? 0.7 : 1
             }}
           >
             Normal (RUNNING)
@@ -186,17 +225,19 @@ export const TelemetryConsole = () => {
 
           <button
             type="button"
-            onClick={() => setMachineStatus('WARNING')}
+            disabled={isUpdating}
+            onClick={() => handleSimulateStatus('WARNING')}
             style={{
               padding: '5px 10px',
               borderRadius: '6px',
               fontSize: '0.725rem',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: isUpdating ? 'wait' : 'pointer',
               backgroundColor: machineStatus === 'WARNING' ? '#78350f' : '#1e293b',
               color: machineStatus === 'WARNING' ? '#fbbf24' : '#94a3b8',
               border: `1px solid ${machineStatus === 'WARNING' ? '#d97706' : '#334155'}`,
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              opacity: isUpdating ? 0.7 : 1
             }}
           >
             Trigger Vibration (WARNING)
@@ -204,17 +245,19 @@ export const TelemetryConsole = () => {
 
           <button
             type="button"
-            onClick={() => setMachineStatus('CRITICAL')}
+            disabled={isUpdating}
+            onClick={() => handleSimulateStatus('DOWN')}
             style={{
               padding: '5px 10px',
               borderRadius: '6px',
               fontSize: '0.725rem',
               fontWeight: 700,
-              cursor: 'pointer',
-              backgroundColor: machineStatus === 'CRITICAL' ? '#7f1d1d' : '#1e293b',
-              color: machineStatus === 'CRITICAL' ? '#f87171' : '#94a3b8',
-              border: `1px solid ${machineStatus === 'CRITICAL' ? '#dc2626' : '#334155'}`,
-              transition: 'all 0.15s ease'
+              cursor: isUpdating ? 'wait' : 'pointer',
+              backgroundColor: isDown ? '#7f1d1d' : '#1e293b',
+              color: isDown ? '#f87171' : '#94a3b8',
+              border: `1px solid ${isDown ? '#dc2626' : '#334155'}`,
+              transition: 'all 0.15s ease',
+              opacity: isUpdating ? 0.7 : 1
             }}
           >
             Thermal Trip (DOWN)
@@ -262,7 +305,7 @@ export const TelemetryConsole = () => {
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px', lineHeight: 1.3 }}>
               {machineStatus === 'RUNNING' && 'Spindle cartridge & 5-axis synchronization nominal'}
               {machineStatus === 'WARNING' && 'Abnormal bearing resonance detected (ISO Zone C)'}
-              {machineStatus === 'CRITICAL' && 'Spindle thermal safety excursion > 90°C. Feed-hold trip'}
+              {isDown && 'Spindle thermal safety excursion > 90°C. Feed-hold trip'}
             </div>
           </div>
 
@@ -296,7 +339,7 @@ export const TelemetryConsole = () => {
               <div style={{
                 width: `${Math.min(100, Math.round((rpm / 15000) * 100))}%`,
                 height: '100%',
-                backgroundColor: machineStatus === 'CRITICAL' ? '#ef4444' : '#38bdf8',
+                backgroundColor: isDown ? '#ef4444' : '#38bdf8',
                 transition: 'width 0.3s ease'
               }} />
             </div>
@@ -493,7 +536,7 @@ export const TelemetryConsole = () => {
               <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#ffffff' }}>
                 {machineStatus === 'RUNNING' && 'CNC-04 Spindle is operating within normal vibration & thermal envelope.'}
                 {machineStatus === 'WARNING' && 'Abnormal harmonic signature matches Spindle Bearing Fatigue (Error E-204).'}
-                {machineStatus === 'CRITICAL' && 'Critical thermal trip! Lockout/Tagout (LOTO) and spindle inspection required.'}
+                {isDown && 'Critical thermal trip! Lockout/Tagout (LOTO) and spindle inspection required.'}
               </div>
               <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>
                 {machineStatus === 'RUNNING'

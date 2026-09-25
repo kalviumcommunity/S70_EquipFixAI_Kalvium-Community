@@ -14,6 +14,7 @@ from app.schemas.maintenance import MaintenanceRecordResponse
 from app.schemas.incident import IncidentResponse
 from app.auth.deps import get_current_user, require_role
 from app.services.audit_service import AuditService
+from app.websocket.events import RealTimeEvents
 
 router = APIRouter(prefix="/machines", tags=["Machines"])
 
@@ -308,6 +309,8 @@ def update_machine(
     for field, value in update_data.items():
         setattr(machine, field, value)
 
+    status_changed = "status" in update_data and update_data["status"] != prev_val["status"]
+
     AuditService.log_action(
         db=db,
         action=AuditAction.PRIORITY_CHANGED,
@@ -319,4 +322,113 @@ def update_machine(
     )
     db.commit()
     db.refresh(machine)
+
+    if status_changed:
+        RealTimeEvents.machine_status_changed({
+            "id": machine.id,
+            "machine_code": machine.machine_code,
+            "name": machine.name,
+            "status": machine.status.value,
+            "updated_by": current_user.full_name or current_user.username
+        })
+
     return machine
+
+
+@router.put("/{machine_id}/status", response_model=MachineResponse)
+def update_machine_status(
+    machine_id: int,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Real-time machine status update and plant-wide WebSocket dispatch."""
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    if not machine:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Machine #{machine_id} not found."
+        )
+
+    new_status_str = status_data.get("status")
+    if not new_status_str:
+        raise HTTPException(status_code=400, detail="status field is required.")
+
+    valid_statuses = [s.value for s in MachineStatus]
+    if new_status_str not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {valid_statuses}")
+
+    prev_status = machine.status.value
+    machine.status = MachineStatus(new_status_str)
+
+    AuditService.log_action(
+        db=db,
+        action=AuditAction.PRIORITY_CHANGED,
+        entity_type="machine",
+        entity_id=machine.id,
+        user_id=current_user.id,
+        previous_value={"status": prev_status},
+        new_value={"status": machine.status.value, "source": "telemetry_simulation"}
+    )
+    db.commit()
+    db.refresh(machine)
+
+    RealTimeEvents.machine_status_changed({
+        "id": machine.id,
+        "machine_code": machine.machine_code,
+        "name": machine.name,
+        "status": machine.status.value,
+        "updated_by": current_user.full_name or current_user.username
+    })
+
+    return machine
+
+
+@router.put("/code/{machine_code}/status", response_model=MachineResponse)
+def update_machine_status_by_code(
+    machine_code: str,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Real-time machine status update by code and plant-wide WebSocket dispatch."""
+    machine = db.query(Machine).filter(Machine.machine_code == machine_code.upper()).first()
+    if not machine:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Machine code '{machine_code}' not found."
+        )
+
+    new_status_str = status_data.get("status")
+    if not new_status_str:
+        raise HTTPException(status_code=400, detail="status field is required.")
+
+    valid_statuses = [s.value for s in MachineStatus]
+    if new_status_str not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {valid_statuses}")
+
+    prev_status = machine.status.value
+    machine.status = MachineStatus(new_status_str)
+
+    AuditService.log_action(
+        db=db,
+        action=AuditAction.PRIORITY_CHANGED,
+        entity_type="machine",
+        entity_id=machine.id,
+        user_id=current_user.id,
+        previous_value={"status": prev_status},
+        new_value={"status": machine.status.value, "source": "telemetry_simulation"}
+    )
+    db.commit()
+    db.refresh(machine)
+
+    RealTimeEvents.machine_status_changed({
+        "id": machine.id,
+        "machine_code": machine.machine_code,
+        "name": machine.name,
+        "status": machine.status.value,
+        "updated_by": current_user.full_name or current_user.username
+    })
+
+    return machine
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { machinesApi } from '../../services/api';
+import { useWebSocket } from '../../context/WebSocketContext';
 import {
   Cpu, Activity, AlertTriangle, CheckCircle2, Wrench,
   Sparkles, Thermometer, Radio, Gauge, ArrowRight
@@ -12,6 +13,7 @@ export const PlantMachineHealthGrid = ({ initialMachines = null, onSelectMachine
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [selectedMachineForAI, setSelectedMachineForAI] = useState(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const { lastEvent } = useWebSocket();
 
   useEffect(() => {
     if (!initialMachines) {
@@ -20,6 +22,13 @@ export const PlantMachineHealthGrid = ({ initialMachines = null, onSelectMachine
       setMachines(initialMachines);
     }
   }, [initialMachines]);
+
+  // Real-time synchronization on machine status changes
+  useEffect(() => {
+    if (lastEvent?.event === 'machine.status_changed') {
+      fetchMachines();
+    }
+  }, [lastEvent]);
 
   const fetchMachines = async () => {
     try {

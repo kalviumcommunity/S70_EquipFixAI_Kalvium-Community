@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AITroubleshootingPanel } from '../../components/ai/AITroubleshootingPanel';
 import AICopilotPromptCard from '../../components/ai/AICopilotPromptCard';
+import { TelemetryConsole } from '../../components/telemetry/TelemetryConsole';
 
 export const TechnicianDashboard = () => {
   const { lastEvent, addToast } = useWebSocket();
@@ -269,6 +270,11 @@ export const TechnicianDashboard = () => {
         title="EquipFix AI Diagnostics Copilot"
         subtitle="Search OEM manuals, safety SOPs, and past verified repair history to resolve work orders."
       />
+
+      {/* Live Telemetry Diagnostic Oscilloscope & Condition Simulation */}
+      <div style={{ marginBottom: '24px' }}>
+        <TelemetryConsole />
+      </div>
 
       {/* Two Column Active Work Order Execution Workspace */}
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px' }}>

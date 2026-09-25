@@ -47,9 +47,10 @@ export const NotificationsPage = () => {
   };
 
   const filtered = notifications.filter((n) => {
+    const nType = n.notification_type || n.type;
     if (filter === 'UNREAD') return !n.is_read;
-    if (filter === 'APPROVAL') return n.type === 'APPROVAL';
-    if (filter === 'ALERT') return n.type === 'ALERT' || n.type === 'STATUS_CHANGE';
+    if (filter === 'APPROVAL') return nType === 'APPROVAL';
+    if (filter === 'ALERT') return nType === 'ALERT' || nType === 'STATUS_CHANGE';
     return true;
   });
 
@@ -134,7 +135,7 @@ export const NotificationsPage = () => {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
                 <div style={{ marginTop: '2px' }}>
-                  {getIcon(item.type)}
+                  {getIcon(item.notification_type || item.type)}
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

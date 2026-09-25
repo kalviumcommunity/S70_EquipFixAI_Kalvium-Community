@@ -109,7 +109,10 @@ export const SupervisorDashboard = () => {
   };
 
   const handleTriggerSchedule = async (scheduleId) => {
-    if (technicians.length === 0) return;
+    if (technicians.length === 0) {
+      addToast('No Technicians Available', 'Cannot generate preventive maintenance work order because no technicians are registered.', 'error');
+      return;
+    }
     try {
       const techId = technicians[0].id;
       await maintenanceApi.generateWO(scheduleId, techId);

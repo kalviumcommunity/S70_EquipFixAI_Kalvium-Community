@@ -172,6 +172,163 @@ def get_incident(
     return incident
 
 
+@router.get("/{incident_id}/timeline")
+def get_incident_timeline(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve complete chronological event timeline for an incident."""
+    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident #{incident_id} not found."
+        )
+
+    # RBAC check: Operators cannot view others' incidents
+    if current_user.role.name == UserRole.OPERATOR.value and incident.reported_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only view incidents reported by you."
+        )
+
+    events = []
+
+    # 1. Incident Reported
+    events.append({
+        "stage": "REPORTED",
+        "title": f"Incident {incident.incident_number} Reported",
+        "timestamp": incident.created_at.isoformat(),
+        "raw_time": incident.created_at,
+        "actor": incident.reported_by.full_name if incident.reported_by else "Floor Operator",
+        "role": "OPERATOR",
+        "description": incident.description,
+        "status": "COMPLETED",
+        "severity": incident.severity.value,
+        "icon": "AlertTriangle"
+    })
+
+    # 2. Supervisor Assignment
+    if incident.supervisor_id or incident.assigned_technician_id:
+        assign_time = incident.updated_at or incident.created_at
+        events.append({
+            "stage": "ASSIGNED",
+            "title": "Technician Dispatched & Triage Initiated",
+            "timestamp": assign_time.isoformat(),
+            "raw_time": assign_time,
+            "actor": incident.supervisor.full_name if incident.supervisor else "Floor Supervisor",
+            "role": "SUPERVISOR",
+            "description": f"Assigned to {incident.assigned_technician.full_name if incident.assigned_technician else 'Maintenance Technician'} with priority {incident.priority.value}.",
+            "status": "COMPLETED",
+            "icon": "UserCheck"
+        })
+
+    # 3. Work Order and Detailed Work Logs
+    work_order = db.query(WorkOrder).filter(WorkOrder.incident_id == incident.id).first()
+    if work_order:
+        if work_order.started_at:
+            events.append({
+                "stage": "IN_PROGRESS",
+                "title": "Technician Commenced Physical Diagnostics",
+                "timestamp": work_order.started_at.isoformat(),
+                "raw_time": work_order.started_at,
+                "actor": work_order.assigned_technician.full_name if work_order.assigned_technician else "Technician",
+                "role": "TECHNICIAN",
+                "description": f"Troubleshooting active on {incident.machine.machine_code if incident.machine else 'unit'}. Work Order #{work_order.work_order_number}.",
+                "status": "COMPLETED",
+                "icon": "Wrench"
+            })
+
+        for log in sorted(work_order.logs or [], key=lambda l: l.timestamp):
+            events.append({
+                "stage": "WORK_LOG",
+                "title": f"Diagnostic Step: {log.step_description[:45]}",
+                "timestamp": log.timestamp.isoformat() if log.timestamp else incident.created_at.isoformat(),
+                "raw_time": log.timestamp or incident.created_at,
+                "actor": log.technician.full_name if log.technician else "Technician",
+                "role": "TECHNICIAN",
+                "description": log.action_taken,
+                "status": "COMPLETED",
+                "icon": "FileText"
+            })
+
+        for pu in work_order.parts_used:
+            t_part = getattr(pu, "created_at", None) or work_order.completed_at or work_order.started_at or incident.created_at
+            events.append({
+                "stage": "PARTS_REPLACED",
+                "title": f"Spare Part Installed: {pu.part.name if pu.part else 'Replacement Component'}",
+                "timestamp": t_part.isoformat() if t_part else incident.created_at.isoformat(),
+                "raw_time": t_part or incident.created_at,
+                "actor": "Plant Stockroom",
+                "role": "TECHNICIAN",
+                "description": f"Installed {pu.quantity_used}x ({pu.part.part_code if pu.part else 'Item'}) from maintenance stock.",
+                "status": "COMPLETED",
+                "icon": "Package"
+            })
+
+        if work_order.completed_at:
+            events.append({
+                "stage": "REPAIR_COMPLETED",
+                "title": "Repair Completed & Handover Initiated",
+                "timestamp": work_order.completed_at.isoformat(),
+                "raw_time": work_order.completed_at,
+                "actor": work_order.assigned_technician.full_name if work_order.assigned_technician else "Technician",
+                "role": "TECHNICIAN",
+                "description": work_order.notes or "Machine repair actions completed and verified against OEM specifications.",
+                "status": "COMPLETED",
+                "icon": "CheckCircle2"
+            })
+
+    # 4. Supervisor Approval & Return to Service
+    from app.models.maintenance import MaintenanceRecord
+    m_record = db.query(MaintenanceRecord).filter(MaintenanceRecord.incident_id == incident.id).first()
+    if m_record and m_record.approval_time:
+        events.append({
+            "stage": "APPROVED",
+            "title": "Supervisor Approved & Machine Restored",
+            "timestamp": m_record.approval_time.isoformat(),
+            "raw_time": m_record.approval_time,
+            "actor": m_record.approver.full_name if m_record.approver else "Supervisor",
+            "role": "SUPERVISOR",
+            "description": f"Verification approved: {m_record.repair_action or 'Restored to service'}. Machine status set back to RUNNING.",
+            "status": "COMPLETED",
+            "icon": "ShieldCheck"
+        })
+
+    if incident.resolved_at:
+        events.append({
+            "stage": "RESOLVED",
+            "title": f"Incident {incident.incident_number} Fully Resolved",
+            "timestamp": incident.resolved_at.isoformat(),
+            "raw_time": incident.resolved_at,
+            "actor": "Platform Automation",
+            "role": "SYSTEM",
+            "description": "Plant asset back online and operational.",
+            "status": "COMPLETED",
+            "icon": "Check"
+        })
+
+    events.sort(key=lambda x: x["raw_time"] or datetime.min)
+    for e in events:
+        del e["raw_time"]
+
+    return {
+        "incident_id": incident.id,
+        "incident_number": incident.incident_number,
+        "current_status": incident.status.value,
+        "machine_code": incident.machine.machine_code if incident.machine else "",
+        "machine_name": incident.machine.name if incident.machine else "",
+        "severity": incident.severity.value,
+        "priority": incident.priority.value,
+        "reported_at": incident.created_at.isoformat(),
+        "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,
+        "assigned_technician": incident.assigned_technician.full_name if incident.assigned_technician else None,
+        "supervisor": incident.supervisor.full_name if incident.supervisor else None,
+        "events": events
+    }
+
+
 @router.put("/{incident_id}/assign", response_model=IncidentResponse)
 def assign_technician(
     incident_id: int,

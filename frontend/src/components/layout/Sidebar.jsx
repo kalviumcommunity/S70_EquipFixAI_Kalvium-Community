@@ -477,11 +477,29 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
           {role === 'OPERATOR' && (
             <>
               <div style={sectionHeaderStyle}>Operator Floor</div>
-              <NavLink to="/labor/dashboard" style={navItemStyle} onClick={onClose}>
+              <NavLink to="/labor/dashboard" end style={navItemStyle} onClick={onClose}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <LayoutDashboard size={17} />
-                  <span>Floor Dashboard</span>
+                  <span>Floor Workstation</span>
                 </div>
+              </NavLink>
+              <NavLink to="/labor/dashboard#reports" style={navItemStyle} onClick={onClose}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <History size={17} color="#38bdf8" />
+                  <span>My Incident Tracking</span>
+                </div>
+                {counts.activeIncidents > 0 && (
+                  <span style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    backgroundColor: '#dc2626',
+                    color: '#ffffff',
+                    padding: '2px 6px',
+                    borderRadius: '9999px',
+                  }}>
+                    {counts.activeIncidents}
+                  </span>
+                )}
               </NavLink>
               <NavLink to="/incidents" style={navItemStyle} onClick={onClose}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -492,7 +510,19 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
               <NavLink to="/machines" style={navItemStyle} onClick={onClose}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Cpu size={17} color="#60a5fa" />
-                  <span>Equipment Status</span>
+                  <span>Equipment Fleet</span>
+                </div>
+              </NavLink>
+              <NavLink to="/labor/dashboard#ai-copilot" style={navItemStyle} onClick={onClose}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Sparkles size={17} color="#a855f7" />
+                  <span style={{ color: '#c084fc', fontWeight: 600 }}>AI Copilot & Safety</span>
+                </div>
+              </NavLink>
+              <NavLink to="/documents" style={navItemStyle} onClick={onClose}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileText size={17} color="#10b981" />
+                  <span>Safety SOPs & Manuals</span>
                 </div>
               </NavLink>
               <NavLink to="/notifications" style={navItemStyle} onClick={onClose}>
@@ -500,6 +530,18 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
                   <Bell size={17} />
                   <span>Notifications</span>
                 </div>
+                {counts.unreadNotifs > 0 && (
+                  <span style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    backgroundColor: '#2563eb',
+                    color: '#ffffff',
+                    padding: '2px 6px',
+                    borderRadius: '9999px',
+                  }}>
+                    {counts.unreadNotifs}
+                  </span>
+                )}
               </NavLink>
             </>
           )}
