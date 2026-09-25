@@ -1,0 +1,52 @@
+--- Page 1 ---
+# FLUID POWER ZERO-ENERGY CONTROL STANDARD (SOP-LOTO-HYD-04)
+Title: Hydraulic Stamping Press & Pneumatic Subsystem Lockout/Tagout De-energization SOP
+Document ID: SOP-HYD-LOTO-2026
+Standard Compliance: OSHA 29 CFR 1910.147 / ISO 4413 Hydraulic Fluid Power / ISO 4414 Pneumatics
+Equipment Association: PRESS-01 (200-Ton Hydraulic Press) / CNC-04 (Pneumatic Counterbalance)
+Classification: Plant Safety Standard Operating Procedure
+
+SECTION 1: HAZARDS OF STORED HYDRAULIC & PNEUMATIC ENERGY
+Fluid power systems store energy in compressed liquids, compressed air reservoirs, pressurized bladder accumulators, 
+and elevated mechanical rams under gravity load.
+⚠️ DANGER: HIGH PRESSURE FLUID INJECTION & PINCH HAZARDS
+- Operating hydraulic system pressure reaches 210 Bar (3,050 PSI). High pressure pinhole leaks can penetrate skin and tissue, causing fatal bloodstream toxicity or severe amputation.
+- Compressed pneumatic lines operate at 6 to 8 Bar (90-115 PSI). Uncontrolled release can launch steel fittings at high velocity.
+- The 200-Ton press slide weighs 4.5 metric tons and will drop under gravity if hydraulic holding valves lose pressure.
+
+--- Page 2 ---
+SECTION 2: REQUIRED PERSONAL PROTECTIVE EQUIPMENT (PPE)
+1. Heavy-duty puncture-resistant nitrile gloves with reinforced palms (EN 388 Level 4).
+2. Full wrap-around ANSI Z87.1 impact face shield over safety glasses when opening hydraulic bleeds.
+3. ASTM F2413 metatarsal-guard safety work boots.
+4. Chemical-resistant apron if draining hydraulic fluid reservoirs.
+
+--- Page 3 ---
+SECTION 3: STEP-BY-STEP FLUID POWER ZERO-ENERGY PROTOCOL
+
+Step 1: Lower Machine Ram & Secure Mechanical Die Blocks
+- Using manual jog mode, lower the press slide ram onto hardwood or certified steel safety drop blocks.
+- Insert the electrical interlock safety plug connected to the die block safety chain into the press console receptacle. This electrically disables ram actuation.
+
+Step 2: Isolate Primary Hydraulic Pump & Electric Motors
+- Turn main hydraulic pump motor switch to "OFF" position.
+- Lock out the electric supply disconnect at MCC-A (Breaker #8) using red padlock and danger tag.
+
+Step 3: Depressurize High-Pressure Hydraulic Accumulators
+- ⚠️ CRITICAL: Nitrogen-charged bladder accumulators ACC-1 and ACC-2 retain up to 180 Bar of stored energy even with the main pump turned off!
+- Locate the manual accumulator safety shut-off block (Block HYD-SB-1).
+- Slowly rotate the red manual bleed needle valve counter-clockwise by 2 full turns.
+- Monitor hydraulic accumulator pressure gauge PG-ACC-1. Observe needle dropping to 0 Bar (0 PSI).
+- Leave bleed valve in open position during servicing.
+
+Step 4: Isolate & Lock Out Pneumatic Air Supply
+- Locate the plant primary pneumatic supply drop at the FRL (Filter-Regulator-Lubricator) manifold.
+- Rotate the yellow manual exhaust ball valve 90 degrees to the "VENT" position.
+- Insert red lockout padlock through the valve lockout hole to prevent re-opening.
+- The downstream air lines will automatically exhaust with an audible rush of air.
+
+Step 5: Verify Complete Zero Energy State (Hydraulic & Pneumatic)
+- Gauge Inspection: Inspect pressure gauge PG-MAIN (main pump), PG-ACC-1 (accumulator), and PG-PNEU (pneumatics).
+- All three gauges MUST read exactly 0 Bar / 0 PSI.
+- Actuate manual manual spool override buttons on directional control valves D1 and D2 to verify zero pilot pressure.
+- Only when all gauges read zero and mechanical safety blocks are in place may hydraulic hose replacement, cylinder packing, or valve overhaul begin.

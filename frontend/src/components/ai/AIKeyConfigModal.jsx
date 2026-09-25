@@ -8,7 +8,7 @@ import {
 export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
   const [provider, setProvider] = useState('gemini');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gemini-3.6-flash');
+  const [model, setModel] = useState('gemini-2.0-flash');
   const [customModel, setCustomModel] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -31,7 +31,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     setProvider(newProvider);
     setTestResult(null);
     if (newProvider === 'gemini') {
-      setModel('gemini-3.6-flash');
+      setModel('gemini-2.0-flash');
     } else {
       setModel('gpt-4o-mini');
     }
@@ -325,7 +325,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                   type="text"
                   value={customModel}
                   onChange={(e) => setCustomModel(e.target.value)}
-                  placeholder="e.g. gemini-2.5-flash"
+                  placeholder="e.g. gemini-2.0-flash"
                   style={{
                     width: '100%',
                     padding: '9px 12px',

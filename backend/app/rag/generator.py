@@ -41,9 +41,10 @@ class GroundedGenerator:
         query: str,
         retrieval_data: Dict[str, Any],
         machine_code: Optional[str] = None,
-        query_id: int = 1
+        query_id: int = 1,
+        user_role: Optional[str] = None
     ) -> AIQueryResponse:
-        """Synthesize technical troubleshooting response strictly grounded in retrieved chunks."""
+        """Synthesize technical troubleshooting response strictly grounded in retrieved chunks with role-based safety restrictions."""
         # Check for Prompt Injection Defense
         if self.is_prompt_injection(query):
             return AIQueryResponse(
@@ -64,6 +65,46 @@ class GroundedGenerator:
                 is_structured_fact=False,
                 created_at=datetime.utcnow()
             )
+
+        # Operator Safety Intercept: Detect Restricted Actions (OSHA 29 CFR 1910.147 LOTO)
+        is_operator = (user_role or "").upper() == "OPERATOR"
+        if is_operator:
+            q_lower = query.lower()
+            is_restricted_action = any(kw in q_lower for kw in [
+                "replace", "disassemble", "take apart", "open panel", "electrical", "rewire", "solder",
+                "motor", "belt change", "modify setting", "bypass", "remove bearing", "repair myself",
+                "open cabinet", "fix myself", "change component", "disassembly"
+            ])
+            if is_restricted_action:
+                return AIQueryResponse(
+                    query_id=query_id,
+                    question=query,
+                    machine_code=machine_code,
+                    possible_cause="⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147).",
+                    recommended_checks=[
+                        "Stop the machine immediately using the standard shutdown procedure.",
+                        "Record displayed HMI error codes and note operating symptoms.",
+                        "Do NOT open machine enclosures, electrical cabinets, or access moving mechanisms.",
+                        "Dispatch a certified technician via the Report Equipment Issue button to notify your supervisor."
+                    ],
+                    safety_warnings=[
+                        "⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147)."
+                    ],
+                    relevant_previous_repairs=[],
+                    sources=[
+                        AICitation(
+                            document_title="OSHA Standard 29 CFR 1910.147 — Control of Hazardous Energy (Lockout/Tagout)",
+                            section_title="Section (c)(4): Energy Control Procedures & Authorized Personnel Only",
+                            snippet="Prohibits non-authorized personnel from executing component servicing, cabinet access, or mechanical disassembly on industrial machinery.",
+                            source_type="SAFETY",
+                            relevance_score=1.0,
+                            page_number=1
+                        )
+                    ],
+                    grounding_status=GroundingStatus.GROUNDED,
+                    is_structured_fact=False,
+                    created_at=datetime.utcnow()
+                )
 
         chunks = retrieval_data.get("chunks", [])
         safety_chunks = retrieval_data.get("safety_chunks", [])
@@ -170,6 +211,38 @@ class GroundedGenerator:
                 unique_checks.append(clean_chk)
             if len(unique_checks) >= 5:
                 break
+
+        # Role-Aware Safety Filtering for Floor Operators
+        is_operator = (user_role or "").upper() == "OPERATOR"
+        if is_operator:
+            q_lower = query.lower()
+            is_restricted_action = any(kw in q_lower for kw in [
+                "replace", "disassemble", "take apart", "open panel", "electrical", "rewire", "solder",
+                "motor", "belt change", "modify setting", "bypass", "remove bearing", "repair myself"
+            ])
+            if is_restricted_action:
+                safety_warnings.insert(0, "⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147).")
+                unique_checks = [
+                    "Stop the machine immediately using the standard shutdown procedure.",
+                    "Record the displayed HMI error code and current sensor readings.",
+                    "Do NOT open machine enclosures, electrical cabinets, or access moving mechanisms.",
+                    "Report this incident via EquipFixAI to notify your shop floor supervisor and dispatch a certified technician."
+                ]
+            else:
+                # Filter out technician-only intrusive checks for operator safety
+                filtered_checks = []
+                for c in unique_checks:
+                    c_lower = c.lower()
+                    if any(t in c_lower for t in ["disassemble", "remove cover", "replace", "rewire", "loosen bolt inside", "open cabinet"]):
+                        continue
+                    filtered_checks.append(c)
+                
+                safe_prepend = [
+                    "Stop machine operation if noise, vibration, or temperature exceeds safe limits.",
+                    "Record error codes from the external operator terminal."
+                ]
+                unique_checks = safe_prepend + [fc for fc in filtered_checks if fc not in safe_prepend][:3]
+                safety_warnings.append("⚠️ Operator Safety Notice: Never bypass safety interlocks or open guards while equipment is energized.")
 
         possible_cause = " | ".join(causes[:2])
 

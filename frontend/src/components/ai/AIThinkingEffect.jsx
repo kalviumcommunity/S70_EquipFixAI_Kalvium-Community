@@ -8,7 +8,7 @@ import { Sparkles, Brain, Cpu, RefreshCw, Zap } from 'lucide-react';
  */
 export const AIThinkingEffect = ({
   mode = 'chat', // 'chat' | 'vision' | 'diagram'
-  modelName = 'Gemini 3.6 Flash',
+  modelName = 'Gemini 2.0 Flash',
   machineCode = ''
 }) => {
   const [phaseIdx, setPhaseIdx] = useState(0);

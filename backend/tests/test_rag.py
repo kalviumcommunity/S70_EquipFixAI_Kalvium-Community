@@ -257,3 +257,39 @@ def test_ai_query_feedback_submission(client: TestClient, db_session: Session, s
     matching = [h for h in history if h["id"] == query_id]
     assert len(matching) == 1
     assert matching[0]["feedback"] == "HELPFUL"
+
+
+def test_document_content_and_search(client: TestClient, db_session: Session, seeded_users):
+    """Verify GET /api/documents/{id}/content returns structured sections, loto_steps, and pages, and search queries work."""
+    headers = get_auth_header("tech_user", UserRole.TECHNICIAN.value)
+
+    # 1. Test listing with search query
+    list_res = client.get("/api/documents?q=OSHA", headers=headers)
+    assert list_res.status_code == 200
+    docs = list_res.json()
+    assert isinstance(docs, list)
+    # Check that any returned document matches OSHA in title
+    if len(docs) > 0:
+        assert any("OSHA" in d["title"].upper() or "LOTO" in d["title"].upper() for d in docs)
+
+    # 2. Test get all documents
+    all_res = client.get("/api/documents", headers=headers)
+    assert all_res.status_code == 200
+    all_docs = all_res.json()
+    assert len(all_docs) > 0
+
+    # 3. Test content endpoint for the first document
+    first_doc_id = all_docs[0]["id"]
+    content_res = client.get(f"/api/documents/{first_doc_id}/content", headers=headers)
+    assert content_res.status_code == 200
+    content_data = content_res.json()
+
+    assert "id" in content_data
+    assert "title" in content_data
+    assert "doc_type" in content_data
+    assert "raw_content" in content_data
+    assert "sections" in content_data
+    assert isinstance(content_data["sections"], list)
+    assert "loto_steps" in content_data
+    assert isinstance(content_data["loto_steps"], list)
+    assert len(content_data["raw_content"]) > 0
