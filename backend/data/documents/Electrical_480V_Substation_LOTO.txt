@@ -1,0 +1,54 @@
+--- Page 1 ---
+# ELECTRICAL SAFETY STANDARD OPERATING PROCEDURE (SOP-LOTO-ELEC-01)
+Title: 480V 3-Phase Electrical Substation & Motor Control Center (MCC) Lockout/Tagout Protocol
+Document ID: SOP-ELEC-480V-2026
+Standard Compliance: OSHA 29 CFR 1910.333 / NFPA 70E Standard for Electrical Safety in the Workplace
+Facility Location: Plant Substation Bay & Main Distribution Panel MDP-3
+Equipment Code: ELEC-SUB-01 / MDP-3 / MCC-A
+
+SECTION 1: ELECTRICAL ARC FLASH HAZARD & OPERATIONAL BOUNDARIES
+⚠️ DANGER: ARC FLASH & ARC BLAST HAZARD — 480 VOLTS AC 3-PHASE
+Main distribution panel MDP-3 and motor control centers (MCC-A, MCC-B) supply 480V 3-Phase 60Hz power with available short-circuit currents up to 65,000 Amperes.
+An electrical arc flash event can generate incident thermal energy exceeding 25 cal/cm² and temperatures over 19,000°C (35,000°F).
+
+Mandatory Boundaries:
+- Flash Protection Boundary: 3.2 meters (10.5 ft)
+- Limited Approach Boundary: 1.5 meters (5.0 ft) — Qualified Electrical Personnel only.
+- Restricted Approach Boundary: 0.3 meters (12 inches) — Avoid contact without insulated tools.
+
+--- Page 2 ---
+SECTION 2: MANDATORY NFPA 70E PPE CATEGORY 4 GEAR
+Before opening or interacting with any 480V energized enclosure or breaker compartment:
+1. 40 cal/cm² Arc Flash Suit (Jacket and Bib Overalls) or 40 cal/cm² Arc Flash Coat.
+2. 40 cal/cm² Arc-rated hood with face shield and safety glasses underneath.
+3. Class 0 (1,000V rated) insulating rubber electrical gloves with leather outer protectors.
+4. Hard hat with arc-rated chin cup.
+5. Hearing protection (ear canal inserts).
+6. Heavy-duty dielectric safety work boots (ASTM F2413 EH rated).
+
+--- Page 3 ---
+SECTION 3: STEP-BY-STEP ELECTRICAL LOCKOUT PROCEDURE
+Step 1: Obtain Electrical Work Permit (EWP) approved by the Plant Electrical Engineer.
+Step 2: Notify the Shift Operations Supervisor and all technicians operating connected CNC and stamping press assets.
+Step 3: Wear complete NFPA 70E Arc Flash PPE.
+Step 4: Stand to the hinge side of the cabinet (do NOT stand directly in front of the breaker handle) to protect against arc blast ejection.
+Step 5: Firmly and rapidly throw the external disconnect handle of Breaker #14 on Panel MDP-3 completely down to the "OFF" position.
+Step 6: Confirm physical mechanical disconnect flag displays "OPEN" through the inspection viewing window.
+Step 7: Insert the Master Red Lockout Hasp through the operating handle lockout hole.
+Step 8: Attach technician padlock (Key Code ELEC-LOTO-01) and heavy-duty vinyl Danger Tag with date and technician contact info.
+
+--- Page 4 ---
+SECTION 4: ZERO VOLTAGE VERIFICATION ("TEST BEFORE TOUCH" PROTOCOL)
+⚠️ CRITICAL: Never assume a circuit is dead until verified with a functional meter.
+Follow the standard 3-Point Voltmeter Verification Technique:
+1. Step 4A (Known Source Test): Set calibrated digital multimeter (CAT IV 600V rated) to AC Volts. Test meter against a known energized 120V or 480V test station to confirm meter operational status.
+2. Step 4B (De-energized Target Test): Test all terminal pairs on the load side of Breaker #14:
+   - Phase L1 to Phase L2: Must be < 1.0 VAC.
+   - Phase L2 to Phase L3: Must be < 1.0 VAC.
+   - Phase L1 to Phase L3: Must be < 1.0 VAC.
+   - Phase L1 to Ground: Must be < 1.0 VAC.
+   - Phase L2 to Ground: Must be < 1.0 VAC.
+   - Phase L3 to Ground: Must be < 1.0 VAC.
+3. Step 4C (Known Source Re-test): Immediately re-test multimeter against known energized voltage source to ensure meter did not fail during testing.
+4. Step 4D: Discharge secondary DC-bus capacitors if working downstream on variable frequency drives (VFD-01, VFD-04). Verify DC bus voltage is < 10.0 VDC.
+5. Step 4E: Apply personal grounding clusters to phase buses if working on high-amperage feeder conductors.

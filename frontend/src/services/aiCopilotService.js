@@ -5,6 +5,8 @@
  * and industrial image/diagram generation (Google Imagen 3, FLUX, DALL-E 3).
  */
 
+import api from './api';
+
 const STORAGE_KEYS = {
   API_KEY: 'equipfix_ai_api_key',
   PROVIDER: 'equipfix_ai_provider', // 'gemini' | 'openai'
@@ -19,76 +21,28 @@ export const AI_PROVIDERS = {
 
 export const GEMINI_MODELS = [
   {
-    id: 'gemini-3.6-flash',
-    name: 'Gemini 3.6 Flash',
-    badge: 'GOOGLE RECOMMENDED',
-    desc: 'Official Google-recommended next-gen flagship with lowest latency & advanced multimodal reasoning'
-  },
-  {
-    id: 'gemini-3.5-flash',
-    name: 'Gemini 3.5 Flash',
-    badge: '3.5 FLASH',
-    desc: 'High-throughput 3.5 generation multimodal model for fast diagnostics'
-  },
-  {
-    id: 'gemini-3.5-pro',
-    name: 'Gemini 3.5 Pro',
-    badge: '3.5 PRO REASONING',
-    desc: 'Deep engineering diagnostics, root-cause calculations & MTTR optimization'
-  },
-  {
-    id: 'gemini-3.0-flash',
-    name: 'Gemini 3.0 Flash',
-    badge: '3.0 FLASH',
-    desc: 'Ultra-fast multimodal processing for real-time equipment checks'
-  },
-  {
-    id: 'gemini-3.0-pro',
-    name: 'Gemini 3.0 Pro',
-    badge: '3.0 PRO',
-    desc: 'Heavyweight reasoning across industrial CAD diagrams and maintenance records'
-  },
-  {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    badge: '2.5 FLASH',
-    desc: 'Production multimodal model with high speed and visual comprehension'
-  },
-  {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    badge: '2.5 PRO',
-    desc: 'Detailed engineering reasoning and plant safety compliance'
-  },
-  {
-    id: 'gemini-2.0-flash-thinking-exp-01-21',
-    name: 'Gemini 2.0 Flash Thinking',
-    badge: 'THINKING ENGINE',
-    desc: 'Step-by-step diagnostic reasoning traces before final resolution'
-  },
-  {
-    id: 'gemini-2.0-pro-exp-02-05',
-    name: 'Gemini 2.0 Pro Experimental',
-    badge: 'PRO EXPERIMENTAL',
-    desc: 'Complex mechanical & mathematical formulas'
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    badge: 'LONG CONTEXT',
-    desc: 'Massive 2M token context window to cross-reference multi-volume manuals'
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    badge: 'RECOMMENDED • FASTEST',
+    desc: 'Lowest latency & advanced multimodal engineering reasoning. Best for real-time plant diagnostics.'
   },
   {
     id: 'gemini-1.5-flash',
     name: 'Gemini 1.5 Flash',
-    badge: 'STABLE WORKHORSE',
-    desc: 'Proven, reliable production diagnostic assistant'
+    badge: 'ROCK-SOLID STABILITY',
+    desc: 'Production workhorse supported on all Google AI Studio and Vertex API keys.'
   },
   {
-    id: 'gemini-1.5-flash-8b',
-    name: 'Gemini 1.5 Flash-8B',
-    badge: 'LIGHTWEIGHT',
-    desc: 'Micro-diagnostics and high-frequency queries'
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    badge: 'ADVANCED REASONING',
+    desc: 'Deep mechanical root-cause calculations, CAD drawings & MTTR analysis.'
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badge: 'EXPERIMENTAL',
+    desc: 'Next-generation reasoning preview'
   },
   {
     id: 'custom',
@@ -99,27 +53,34 @@ export const GEMINI_MODELS = [
 ];
 
 export const OPENAI_MODELS = [
-  { id: 'gpt-4o', name: 'GPT-4o', badge: 'OMNI FLAGSHIP', desc: 'Top tier multimodal vision & reasoning' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', badge: 'FAST & LIGHT', desc: 'Efficient standard diagnostic queries' },
+  { id: 'gpt-4o', name: 'GPT-4o', badge: 'OMNI FLAGSHIP', desc: 'Top tier multimodal vision & reasoning' },
   { id: 'o1', name: 'o1', badge: 'DEEP THINKING', desc: 'Complex algorithmic troubleshooting' },
   { id: 'o3-mini', name: 'o3-mini', badge: 'REASONING MINI', desc: 'Fast STEM & industrial reasoning' },
   { id: 'custom', name: 'Custom OpenAI Model ID', badge: 'CUSTOM', desc: 'Specify custom model name or fine-tuned checkpoint' }
 ];
 
 export const DEFAULT_MODELS = {
-  gemini: 'gemini-3.6-flash',
+  gemini: 'gemini-2.0-flash',
   openai: 'gpt-4o-mini',
 };
 
 export const getAIConfig = () => {
-  const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+  let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+  apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
   const provider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
-  let model = localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODELS[provider] || 'gemini-3.6-flash';
+  let model = localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
 
-  // Automatically migrate deprecated models (e.g. gemini-2.0-flash) to gemini-3.6-flash
-  if (model === 'gemini-2.0-flash' || model === 'models/gemini-2.0-flash' || model === 'gemini-2.0-flash-lite') {
-    model = 'gemini-3.6-flash';
-    localStorage.setItem(STORAGE_KEYS.MODEL, 'gemini-3.6-flash');
+  // Automatically migrate invalid, deprecated, or fictional models to valid Google Gemini models
+  if (
+    !model ||
+    model.startsWith('gemini-3.') ||
+    model.startsWith('gemini-3-') ||
+    model === 'gemini-2.0-flash-lite' ||
+    model === 'models/gemini-2.0-flash-lite'
+  ) {
+    model = 'gemini-2.0-flash';
+    localStorage.setItem(STORAGE_KEYS.MODEL, 'gemini-2.0-flash');
   }
 
   const customModel = localStorage.getItem(STORAGE_KEYS.CUSTOM_MODEL) || '';
@@ -127,7 +88,10 @@ export const getAIConfig = () => {
 };
 
 export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
-  if (apiKey !== undefined) localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey.trim());
+  if (apiKey !== undefined) {
+    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
+    localStorage.setItem(STORAGE_KEYS.API_KEY, cleanKey);
+  }
   if (provider !== undefined) localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
   if (model !== undefined) localStorage.setItem(STORAGE_KEYS.MODEL, model);
   if (customModel !== undefined) localStorage.setItem(STORAGE_KEYS.CUSTOM_MODEL, customModel.trim());
@@ -149,7 +113,7 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
 
   let effectiveModel = (model === 'custom' && customModel?.trim())
     ? customModel.trim()
-    : (model || DEFAULT_MODELS[provider] || 'gemini-3.6-flash');
+    : (model || DEFAULT_MODELS[provider] || 'gemini-2.5-flash');
 
   // Strip 'models/' prefix if present
   effectiveModel = effectiveModel.replace(/^models\//, '');
@@ -271,7 +235,7 @@ export const askEquipFixCopilot = async ({
   let effectiveModel = _overrideModel || (
     (model === 'custom' && customModel?.trim())
       ? customModel.trim()
-      : (model || DEFAULT_MODELS[provider] || 'gemini-3.6-flash')
+      : (model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash')
   );
 
   // Strip 'models/' prefix if present
@@ -295,8 +259,6 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
 
   // If user configured a Gemini key:
   if (apiKey && provider === 'gemini') {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
     const parts = [{ text: `${systemPrompt}\n\nUser Question/Instruction: ${prompt}` }];
 
     if (imageBase64) {
@@ -313,53 +275,85 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
     const payload = {
       contents: [{ role: 'user', parts }],
       generationConfig: {
-        temperature: 0.25,
-        maxOutputTokens: 2500,
+        temperature: 0.2,
+        maxOutputTokens: 2048,
       }
     };
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    // Sequential candidate models to attempt (Strictly NON-RECURSIVE)
+    const candidateModels = Array.from(new Set([
+      effectiveModel,
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ].filter(Boolean)));
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const errMsg = err.error?.message || `Gemini API error (${res.status}) on model ${effectiveModel}`;
+    let lastError = null;
 
-      // Automatically handle model deprecation recommendations from Google (e.g. update to gemini-3.6-flash)
-      const match = errMsg.match(/models\/([a-zA-Z0-9._-]+)\s+for the latest features/i)
-        || errMsg.match(/update your code to use models\/([a-zA-Z0-9._-]+)/i)
-        || errMsg.match(/use\s+(?:models\/)?(gemini-[a-zA-Z0-9._-]+)/i);
+    for (const currentModel of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12-second strict timeout
 
-      if (match && match[1] && match[1] !== effectiveModel && !_overrideModel) {
-        const suggestedModel = match[1];
-        saveAIConfig({ model: suggestedModel });
-        // Retry immediately with the Google-recommended model!
-        return askEquipFixCopilot({
-          prompt,
-          imageBase64,
-          imageMime,
-          context,
-          _overrideModel: suggestedModel
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
         });
-      }
 
-      throw new Error(errMsg);
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          const candidate = data.candidates?.[0];
+          const textOutput = candidate?.content?.parts?.map(p => p.text).join('') || '';
+
+          if (textOutput.trim()) {
+            // Save the verified working model for immediate next query
+            saveAIConfig({ model: currentModel });
+            return {
+              text: textOutput,
+              provider: `Google Gemini (${currentModel})`,
+              realtime: true,
+              hasVision: Boolean(imageBase64),
+              groundedSource: `Gemini ${currentModel} Direct Stream`
+            };
+          }
+        }
+
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `Google API returned status ${res.status}`;
+        lastError = errMsg;
+
+        // If the key is invalid or unauthorized, retrying other models won't help
+        if (
+          res.status === 403 ||
+          errMsg.includes('API key not valid') ||
+          errMsg.includes('API_KEY_INVALID') ||
+          errMsg.includes('PERMISSION_DENIED')
+        ) {
+          console.warn(`[EquipFixAI] API Key error on Gemini: ${errMsg}. Skipping remaining models.`);
+          break;
+        }
+
+        console.warn(`[EquipFixAI] Model ${currentModel} failed (${res.status}: ${errMsg}). Trying next model...`);
+      } catch (attemptErr) {
+        clearTimeout(timeoutId);
+        if (attemptErr.name === 'AbortError') {
+          lastError = `Request to ${currentModel} timed out (12s limit).`;
+        } else {
+          lastError = attemptErr.message || 'Network request failed';
+        }
+        console.warn(`[EquipFixAI] Error on ${currentModel}:`, lastError);
+      }
     }
 
-    const data = await res.json();
-    const candidate = data.candidates?.[0];
-    const textOutput = candidate?.content?.parts?.map(p => p.text).join('') || 'No response generated.';
-
-    return {
-      text: textOutput,
-      provider: `Google Gemini (${effectiveModel})`,
-      realtime: true,
-      hasVision: Boolean(imageBase64),
-      groundedSource: `Gemini ${effectiveModel} Direct Stream`
-    };
+    // If all direct Gemini attempts failed, DO NOT HANG!
+    // Seamlessly fall through to EquipFix Local RAG Engine below.
+    console.warn(`[EquipFixAI] Direct Gemini calls failed (${lastError}). Falling back to EquipFix Local RAG Engine.`);
   }
 
   // If user configured an OpenAI key:
@@ -411,26 +405,14 @@ ${context.incidentSummary ? `Active Symptom Context: ${context.incidentSummary}`
   }
 
   // Fallback: If no custom key is configured, fallback to backend /api/ai/query
-  const res = await fetch('/api/ai/query', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('equipfix_token') || ''}`
-    },
-    body: JSON.stringify({
+  try {
+    const res = await api.post('/ai/query', {
       question: prompt,
       machine_id: context.machineId || undefined,
       work_order_id: context.workOrderId || undefined
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Troubleshooting query failed. Please configure your API key for direct real-time answers.');
-  }
-
-  const data = await res.json();
-  const formatted = `### 🔍 Root Cause Analysis & Sensor Telemetry
+    });
+    const data = res.data;
+    const formatted = `### 🔍 Root Cause Analysis & Sensor Telemetry
 ${data.possible_cause || '✅ Diagnostic telemetry and vibration spectrum within normal thresholds.'}
 
 ### 🛠️ Recommended Action Steps
@@ -445,15 +427,18 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
 \`\`\`
 `;
 
-  return {
-
-    text: formatted,
-    provider: 'EquipFix Local RAG Engine',
-    realtime: false,
-    hasVision: false,
-    groundedSource: 'Internal Vector Store & Historical Records',
-    raw: data
-  };
+    return {
+      text: formatted,
+      provider: 'EquipFix Local RAG Engine',
+      realtime: false,
+      hasVision: false,
+      groundedSource: 'Internal Vector Store & Historical Records',
+      raw: data
+    };
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.message || 'Troubleshooting query failed. Please configure your API key for direct real-time answers.';
+    throw new Error(detail);
+  }
 };
 
 /**

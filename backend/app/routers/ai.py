@@ -134,7 +134,8 @@ def execute_ai_query(
         query=question,
         retrieval_data=retrieval_data,
         machine_code=machine_code,
-        query_id=query_record.id
+        query_id=query_record.id,
+        user_role=current_user.role.name
     )
 
     # Save finalized response

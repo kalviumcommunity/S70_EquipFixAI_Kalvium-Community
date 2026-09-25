@@ -29,9 +29,16 @@ class AIPreviousRepair(BaseModel):
 
 
 class AIQueryRequest(BaseModel):
-    question: str
+    question: Optional[str] = None
+    query: Optional[str] = None
     machine_id: Optional[int] = None
     work_order_id: Optional[int] = None
+    include_sources: Optional[bool] = True
+
+    def __init__(self, **data):
+        if not data.get("question") and data.get("query"):
+            data["question"] = data["query"]
+        super().__init__(**data)
 
 
 class AIQueryResponse(BaseModel):

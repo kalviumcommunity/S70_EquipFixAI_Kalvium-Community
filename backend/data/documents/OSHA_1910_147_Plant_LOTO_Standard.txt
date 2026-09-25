@@ -1,0 +1,84 @@
+--- Page 1 ---
+# OSHA 29 CFR 1910.147 — CONTROL OF HAZARDOUS ENERGY (LOCKOUT/TAGOUT) MASTER STANDARD
+Document Code: STD-OSHA-1910-147-2026
+Standard Title: General Industry Standard for the Control of Hazardous Energy Sources
+Regulatory Authority: Occupational Safety and Health Administration (OSHA), U.S. Department of Labor
+Compliance Status: MANDATORY PLANT-WIDE REGULATION (Zero Tolerance Policy)
+Effective Date: January 1, 2026 | Revision: 4.0
+
+SECTION 1: PURPOSE AND SCOPE
+This master safety standard establishes mandatory minimum requirements for the control of hazardous energy (electrical, mechanical, hydraulic, pneumatic, chemical, and thermal) during servicing, maintenance, and unjamming of industrial machinery.
+
+Scope of Application:
+1. Applies to all machining centers (CNC-01, CNC-02, CNC-04), hydraulic stamping presses (PRESS-01, PRESS-02), robotic welding cells (ROBOT-01, ROBOT-02), and air compressors (COMP-01).
+2. Applies whenever an employee is required to remove or bypass a machine guard or other safety device.
+3. Applies whenever an employee is required to place any part of their body into an area on a machine or piece of equipment where work is actually performed upon the material being processed (point of operation).
+
+⚠️ DANGER: LIFE SAFETY HAZARD
+Unexpected energization, startup of machines, or release of stored energy during servicing will cause catastrophic personal injury, severe arc flash burns, limb amputation, or death.
+
+--- Page 2 ---
+SECTION 2: ROLES AND RESPONSIBILITIES
+
+1. Authorized Employee (Certified Maintenance Technicians & Electricians):
+   - Only individuals who have completed OSHA 1910.147 Authorized certification and hold an active plant lock/key assignment.
+   - Authorized to apply padlocks, danger tags, and perform zero-energy state verification.
+
+2. Affected Employee (Machine Operators & Floor Laborers):
+   - Employees whose job requires them to operate or use a machine or equipment on which servicing or maintenance is being performed under lockout or tagout.
+   - MUST NEVER attempt to bypass, remove, tamper with, or operate equipment under Lockout/Tagout.
+
+3. Other Employees (Supervisors, Visitors, Support Personnel):
+   - All employees who work in an area where energy control procedures are utilized. Must be instructed about the prohibition relating to attempts to restart or reenergize locked out machines.
+
+--- Page 3 ---
+SECTION 3: MANDATORY 7-STEP ZERO-ENERGY ISOLATION PROTOCOL
+
+Every authorized technician must strictly execute the following sequential 7-step energy control procedure prior to servicing:
+
+Step 1: Preparation for Shutdown & Mandatory Notification
+- Notify all affected operators, floor laborers, and shift supervisors that a lockout/tagout procedure is being implemented.
+- Review specific machine energy control tag: identify all electrical disconnects, pneumatic valves, hydraulic accumulators, and gravity counterweights.
+
+Step 2: Orderly Equipment Shutdown
+- Shut down the machine using standard stopping procedures (normal stop pushbutton or HMI power cycle).
+- Ensure all moving axes, chucks, spindles, and robotic arms come to a complete mechanical standstill.
+
+Step 3: Machine Energy Isolation
+- Operate all energy-isolating devices to completely disconnect the machine from energy sources:
+  a. Open main electrical disconnect switches or circuit breakers.
+  b. Close manual pneumatic isolation ball valves.
+  c. Close hydraulic supply shut-off valves.
+
+Step 4: Application of Lockout/Tagout Devices
+- Secure each energy-isolating device in the "OFF" or "SAFE" position with an OSHA-approved standardized RED safety padlock.
+- Affix a standardized DANGER tag displaying: "DO NOT OPERATE", Technician Name, Employee ID, Date, and Contact Extension.
+- For group lockout involving multiple technicians, each technician MUST attach their own personal padlock to an approved lockout hasp or lockbox.
+
+Step 5: Release of Stored Hazardous Residual Energy
+- ⚠️ CRITICAL: Relieve or mechanically restrain all stored residual energy:
+  a. Capacitors & DC-Bus: Allow discharge time (minimum 10 minutes) and verify zero voltage.
+  b. Hydraulic Accumulators: Open manual dump valve to discharge pressure to 0 Bar.
+  c. Pneumatics: Depress secondary manual dump valve until manifold gauge registers 0 PSI.
+  d. Gravity/Kinetic Energy: Mechanically block elevated machine rams or vertical carriages with safety drop stops.
+
+Step 6: Zero-Energy State Verification (The "Test Before Touch" Rule)
+- Prior to starting any physical work, the authorized technician must verify isolation:
+  a. Multimeter Voltage Check: Test incoming phase-to-phase and phase-to-ground (L1, L2, L3) with a calibrated CAT IV 600V digital multimeter. Reading must be < 1.0 VAC/VDC.
+  b. Pressure Gauge Inspection: Confirm zero pressure on all inline analog and digital pressure gauges.
+
+Step 7: Verification by Restart Attempt
+- Ensure operating personnel are clear of the machinery boundary.
+- Attempt to start the machine using the operator HMI or start pushbutton.
+- Verify that the machine remains completely unpowered and does not actuate.
+- Return operating control switches to the "OFF" position after the restart attempt.
+
+--- Page 4 ---
+SECTION 4: RELEASE FROM LOCKOUT / TAGOUT (RESTORATION PROCEDURE)
+
+Before lockout or tagout devices are removed and energy is restored, the following procedures MUST be followed:
+1. Machine Inspection: Inspect the work area to ensure that nonessential items (tools, spare parts, rags) have been removed and machine components are mechanically intact.
+2. Guard Replacement: Reinstall and secure all fixed interlocks, covers, and safety guards.
+3. Employee Clearance: Check the work area to ensure that all employees have been safely positioned or cleared from the machine boundary.
+4. Notification: Notify affected employees that the lockout or tagout devices are being removed.
+5. Lock Removal: Each lockout device MUST be removed from each energy isolating device by the employee who applied the device.

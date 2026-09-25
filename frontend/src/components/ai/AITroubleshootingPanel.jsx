@@ -288,10 +288,10 @@ I am ready for real-time equipment diagnostics, safety protocols, and plant oper
   const [showHistory, setShowHistory] = useState(false);
 
   const quickPrompts = [
-    machineCode ? `Diagnose Error E-204 on ${machineCode}` : 'Diagnose spindle abnormal vibration',
-    'Mandatory Lockout/Tagout (LOTO) procedure',
-    machineCode ? `What is the current status of ${machineCode}?` : 'Fleet MTTR benchmark analysis',
-    'Bearing replacement torque specifications'
+    machineCode ? `Diagnose Error E-204 on ${machineCode}` : 'Diagnose CNC spindle bearing vibration & thermal runaway',
+    'OSHA 1910.147 Zero-Energy Isolation for 480V Substation & MCC-A',
+    '200-Ton Hydraulic Press Pressure Loss & Proportional Valve SOP',
+    'Robot Cell Safety Gate Interlock E-Stop Fault Reset Procedure'
   ];
 
   const visionPrompts = [
@@ -343,7 +343,7 @@ I am ready for real-time equipment diagnostics, safety protocols, and plant oper
   const handleConfigSaved = (newCfg) => {
     setAiConfig(newCfg);
     setActiveTab('DIAGNOSTICS'); // Redirect straight to chat view!
-    setCopiedStatus(`API Key verified & activated! Model: ${newCfg.model || 'Gemini 3.6 Flash'}`);
+    setCopiedStatus(`API Key verified & activated! Model: ${newCfg.model || 'Gemini 2.5 Flash'}`);
     setTimeout(() => setCopiedStatus(null), 4000);
 
     // Add confirmation message to chat thread
@@ -353,7 +353,7 @@ I am ready for real-time equipment diagnostics, safety protocols, and plant oper
         id: `sys-${Date.now()}`,
         role: 'assistant',
         content: `### ⚡ Real-Time AI Connected
-Active model updated to **${newCfg.model || 'Gemini 3.6 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).
+Active model updated to **${newCfg.model || 'Gemini 2.5 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).
 Direct multimodal streaming inference is now active. Send any diagnostic prompt below!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         provider: `${newCfg.provider.toUpperCase()} ENGINE`
@@ -413,6 +413,10 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     const q = (queryText || question).trim();
     if (!q) return;
 
+    // Refresh aiConfig right before query so newly configured keys are immediately active
+    const activeConfig = getAIConfig();
+    setAiConfig(activeConfig);
+
     // 1. Immediately make text in search bar invisible / cleared
     setQuestion('');
 
@@ -437,7 +441,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       let aiText = '';
       let providerLabel = '';
 
-      if (aiConfig.apiKey) {
+      if (activeConfig.apiKey) {
         const result = await askEquipFixCopilot({
           prompt: q,
           context: { machineCode, incidentSummary, machineId, workOrderId }
@@ -486,7 +490,19 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
         }, 300);
       }
     } catch (err) {
-      setError(err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.');
+      const errorMsg = err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.';
+      setError(errorMsg);
+      // Append an assistant message so user sees the diagnostic feedback and is not left hanging
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-err-${Date.now()}`,
+          role: 'assistant',
+          content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Tip: Check your API key under **Configure API Key** or ask another diagnostic question.*`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          provider: 'System Diagnostics'
+        }
+      ]);
     } finally {
       setLoading(false);
       // Auto-scroll chat down smoothly when prompt execution finishes
@@ -666,7 +682,7 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
               textTransform: 'uppercase'
             }}>
               {aiConfig.apiKey
-                ? `${aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 3.6 Flash')} ACTIVE`
+                ? `${aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')} ACTIVE`
                 : 'Internal RAG Mode'}
             </span>
           </div>
@@ -1069,7 +1085,7 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
                 <div style={{ display: 'flex', justifyContent: 'flex-start', margin: '4px 0 10px 0' }}>
                   <AIThinkingEffect
                     mode="chat"
-                    modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 3.6 Flash')}
+                    modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')}
                     machineCode={machineCode}
                   />
                 </div>
@@ -1321,7 +1337,7 @@ ${data.safety_instructions || '🛡️ Verify machine electrical isolation (OSHA
               <div style={{ marginBottom: '20px' }}>
                 <AIThinkingEffect
                   mode="vision"
-                  modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 3.6 Flash')}
+                  modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')}
                   machineCode={machineCode}
                 />
               </div>
