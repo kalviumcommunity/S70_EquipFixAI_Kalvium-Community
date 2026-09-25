@@ -6,7 +6,7 @@ import { Calendar, Plus, Play, CheckCircle, Clock } from 'lucide-react';
 
 export const SchedulesPage = () => {
   const { hasRole } = useAuth();
-  const { addToast } = useWebSocket();
+  const { addToast, lastEvent } = useWebSocket();
   const [schedules, setSchedules] = useState([]);
   const [machines, setMachines] = useState([]);
   const [technicians, setTechnicians] = useState([]);
@@ -54,7 +54,7 @@ export const SchedulesPage = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [lastEvent]);
 
   const handleCreateSchedule = async (e) => {
     e.preventDefault();

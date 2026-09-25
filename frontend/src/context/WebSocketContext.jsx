@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useToast } from '../components/common/ToastContainer';
+import { useAuth } from './AuthContext';
 
 const WebSocketContext = createContext(null);
 
@@ -7,24 +8,33 @@ export const WebSocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
   const { addToast } = useToast();
+  const { token } = useAuth();
   const wsRef = useRef(null);
   const pingIntervalRef = useRef(null);
 
-  const notify = (title, message, type = 'info') => {
-    addToast({ title, message, type, duration: 5500 });
+  const notify = (firstArg, maybeMessage, maybeType = 'info') => {
+    if (typeof firstArg === 'object' && firstArg !== null) {
+      addToast(firstArg);
+    } else {
+      addToast({ title: firstArg, message: maybeMessage, type: maybeType, duration: 5500 });
+    }
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('equipfix_token');
-    if (!token) {
+    const activeToken = token || localStorage.getItem('equipfix_token');
+    if (!activeToken) {
       setConnected(false);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
       return;
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const isDev = window.location.port === '5173';
     const wsHost = isDev ? 'localhost:8000' : window.location.host;
-    const wsUrl = `${protocol}//${wsHost}/api/ws?token=${encodeURIComponent(token)}`;
+    const wsUrl = `${protocol}//${wsHost}/api/ws?token=${encodeURIComponent(activeToken)}`;
 
     let isUnmounted = false;
 
@@ -147,7 +157,7 @@ export const WebSocketProvider = ({ children }) => {
       if (wsRef.current) wsRef.current.close();
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     };
-  }, [localStorage.getItem('equipfix_token')]);
+  }, [token]);
 
   return (
     <WebSocketContext.Provider value={{ connected, lastEvent, addToast: notify }}>

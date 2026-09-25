@@ -6,15 +6,31 @@ const ToastContext = createContext(null);
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback(({ title, message, type = 'info', duration = 4000 }) => {
-    const id = Date.now() + Math.random().toString(36).substring(2, 9);
-    const toastDuration = duration > 0 ? duration : 4500;
-    setToasts((prev) => [...prev, { id, title, message, type, duration: toastDuration }]);
+  const addToast = useCallback((firstArg, maybeMessage, maybeType = 'info', maybeDuration = 4500) => {
+    let title = '';
+    let message = '';
+    let type = 'info';
+    let duration = 4500;
 
-    if (toastDuration > 0) {
+    if (typeof firstArg === 'object' && firstArg !== null) {
+      title = firstArg.title || '';
+      message = firstArg.message || '';
+      type = firstArg.type || 'info';
+      duration = firstArg.duration > 0 ? firstArg.duration : 4500;
+    } else {
+      title = typeof firstArg === 'string' ? firstArg : '';
+      message = typeof maybeMessage === 'string' ? maybeMessage : '';
+      type = typeof maybeType === 'string' ? maybeType : 'info';
+      duration = typeof maybeDuration === 'number' && maybeDuration > 0 ? maybeDuration : 4500;
+    }
+
+    const id = Date.now() + Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, title, message, type, duration }]);
+
+    if (duration > 0) {
       setTimeout(() => {
         removeToast(id);
-      }, toastDuration);
+      }, duration);
     }
   }, []);
 
