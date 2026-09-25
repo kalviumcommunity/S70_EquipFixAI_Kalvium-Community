@@ -192,15 +192,28 @@ export const LoginPage = () => {
         targetRole: userRole
       });
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      if (typeof detail === 'string') {
-        setError(detail);
-      } else if (Array.isArray(detail) && detail[0]?.msg) {
-        setError(detail[0].msg);
-      } else if (err.message === 'Network Error' || (!err.response && err.isAxiosError)) {
+      const data = err.response?.data;
+      if (
+        err.message === 'Network Error' ||
+        (!err.response && err.isAxiosError) ||
+        err.code === 'ERR_NETWORK' ||
+        (typeof data === 'string' && data.includes('ECONNREFUSED'))
+      ) {
         setError('Unable to reach authentication server on port 8000. Please verify the backend is running.');
+      } else if (typeof data?.detail === 'string') {
+        setError(data.detail);
+      } else if (Array.isArray(data?.detail)) {
+        setError(data.detail.map((item) => (typeof item === 'string' ? item : item.msg || JSON.stringify(item))).join('. '));
+      } else if (typeof data?.message === 'string') {
+        setError(data.message);
+      } else if (err.response?.status === 401) {
+        setError('Incorrect username or password. Please verify your credentials.');
+      } else if (err.response?.status === 403) {
+        setError(data?.detail || 'Account clearance error or access restricted.');
+      } else if (err.response?.status >= 500) {
+        setError('Authentication server error. Please ensure the backend on port 8000 is running and retry.');
       } else {
-        setError('Authentication failed. Please verify your credentials and try again.');
+        setError(err.message || 'Authentication failed. Please verify your credentials and try again.');
       }
     } finally {
       setLoading(false);
@@ -302,16 +315,26 @@ export const LoginPage = () => {
     } catch (err) {
       console.error('Confirm role error:', err);
       let errMsg = '';
-      if (err.message === 'Network Error' || (!err.response && err.isAxiosError) || err.code === 'ERR_NETWORK') {
+      const responseData = err.response?.data;
+      if (
+        err.message === 'Network Error' ||
+        (!err.response && err.isAxiosError) ||
+        err.code === 'ERR_NETWORK' ||
+        (typeof responseData === 'string' && responseData.includes('ECONNREFUSED'))
+      ) {
         errMsg = 'Backend server connection error: Unable to reach FastAPI backend on port 8000. Please verify the backend server is running.';
       } else if (err.response?.status === 502 || err.response?.status === 504) {
         errMsg = 'Backend gateway unavailable (502/504). Please ensure the backend server is running on port 8000.';
-      } else if (typeof err.response?.data?.detail === 'string') {
-        errMsg = err.response.data.detail;
-      } else if (Array.isArray(err.response?.data?.detail)) {
-        errMsg = err.response.data.detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
-      } else if (err.response?.data?.message) {
-        errMsg = err.response.data.message;
+      } else if (typeof responseData?.detail === 'string') {
+        errMsg = responseData.detail;
+      } else if (Array.isArray(responseData?.detail)) {
+        errMsg = responseData.detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
+      } else if (typeof responseData?.message === 'string') {
+        errMsg = responseData.message;
+      } else if (typeof responseData === 'string' && responseData.length < 200) {
+        errMsg = responseData;
+      } else if (err.response?.status >= 500) {
+        errMsg = 'Authentication server encountered a temporary issue. Please ensure the backend on port 8000 is running and retry.';
       } else {
         errMsg = err.message || 'Role authorization failed. Please try again.';
       }

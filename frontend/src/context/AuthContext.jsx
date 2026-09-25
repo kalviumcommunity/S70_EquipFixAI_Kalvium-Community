@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi } from '../services/api';
+import { authApi, setAuthToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -19,6 +19,13 @@ export const AuthProvider = ({ children }) => {
     return !(savedToken && savedUser);
   });
 
+  // Sync axios Authorization header on page reload when token is restored from localStorage
+  useEffect(() => {
+    if (token) {
+      setAuthToken(token);
+    }
+  }, [token]);
+
   useEffect(() => {
     const verifyToken = async () => {
       if (token) {
@@ -27,8 +34,21 @@ export const AuthProvider = ({ children }) => {
           setUser(res.data);
           localStorage.setItem('equipfix_user', JSON.stringify(res.data));
         } catch (err) {
-          console.error('Session expired or invalid token:', err);
-          logout();
+          const status = err?.response?.status;
+          if (status === 401) {
+            // Token is definitively rejected by the server — clear session
+            console.warn('Token rejected by server (401). Clearing session.');
+            setAuthToken(null);
+            localStorage.removeItem('equipfix_token');
+            localStorage.removeItem('equipfix_user');
+            setToken(null);
+            setUser(null);
+          } else {
+            // Network error, 5xx, or other transient failure after a fresh login —
+            // keep the existing user/token from localStorage intact so the user
+            // doesn't get bounced back to /login on a momentary glitch.
+            console.warn('Token verification transient failure (status ' + (status || 'network') + '). Keeping session.');
+          }
         }
       }
       setLoading(false);
@@ -39,6 +59,8 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password, expectedRole = null) => {
     const res = await authApi.login(username, password, expectedRole);
     const { access_token, user: loggedUser } = res.data;
+    // Set axios default header IMMEDIATELY before any subsequent request fires
+    setAuthToken(access_token);
     localStorage.setItem('equipfix_token', access_token);
     localStorage.setItem('equipfix_user', JSON.stringify(loggedUser));
     setToken(access_token);
@@ -49,6 +71,8 @@ export const AuthProvider = ({ children }) => {
   const googleLogin = async (payload) => {
     const res = await authApi.googleLogin(payload);
     const { access_token, user: loggedUser } = res.data;
+    // Set axios default header IMMEDIATELY before any subsequent request fires
+    setAuthToken(access_token);
     localStorage.setItem('equipfix_token', access_token);
     localStorage.setItem('equipfix_user', JSON.stringify(loggedUser));
     setToken(access_token);
@@ -57,6 +81,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    setAuthToken(null);
     localStorage.removeItem('equipfix_token');
     localStorage.removeItem('equipfix_user');
     setToken(null);
@@ -115,4 +140,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

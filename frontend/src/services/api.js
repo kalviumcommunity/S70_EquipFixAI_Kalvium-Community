@@ -4,6 +4,9 @@ const getBaseURL = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
+  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost')) {
+    return 'http://localhost:8000/api';
+  }
   return '/api';
 };
 
@@ -14,25 +17,59 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: attach JWT Bearer token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('equipfix_token');
+/**
+ * Immediately set (or clear) the Authorization header on the shared axios instance.
+ * Called by AuthContext right after a successful login/googleLogin so that the
+ * header is in place before the verifyToken useEffect fires — eliminating the
+ * race condition where verifyToken's authApi.me() could run before the
+ * request interceptor picks up the token from localStorage.
+ */
+export const setAuthToken = (token) => {
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common['Authorization'];
+  }
+};
+
+// Request interceptor: attach JWT Bearer token from localStorage as a fallback
+// (covers hard page reloads where axios defaults have not yet been set)
+api.interceptors.request.use((config) => {
+  if (!config.headers.Authorization) {
+    const token = localStorage.getItem('equipfix_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 }, (error) => Promise.reject(error));
 
-// Response interceptor: capture 401s
+// Response interceptor: handle 401 (session expired / invalid token)
+// Only redirect to /login if we're not already there AND there is no fresh
+// user data in localStorage (prevents evicting a user right after Google login
+// during the window where verifyToken hasn't finished yet).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Token invalid or expired
       if (!window.location.pathname.includes('/login')) {
-        localStorage.removeItem('equipfix_token');
-        localStorage.removeItem('equipfix_user');
-        window.location.href = '/login';
+        // Guard: do not evict if localStorage still has valid user data
+        // (this can happen during the brief post-login period before verifyToken
+        // completes, or when a secondary endpoint unrelated to auth returns 401)
+        const storedToken = localStorage.getItem('equipfix_token');
+        const storedUser = localStorage.getItem('equipfix_user');
+        const requestUrl = error.config?.url || '';
+        const isAuthMeRequest = requestUrl.includes('/auth/me');
+
+        if (!storedToken || !storedUser || isAuthMeRequest) {
+          // Genuine expired / invalid session — clear and redirect
+          localStorage.removeItem('equipfix_token');
+          localStorage.removeItem('equipfix_user');
+          delete api.defaults.headers.common['Authorization'];
+          window.location.href = '/login';
+        }
+        // For other 401s (e.g. a role-based endpoint called too early),
+        // let AuthContext.verifyToken handle the clean logout
       }
     }
     return Promise.reject(error);
@@ -61,11 +98,14 @@ export const machinesApi = {
   getTimeline: (id) => api.get(`/machines/${id}/timeline`),
   create: (data) => api.post('/machines', data),
   update: (id, data) => api.put(`/machines/${id}`, data),
+  updateStatus: (id, status) => api.put(`/machines/${id}/status`, { status }),
+  updateStatusByCode: (code, status) => api.put(`/machines/code/${code}/status`, { status }),
 };
 
 export const incidentsApi = {
   list: (params) => api.get('/incidents', { params }),
   get: (id) => api.get(`/incidents/${id}`),
+  getTimeline: (id) => api.get(`/incidents/${id}/timeline`),
   report: (data) => api.post('/incidents', data),
   assign: (id, data) => api.put(`/incidents/${id}/assign`, data),
   updatePriority: (id, data) => api.put(`/incidents/${id}/priority`, data),
@@ -102,6 +142,7 @@ export const partsApi = {
 export const documentsApi = {
   list: (params) => api.get('/documents', { params }),
   get: (id) => api.get(`/documents/${id}`),
+  getContent: (id) => api.get(`/documents/${id}/content`),
   create: (data) => api.post('/documents', data),
   addVersion: (id, data) => api.post(`/documents/${id}/versions`, data),
   ingest: (id) => api.post(`/documents/${id}/ingest`),
@@ -117,7 +158,9 @@ export const aiApi = {
 export const notificationsApi = {
   list: () => api.get('/notifications'),
   markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAsRead: (id) => api.put(`/notifications/${id}/read`),
   markAllRead: () => api.put('/notifications/read-all'),
+  markAllAsRead: () => api.put('/notifications/read-all'),
 };
 
 export const auditLogsApi = {

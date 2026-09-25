@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.config import settings
 from app.database.session import get_db
 from app.models.user import User, Role
@@ -65,12 +65,11 @@ def get_public_plant_stats(db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(
     login_data: UserLogin,
-
     db: Session = Depends(get_db)
 ):
     """Authenticate user with username or email and password, return JWT token."""
     identifier = login_data.username.strip()
-    user = db.query(User).filter(
+    user = db.query(User).options(joinedload(User.role)).filter(
         (User.username == identifier) | (User.email == identifier)
     ).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
@@ -85,21 +84,43 @@ def login(
             detail="Inactive user account"
         )
 
-    # Authenticate user directly and return their actual registered role
-    AuditService.log_action(
-        db=db,
-        action=AuditAction.LOGIN,
-        entity_type="user",
-        entity_id=user.id,
-        user_id=user.id,
-        new_value={"username": user.username, "role": user.role.name}
-    )
-    db.commit()
+    # Validate requested role if client supplied expected_role
+    role_name = user.role.name if user.role else "OPERATOR"
+    if login_data.expected_role:
+        expected = str(login_data.expected_role).upper()
+        user_role = role_name.upper()
+        def normalize_role(r):
+            return "LABOR" if r in ("LABOR", "OPERATOR") else r
+        if normalize_role(expected) != normalize_role(user_role):
+            role_display = expected.title()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your account does not have {role_display} access. Registered as {user_role}."
+            )
 
+    user_id = user.id
+    user_username = user.username
+
+    # Safely log audit event without blocking authentication if audit table has an issue
+    try:
+        AuditService.log_action(
+            db=db,
+            action=AuditAction.LOGIN,
+            entity_type="user",
+            entity_id=user_id,
+            user_id=user_id,
+            new_value={"username": user_username, "role": role_name}
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    user = db.query(User).options(joinedload(User.role)).filter(User.id == user_id).first() or user
+    final_role = user.role.name if user.role else role_name
 
     token = create_access_token(
         subject=user.username,
-        role=user.role.name
+        role=final_role
     )
 
     return Token(
@@ -122,6 +143,12 @@ def google_login(
     try:
         email = login_data.email
         full_name = login_data.full_name
+
+        if not settings.GOOGLE_CLIENT_ID and not (login_data.credential or login_data.token):
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Google OAuth is not configured on this server (GOOGLE_CLIENT_ID missing)."
+            )
 
         # If credential or token is provided, extract claims from the JWT
         token_str = login_data.credential or login_data.token
@@ -228,23 +255,30 @@ def google_login(
                 db.flush()
 
         role_name = user.role.name if user.role else "OPERATOR"
+        user_id = user.id
+        user_username = user.username
 
         try:
             AuditService.log_action(
                 db=db,
                 action=AuditAction.LOGIN,
                 entity_type="user",
-                entity_id=user.id,
-                user_id=user.id,
-                new_value={"username": user.username, "role": role_name, "auth_provider": "google"}
+                entity_id=user_id,
+                user_id=user_id,
+                new_value={"username": user_username, "role": role_name, "auth_provider": "google"}
             )
-        except Exception as audit_err:
+        except Exception:
             pass
 
         db.commit()
 
-        # Re-fetch user to ensure relationships and fields are fully loaded
-        user = db.query(User).filter(User.id == user.id).first()
+        # Re-fetch user safely with scalar id to ensure relationships and fields are fully loaded
+        user = db.query(User).options(joinedload(User.role)).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User account could not be loaded after authentication."
+            )
 
         token = create_access_token(
             subject=user.username,
@@ -296,45 +330,101 @@ def register(
             detail="Password must contain at least one special character."
         )
 
+    clean_username = reg_data.username.strip()
+    clean_email = reg_data.email.strip().lower()
+
     # Check for existing username or email
     existing_user = db.query(User).filter(
-        (User.username == reg_data.username.strip()) | (User.email == reg_data.email.strip().lower())
+        (User.username == clean_username) | (User.email == clean_email)
     ).first()
     if existing_user:
+        if existing_user.username.lower() == clean_username.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this username already exists."
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this username or email already exists."
+            detail="A user with this email already exists."
         )
 
-    role = db.query(Role).filter(Role.name == reg_data.role_name.value).first()
+    # Normalize role name
+    raw_role = reg_data.role_name.value if hasattr(reg_data.role_name, "value") else str(reg_data.role_name)
+    raw_role = raw_role.strip().upper()
+    if raw_role in ["LABOR", "LABOUR", "OPERATOR"]:
+        requested_role_name = "OPERATOR"
+    elif raw_role in ["TECH", "TECHNICIAN"]:
+        requested_role_name = "TECHNICIAN"
+    elif raw_role in ["SUPER", "SUPERVISOR"]:
+        requested_role_name = "SUPERVISOR"
+    elif raw_role in ["MGR", "MANAGER", "ADMIN"]:
+        requested_role_name = "MANAGER"
+    else:
+        requested_role_name = raw_role
+
+    # Forbid self-registration as Manager
+    if requested_role_name == "MANAGER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manager accounts cannot be self-registered. Please contact system administrator."
+        )
+
+    role = db.query(Role).filter(Role.name == requested_role_name).first()
     if not role:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Role '{reg_data.role_name.value}' not found."
+        for default_r in ["OPERATOR", "TECHNICIAN", "SUPERVISOR", "MANAGER"]:
+            if not db.query(Role).filter(Role.name == default_r).first():
+                db.add(Role(name=default_r, description=f"Standard {default_r} clearance"))
+        db.flush()
+        role = db.query(Role).filter(Role.name == requested_role_name).first()
+        if not role:
+            role = db.query(Role).filter(Role.name == "OPERATOR").first()
+
+    try:
+        user = User(
+            username=clean_username,
+            email=clean_email,
+            full_name=reg_data.full_name.strip(),
+            hashed_password=get_password_hash(reg_data.password),
+            role_id=role.id,
+            is_active=True
         )
+        user.role = role
+        db.add(user)
+        db.flush()
 
-    user = User(
-        username=reg_data.username.strip(),
-        email=reg_data.email.strip().lower(),
-        full_name=reg_data.full_name.strip(),
-        hashed_password=get_password_hash(reg_data.password),
-        role_id=role.id,
-        is_active=True
-    )
-    db.add(user)
-    db.flush()
+        user_id = user.id
+        user_username = user.username
+        role_name = role.name
 
-    AuditService.log_action(
-        db=db,
-        action=AuditAction.USER_CREATED,
-        entity_type="user",
-        entity_id=user.id,
-        user_id=user.id,
-        new_value={"username": user.username, "role": role.name, "source": "self_registration"}
-    )
-    db.commit()
-    db.refresh(user)
-    return user
+        try:
+            AuditService.log_action(
+                db=db,
+                action=AuditAction.USER_CREATED,
+                entity_type="user",
+                entity_id=user_id,
+                user_id=user_id,
+                new_value={"username": user_username, "role": role_name, "source": "self_registration"}
+            )
+        except Exception:
+            pass
+
+        db.commit()
+
+        user = db.query(User).options(joinedload(User.role)).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User account could not be loaded after registration."
+            )
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration error: {str(e)}"
+        )
 
 
 @router.post("/forgot-password", response_model=GenericAuthMessageResponse)
@@ -356,15 +446,18 @@ def forgot_password(
         )
         reset_url = f"/reset-password?token={reset_token}"
         # Log event in audit trail
-        AuditService.log_action(
-            db=db,
-            action=AuditAction.LOGIN,
-            entity_type="user",
-            entity_id=user.id,
-            user_id=user.id,
-            new_value={"event": "password_reset_requested", "reset_token_preview": reset_token[:12] + "..."}
-        )
-        db.commit()
+        try:
+            AuditService.log_action(
+                db=db,
+                action=AuditAction.LOGIN,
+                entity_type="user",
+                entity_id=user.id,
+                user_id=user.id,
+                new_value={"event": "password_reset_requested", "reset_token_preview": reset_token[:12] + "..."}
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
 
     return GenericAuthMessageResponse(
         message="If an account with this email exists, a password reset link has been dispatched.",
