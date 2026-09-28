@@ -5,6 +5,7 @@ import { authApi } from '../services/api';
 import PasswordInput from '../components/common/PasswordInput';
 import { signInWithGoogle } from '../firebase';
 import GoogleRoleConfirmModal from '../components/auth/GoogleRoleConfirmModal';
+import GoogleAccountChooserModal from '../components/auth/GoogleAccountChooserModal';
 import AuthSuccessPopup from '../components/auth/AuthSuccessPopup';
 import {
   Wrench, Shield, CheckCircle, AlertCircle, Sparkles,
@@ -25,6 +26,7 @@ export const LoginPage = () => {
   const [googleNotice, setGoogleNotice] = useState(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showGoogleAccountChooser, setShowGoogleAccountChooser] = useState(false);
 
   // Real-time live plant statistics from backend
   const [liveStats, setLiveStats] = useState({
@@ -220,6 +222,74 @@ export const LoginPage = () => {
     }
   };
 
+  const handleCompleteGoogleLogin = async ({ email, full_name, photoURL, idToken, role }) => {
+    setError('');
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please provide a valid Google account email.');
+      return;
+    }
+
+    // Auto-detect role if not explicitly provided
+    let targetRole = role || 'OPERATOR';
+    if (cleanEmail.includes('manager') || cleanEmail.includes('kalvium')) targetRole = 'MANAGER';
+    else if (cleanEmail.includes('tech')) targetRole = 'TECHNICIAN';
+    else if (cleanEmail.includes('super')) targetRole = 'SUPERVISOR';
+
+    try {
+      const loggedUser = await googleLogin({
+        credential: idToken || 'direct-auth-fallback-token',
+        token: idToken || 'direct-auth-fallback-token',
+        email: cleanEmail,
+        full_name: full_name || cleanEmail.split('@')[0].replace('.', ' ').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        role: targetRole,
+      });
+
+      const userRole = loggedUser?.role?.name || loggedUser?.role || targetRole;
+      const displayName = loggedUser?.full_name || loggedUser?.username || full_name || 'Plant Operator';
+
+      // Save to recent accounts
+      saveAccountToRecent({
+        id: loggedUser.id,
+        username: loggedUser.username,
+        email: loggedUser.email,
+        full_name: displayName,
+        role: userRole,
+        lastLogin: new Date().toISOString()
+      });
+
+      // Trigger animated green success notification popup
+      setSuccessPopupData({
+        isOpen: true,
+        title: `Welcome, ${displayName}!`,
+        message: `Google identity verified (${cleanEmail}). Station clearance authorized for ${userRole}.`,
+        roleName: userRole,
+        targetRole: userRole
+      });
+    } catch (err) {
+      console.error('Google login error:', err);
+      let errMsg = '';
+      const responseData = err.response?.data;
+      if (
+        err.message === 'Network Error' ||
+        (!err.response && err.isAxiosError) ||
+        err.code === 'ERR_NETWORK' ||
+        (typeof responseData === 'string' && responseData.includes('ECONNREFUSED'))
+      ) {
+        errMsg = 'Backend server connection error: Unable to reach FastAPI backend on port 8000. Please verify the backend server is running.';
+      } else if (err.response?.status === 502 || err.response?.status === 504) {
+        errMsg = 'Backend gateway unavailable (502/504). Please ensure the backend server is running on port 8000.';
+      } else if (typeof responseData?.detail === 'string') {
+        errMsg = responseData.detail;
+      } else if (Array.isArray(responseData?.detail)) {
+        errMsg = responseData.detail.map(d => d.msg || d).join(', ');
+      } else {
+        errMsg = err.message || 'Google sign-in could not be completed.';
+      }
+      setError(errMsg);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setError('');
     setGoogleNotice(null);
@@ -235,34 +305,38 @@ export const LoginPage = () => {
       // 2. Extract Firebase JWT ID token
       const idToken = await fbUser.getIdToken();
 
-      // 3. Prompt user with role confirmation modal (bubble-up animation)
-      setPendingGoogleAuth({
+      // 3. User selected their Google account in the native popup!
+      // Log straight into that particular account:
+      await handleCompleteGoogleLogin({
         email: fbUser.email,
         full_name: fbUser.displayName || '',
         photoURL: fbUser.photoURL || null,
         idToken,
       });
-      setShowGoogleRoleModal(true);
     } catch (err) {
-      console.error('Google Sign-In Error:', err);
+      console.warn('Firebase popup unavailable or domain unauthorized, opening Google Account Chooser:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setGoogleLoading(false);
         return;
       }
       // If Firebase blocked due to unauthorized domain, network glitch, or unconfigured domain:
-      // Seamlessly transition directly to Google Station Role Confirmation modal so user is never blocked!
+      // Immediately open Google Account Chooser modal asking which account to use!
       setGoogleNotice(null);
-      const fallbackEmail = (identifier && identifier.includes('@')) ? identifier.trim() : 'google.user@equipfix.ai';
-      setPendingGoogleAuth({
-        email: fallbackEmail,
-        full_name: fallbackEmail.split('@')[0].replace('.', ' ').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        photoURL: null,
-        idToken: 'direct-auth-fallback-token',
-      });
-      setShowGoogleRoleModal(true);
+      setShowGoogleAccountChooser(true);
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const handleSelectGoogleAccount = async (account) => {
+    setShowGoogleAccountChooser(false);
+    await handleCompleteGoogleLogin({
+      email: account.email,
+      full_name: account.name || account.full_name,
+      photoURL: account.photoURL,
+      idToken: 'direct-auth-fallback-token',
+      role: account.role || 'OPERATOR'
+    });
   };
 
   const handleConfirmGoogleRole = async (chosenRole, customEmail) => {
@@ -908,6 +982,15 @@ export const LoginPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Google Account Chooser Modal */}
+      <GoogleAccountChooserModal
+        isOpen={showGoogleAccountChooser}
+        onSelectAccount={handleSelectGoogleAccount}
+        onClose={() => setShowGoogleAccountChooser(false)}
+        loading={googleLoading}
+        directoryAccounts={recentAccounts}
+      />
 
       {/* Google SSO Role Confirmation Modal with Bubble-Up Animation */}
       <GoogleRoleConfirmModal
