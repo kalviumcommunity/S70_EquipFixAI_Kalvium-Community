@@ -408,7 +408,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     }
   };
 
-  // --- TAB 1: DIAGNOSTICS & Q&A ---
+  // --- TAB 1: DIAGNOSTICS & Q&A WITH REAL-TIME STREAMING ---
   const handleSearch = async (queryText = null) => {
     const q = (queryText || question).trim();
     if (!q) return;
@@ -427,18 +427,34 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       content: q,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-    setMessages((prev) => [...prev, userMsg]);
 
+    // 3. Immediately prepare real-time streaming assistant placeholder
+    const assistantMsgId = `ai-${Date.now()}`;
+    const activeModelLabel = (activeConfig.model === 'custom' && activeConfig.customModel)
+      ? activeConfig.customModel
+      : (activeConfig.model || 'Gemini 2.5 Flash');
+    const initialAssistantMsg = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      provider: activeConfig.apiKey
+        ? `${activeConfig.provider.toUpperCase()} (${activeModelLabel})`
+        : 'EquipFix Industrial Engine',
+      isStreaming: true
+    };
+
+    setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
     setLoading(true);
     setError(null);
 
-    // 3. Scroll down right away so user sees their message sent
+    // Auto-scroll down smoothly
     setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
 
     try {
-      // Build conversation history excluding greetings, error notices, and system messages
+      // Build conversation history excluding system and error notices
       const conversationHistory = messages
         .filter(m => m.id !== 'welcome' && !m.id.startsWith('sys-') && !m.id.startsWith('ai-err-') && m.content)
         .slice(-8)
@@ -450,49 +466,65 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       const result = await askEquipFixCopilot({
         prompt: q,
         history: conversationHistory,
-        context: { machineCode, incidentSummary, machineId, workOrderId }
+        context: { machineCode, incidentSummary, machineId, workOrderId },
+        onChunk: (_chunk, accumulatedText) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: accumulatedText, isStreaming: true }
+                : m
+            )
+          );
+          chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
       });
 
       const aiText = result.text;
       const providerLabel = result.provider;
 
-      // Append assistant message to thread
-      const assistantMsg = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        content: aiText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        provider: providerLabel
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+      // Finalize assistant message
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: aiText,
+                provider: providerLabel || m.provider,
+                isStreaming: false
+              }
+            : m
+        )
+      );
       fetchHistory();
 
-      // Automatically generate visual diagram if question requested one
-      const wantsDiagram = /\b(diagram|schematic|draw|visualize|blueprint|exploded|show me|look like|illustration|circuit|cad)\b/i.test(q);
+      // Automatically generate visual diagram only when explicitly requested
+      const wantsDiagram = /\b(generate (a )?(diagram|schematic|blueprint)|draw (a )?(diagram|schematic))\b/i.test(q);
       if (wantsDiagram) {
         setTimeout(() => {
-          handleGenerateInlineDiagram(assistantMsg.id, q, aiText);
+          handleGenerateInlineDiagram(assistantMsgId, q, aiText);
         }, 300);
       }
     } catch (err) {
       const errorMsg = err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.';
       const isKeyErr = /api key|unauthorized|permission_denied|quota|auth/i.test(errorMsg);
       setError(errorMsg);
-      // Append an assistant message so user sees the diagnostic feedback and is not left hanging
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-err-${Date.now()}`,
-          role: 'assistant',
-          content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Click **Configure AI Key** below to verify or update your API credentials.*`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          provider: 'System Diagnostics',
-          isKeyError: isKeyErr
-        }
-      ]);
+
+      // Replace or update streaming message with notice
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Click **Configure AI Key** below to verify or update your API credentials.*`,
+                provider: 'System Diagnostics',
+                isKeyError: isKeyErr,
+                isStreaming: false
+              }
+            : m
+        )
+      );
     } finally {
       setLoading(false);
-      // Auto-scroll chat down smoothly when prompt execution finishes
       setTimeout(() => {
         chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
@@ -953,14 +985,46 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{msg.content}</div>
                     ) : (
                       <>
-                        {/* Rich HTML-formatted message output */}
-                        <FormattedAIMessage content={msg.content} />
+                        {/* Live Streaming Message Content */}
+                        {msg.isStreaming && !msg.content ? (
+                          <AIThinkingEffect
+                            mode="chat"
+                            modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.5 Flash')}
+                            machineCode={machineCode}
+                          />
+                        ) : (
+                          <>
+                            {/* Rich HTML-formatted message output */}
+                            <FormattedAIMessage content={msg.content} />
 
-                        {/* Inline Generated Visual Diagram (if loading) */}
-                        {messageDiagrams[msg.id]?.loading && (
-                          <div style={{ marginTop: '12px' }}>
-                            <AIThinkingEffect mode="diagram" modelName="CAD Schematic Synthesizer" machineCode={machineCode} />
-                          </div>
+                            {/* Live Streaming Progress Indicator */}
+                            {msg.isStreaming && (
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginTop: '8px',
+                                padding: '3px 8px',
+                                borderRadius: '12px',
+                                backgroundColor: '#f0f9ff',
+                                border: '1px solid #bae6fd',
+                                fontSize: '0.72rem',
+                                color: '#0284c7',
+                                fontWeight: 700
+                              }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  width: '6px',
+                                  height: '6px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#0284c7',
+                                  boxShadow: '0 0 6px #0284c7'
+                                }} />
+                                <span>Real-Time Streaming Active</span>
+                                <span style={{ fontWeight: 900, color: '#0284c7' }}>▍</span>
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {/* Inline Generated Visual Diagram (if ready) */}
@@ -1088,19 +1152,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   </div>
                 </div>
               ))}
-
-              {/* Clean AI Thinking Effect inside chat */}
-              {loading && (
-                <div style={{ display: 'flex', justifyContent: 'flex-start', margin: '4px 0 10px 0' }}>
-                  <AIThinkingEffect
-                    mode="chat"
-                    modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')}
-                    machineCode={machineCode}
-                  />
-                </div>
-              )}
-
-
 
               {/* Auto scroll bottom anchor */}
               <div ref={chatBottomRef} style={{ height: '1px' }} />

@@ -230,7 +230,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
-                  Gemini 2.0 Flash, 1.5 Flash, 1.5 Pro & Imagen 3
+                  Gemini 2.5, 2.0, 1.5 & custom models with live streaming
                 </span>
               </button>
 
