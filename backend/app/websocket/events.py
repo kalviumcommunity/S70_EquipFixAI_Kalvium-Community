@@ -95,3 +95,10 @@ class RealTimeEvents:
         dispatch_async(
             ws_manager.send_to_user(recipient_id, "notification.created", notif_data)
         )
+
+    @staticmethod
+    def user_role_updated(data: Dict[str, Any]):
+        """Emit user.role_updated to everyone across the plant for real-time access control synchronization."""
+        dispatch_async(
+            ws_manager.broadcast("user.role_updated", data)
+        )

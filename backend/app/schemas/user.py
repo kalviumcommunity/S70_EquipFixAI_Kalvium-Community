@@ -35,11 +35,29 @@ class UserCreate(UserBase):
     role_name: UserRole = UserRole.OPERATOR
 
 
+class UserWorkSummary(BaseModel):
+    total_jobs: int = 0
+    active_jobs: int = 0
+    completed_jobs: int = 0
+    hours_logged: float = 0.0
+    mttr_hours: float = 0.0
+    parts_installed: int = 0
+    total_parts_cost: float = 0.0
+    reported_incidents: int = 0
+    open_incidents: int = 0
+    current_task: Optional[str] = None
+    last_active: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class UserResponse(UserBase):
     id: int
     role: RoleResponse
     is_active: bool
     created_at: datetime
+    work_summary: Optional[UserWorkSummary] = None
 
     class Config:
         from_attributes = True
