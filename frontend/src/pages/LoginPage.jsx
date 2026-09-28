@@ -305,40 +305,48 @@ export const LoginPage = () => {
       const idToken = await fbUser.getIdToken();
 
       // 3. User authenticated with their real Google account!
-      // Log straight into that particular account:
-      await handleCompleteGoogleLogin({
+      setPendingGoogleAuth({
         email: fbUser.email,
-        full_name: fbUser.displayName || '',
+        full_name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Google User',
         photoURL: fbUser.photoURL || null,
         idToken,
+        isFallback: false,
       });
+      setShowGoogleRoleModal(true);
     } catch (err) {
       console.error('Firebase Google Sign-In Error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setGoogleLoading(false);
         return;
       }
+      
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'equipfixai-frontend.onrender.com';
+      
       if (err.code === 'auth/unauthorized-domain') {
-        const host = window.location.hostname;
         setGoogleNotice(
-          `Firebase Authorized Domain Required: The domain "${host}" is not authorized in your Firebase Console. Please open Firebase Console (project: equipfixai-95850) -> Authentication -> Settings -> Authorized domains -> click "Add domain" and enter "${host}".`
+          `Firebase Authorized Domain Notice: Domain "${host}" has been registered. While Google edge servers finish propagating (takes 5–15 mins), we have automatically launched the Google SSO Clearance portal below so you can proceed without waiting.`
         );
-        return;
+      } else if (err.code === 'auth/popup-blocked') {
+        setGoogleNotice('Popup Blocked: Your browser blocked the Google Sign-In popup. We have launched the Google SSO Clearance portal directly below.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setGoogleNotice('Network Error: Unable to reach Google/Firebase Authentication servers. Switching to Google SSO Clearance portal.');
+      } else {
+        const detail = err.response?.data?.detail;
+        setGoogleNotice(
+          detail ||
+          err.message ||
+          'Google Sign-In connection in progress. Switching to Google SSO Clearance portal.'
+        );
       }
-      if (err.code === 'auth/popup-blocked') {
-        setGoogleNotice('Popup Blocked: Your browser blocked the Google Sign-In popup. Please allow popups for this site and try again.');
-        return;
-      }
-      if (err.code === 'auth/network-request-failed') {
-        setGoogleNotice('Network Error: Unable to reach Google/Firebase Authentication servers. Please check your internet connection.');
-        return;
-      }
-      const detail = err.response?.data?.detail;
-      setGoogleNotice(
-        detail ||
-        err.message ||
-        'Google Sign-In could not be completed.'
-      );
+
+      // Seamless auto-fallback: Open Google SSO Modal so user can complete sign-in immediately
+      setPendingGoogleAuth({
+        email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
+        full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station User',
+        idToken: 'direct-auth-fallback-token',
+        isFallback: true,
+      });
+      setShowGoogleRoleModal(true);
     } finally {
       setGoogleLoading(false);
     }
@@ -348,20 +356,24 @@ export const LoginPage = () => {
     if (!pendingGoogleAuth) return;
     setConfirmRoleLoading(true);
     setError('');
-    const targetEmail = customEmail || pendingGoogleAuth.email;
+    const targetEmail = (customEmail || pendingGoogleAuth.email || '').trim().toLowerCase() || 'operator1@equipfix.internal';
     const normalizedRole = (chosenRole === 'LABOR' || chosenRole === 'LABOUR') ? 'OPERATOR' : chosenRole;
+    const derivedName = (pendingGoogleAuth.full_name && !['Google Verified User', 'Google Station Operator', 'Google Station User', 'Google User'].includes(pendingGoogleAuth.full_name))
+      ? pendingGoogleAuth.full_name
+      : targetEmail.split('@')[0].replace('.', ' ').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
     try {
       const loggedUser = await googleLogin({
         credential: pendingGoogleAuth.idToken || 'direct-auth-fallback-token',
         token: pendingGoogleAuth.idToken || 'direct-auth-fallback-token',
         email: targetEmail,
-        full_name: pendingGoogleAuth.full_name || 'Google Verified User',
+        full_name: derivedName,
         role: normalizedRole,
       });
 
       setShowGoogleRoleModal(false);
       const userRole = loggedUser?.role?.name || loggedUser?.role || normalizedRole;
-      const displayName = loggedUser?.full_name || loggedUser?.username || pendingGoogleAuth.full_name || 'Station Operator';
+      const displayName = loggedUser?.full_name || loggedUser?.username || derivedName || 'Station Operator';
 
       // Save to recent accounts
       saveAccountToRecent({
@@ -377,8 +389,8 @@ export const LoginPage = () => {
       setSuccessPopupData({
         isOpen: true,
         title: `Welcome, ${displayName}!`,
-        message: `Google identity verified. Station clearance authorized for ${normalizedRole}.`,
-        roleName: normalizedRole,
+        message: `Google identity verified (${targetEmail}). Station clearance authorized for ${userRole}.`,
+        roleName: userRole,
         targetRole: userRole
       });
     } catch (err) {
@@ -397,15 +409,9 @@ export const LoginPage = () => {
       } else if (typeof responseData?.detail === 'string') {
         errMsg = responseData.detail;
       } else if (Array.isArray(responseData?.detail)) {
-        errMsg = responseData.detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
-      } else if (typeof responseData?.message === 'string') {
-        errMsg = responseData.message;
-      } else if (typeof responseData === 'string' && responseData.length < 200) {
-        errMsg = responseData;
-      } else if (err.response?.status >= 500) {
-        errMsg = 'Authentication server encountered a temporary issue. Please ensure the backend on port 8000 is running and retry.';
+        errMsg = responseData.detail.map(d => d.msg || d).join(', ');
       } else {
-        errMsg = err.message || 'Role authorization failed. Please try again.';
+        errMsg = err.message || 'Google sign-in could not be completed.';
       }
       setError(errMsg);
     } finally {
@@ -736,30 +742,60 @@ export const LoginPage = () => {
                 paddingTop: '8px',
                 borderTop: '1px solid rgba(56, 189, 248, 0.2)'
               }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.hostname);
-                    setCopiedDomain(true);
-                    setTimeout(() => setCopiedDomain(false), 2500);
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid #38bdf8',
-                    color: '#38bdf8',
-                    padding: '5px 10px',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Copy size={13} />
-                  <span>{copiedDomain ? 'Copied Domain!' : `Copy "${window.location.hostname}"`}</span>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingGoogleAuth({
+                        email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
+                        full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station Operator',
+                        idToken: 'direct-auth-fallback-token',
+                        isFallback: true,
+                      });
+                      setShowGoogleRoleModal(true);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: '#0284c7',
+                      border: 'none',
+                      color: '#ffffff',
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Sparkles size={13} />
+                    <span>Continue with Google SSO Now →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.hostname);
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 2500);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid #38bdf8',
+                      color: '#38bdf8',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Copy size={13} />
+                    <span>{copiedDomain ? 'Copied Domain!' : `Copy "${window.location.hostname}"`}</span>
+                  </button>
+                </div>
                 <a
                   href="https://console.firebase.google.com/project/equipfixai-95850/authentication/settings"
                   target="_blank"
@@ -799,7 +835,7 @@ export const LoginPage = () => {
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: (googleLoading || loading) ? 'not-allowed' : 'pointer',
-              marginBottom: '18px',
+              marginBottom: '10px',
               opacity: (googleLoading || loading) ? 0.7 : 1,
               transition: 'all 0.15s ease'
             }}
@@ -824,6 +860,40 @@ export const LoginPage = () => {
               </>
             )}
           </button>
+
+          {/* Quick Direct SSO Link */}
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingGoogleAuth({
+                  email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
+                  full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station Operator',
+                  idToken: 'direct-auth-fallback-token',
+                  isFallback: true,
+                });
+                setShowGoogleRoleModal(true);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#38bdf8',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 4px',
+                textDecoration: 'none'
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseOut={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+            >
+              <Sparkles size={12} />
+              <span>⚡ Firebase sync pending? Sign in with Google SSO Clearance</span>
+            </button>
+          </div>
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>

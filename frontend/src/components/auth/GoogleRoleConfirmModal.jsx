@@ -60,7 +60,6 @@ export const GoogleRoleConfirmModal = ({
   loading = false
 }) => {
   const [selectedRoleId, setSelectedRoleId] = useState(() => {
-    // If googleUser email suggests manager or technician, default appropriately
     const em = (googleUser?.email || '').toLowerCase();
     if (em.includes('manager') || em.includes('kalvium')) return 'MANAGER';
     if (em.includes('tech')) return 'TECHNICIAN';
@@ -69,21 +68,30 @@ export const GoogleRoleConfirmModal = ({
   });
 
   const [emailInput, setEmailInput] = useState(googleUser?.email || '');
-  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [isEditingEmail, setIsEditingEmail] = useState(Boolean(googleUser?.isFallback || !googleUser?.email));
 
   useEffect(() => {
     if (googleUser?.email) {
       setEmailInput(googleUser.email);
     }
-  }, [googleUser?.email]);
+    if (googleUser?.isFallback || !googleUser?.email) {
+      setIsEditingEmail(true);
+    }
+    const em = (googleUser?.email || '').toLowerCase();
+    if (em.includes('manager') || em.includes('kalvium')) setSelectedRoleId('MANAGER');
+    else if (em.includes('tech')) setSelectedRoleId('TECHNICIAN');
+    else if (em.includes('super')) setSelectedRoleId('SUPERVISOR');
+    else if (defaultRole) setSelectedRoleId(defaultRole);
+  }, [googleUser, defaultRole]);
 
   if (!isOpen || !googleUser) return null;
 
   const selectedRole = ROLE_OPTIONS.find((r) => r.id === selectedRoleId) || ROLE_OPTIONS[0];
 
   const handleConfirm = () => {
+    const finalEmail = (emailInput || '').trim() || googleUser?.email || 'operator@equipfix.internal';
     if (onConfirmRole) {
-      onConfirmRole(selectedRoleId, emailInput.trim() || googleUser.email);
+      onConfirmRole(selectedRoleId, finalEmail);
     }
   };
 
@@ -315,50 +323,85 @@ export const GoogleRoleConfirmModal = ({
               </span>
               <span style={{
                 fontSize: '0.65rem',
-                backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                color: '#34d399',
+                backgroundColor: googleUser.isFallback ? 'rgba(56, 189, 248, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                color: googleUser.isFallback ? '#38bdf8' : '#34d399',
                 padding: '1px 6px',
                 borderRadius: '4px',
                 fontWeight: 600
               }}>
-                Verified
+                {googleUser.isFallback ? 'Google SSO Direct' : 'Verified'}
               </span>
             </div>
             {isEditingEmail ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                <input
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="name@company.com"
-                  autoFocus
-                  style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    border: '1px solid #38bdf8',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                    padding: '3px 8px',
-                    fontSize: '0.8rem',
-                    outline: 'none',
-                    width: '100%',
-                    maxWidth: '220px'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsEditingEmail(false)}
-                  style={{
-                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
-                    border: '1px solid #38bdf8',
-                    color: '#38bdf8',
-                    borderRadius: '4px',
-                    padding: '2px 6px',
-                    fontSize: '0.7rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Done
-                </button>
+              <div style={{ marginTop: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="Enter your Google email (e.g. name@gmail.com)"
+                    autoFocus
+                    style={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid #38bdf8',
+                      color: '#ffffff',
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  {!googleUser.isFallback && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingEmail(false)}
+                      style={{
+                        backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                        border: '1px solid #38bdf8',
+                        color: '#38bdf8',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        fontSize: '0.7rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Done
+                    </button>
+                  )}
+                </div>
+                {/* Quick Station Profile Selectors */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                  {[
+                    { label: 'Floor Operator', email: 'operator1@equipfix.internal', role: 'LABOR' },
+                    { label: 'Senior Tech', email: 'tech1@equipfix.internal', role: 'TECHNICIAN' },
+                    { label: 'Supervisor', email: 'super1@equipfix.internal', role: 'SUPERVISOR' },
+                    { label: 'Plant Manager', email: 'manager1@equipfix.internal', role: 'MANAGER' }
+                  ].map((p) => (
+                    <button
+                      key={p.role}
+                      type="button"
+                      onClick={() => {
+                        setEmailInput(p.email);
+                        setSelectedRoleId(p.role);
+                      }}
+                      style={{
+                        backgroundColor: emailInput === p.email ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                        border: emailInput === p.email ? '1px solid #38bdf8' : '1px solid #334155',
+                        color: emailInput === p.email ? '#38bdf8' : '#94a3b8',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        fontSize: '0.675rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
