@@ -280,12 +280,14 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
                 )}
               </NavLink>
 
-              <NavLink to="/users" style={navItemStyle} onClick={onClose}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Users size={17} color="#38bdf8" />
-                  <span>Employee Directory</span>
-                </div>
-              </NavLink>
+              {['SUPERVISOR', 'MANAGER'].includes(role) && (
+                <NavLink to="/users" style={navItemStyle} onClick={onClose}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Users size={17} color="#38bdf8" />
+                    <span>Employee Directory</span>
+                  </div>
+                </NavLink>
+              )}
 
               {/* SECTION: INTELLIGENCE & COMPLIANCE */}
               <div style={sectionHeaderStyle}>Intelligence & Compliance</div>

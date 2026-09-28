@@ -33,8 +33,16 @@ export const WebSocketProvider = ({ children }) => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const isDev = window.location.port === '5173';
-    const wsHost = isDev ? 'localhost:8000' : window.location.host;
-    const wsUrl = `${protocol}//${wsHost}/api/ws?token=${encodeURIComponent(activeToken)}`;
+    let wsHost = isDev ? 'localhost:8000' : window.location.host;
+    if (import.meta.env.VITE_API_URL) {
+      try {
+        const parsed = new URL(import.meta.env.VITE_API_URL);
+        wsHost = parsed.host;
+      } catch (e) {}
+    }
+    const wsUrl = import.meta.env.VITE_WS_URL
+      ? `${import.meta.env.VITE_WS_URL}?token=${encodeURIComponent(activeToken)}`
+      : `${protocol}//${wsHost}/api/ws?token=${encodeURIComponent(activeToken)}`;
 
     let isUnmounted = false;
 
