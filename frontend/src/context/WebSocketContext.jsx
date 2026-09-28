@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useToast } from '../components/common/ToastContainer';
 import { useAuth } from './AuthContext';
+import { getBaseURL } from '../services/api';
 
 const WebSocketContext = createContext(null);
 
@@ -32,13 +33,13 @@ export const WebSocketProvider = ({ children }) => {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const isDev = window.location.port === '5173';
-    let wsHost = isDev ? 'localhost:8000' : window.location.host;
-    if (import.meta.env.VITE_API_URL) {
-      try {
-        const parsed = new URL(import.meta.env.VITE_API_URL);
-        wsHost = parsed.host;
-      } catch (e) {}
+    let wsHost = 'localhost:8000';
+    try {
+      const apiBase = getBaseURL();
+      const parsed = new URL(apiBase.startsWith('http') ? apiBase : `https://${window.location.host}${apiBase}`);
+      wsHost = parsed.host;
+    } catch (e) {
+      wsHost = window.location.host;
     }
     const wsUrl = import.meta.env.VITE_WS_URL
       ? `${import.meta.env.VITE_WS_URL}?token=${encodeURIComponent(activeToken)}`

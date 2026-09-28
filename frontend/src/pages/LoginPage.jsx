@@ -200,7 +200,11 @@ export const LoginPage = () => {
         err.code === 'ERR_NETWORK' ||
         (typeof data === 'string' && data.includes('ECONNREFUSED'))
       ) {
-        setError('Unable to reach authentication server on port 8000. Please verify the backend is running.');
+        setError('Unable to reach authentication server. If running on Render, the backend service may be waking up (takes ~30s). Please wait a moment and retry.');
+      } else if (err.response?.status === 404) {
+        setError('Authentication service endpoint not found (404). Backend service is waking up or connecting. Please retry in a few seconds.');
+      } else if (err.response?.status === 502 || err.response?.status === 504) {
+        setError('Backend is warming up on Render (Gateway 502/504). Please wait a few seconds and retry.');
       } else if (typeof data?.detail === 'string') {
         setError(data.detail);
       } else if (Array.isArray(data?.detail)) {
@@ -212,7 +216,7 @@ export const LoginPage = () => {
       } else if (err.response?.status === 403) {
         setError(data?.detail || 'Account clearance error or access restricted.');
       } else if (err.response?.status >= 500) {
-        setError('Authentication server error. Please ensure the backend on port 8000 is running and retry.');
+        setError('Authentication server error. Please ensure the backend server is running and retry.');
       } else {
         setError(err.message || 'Authentication failed. Please verify your credentials and try again.');
       }
@@ -403,9 +407,11 @@ export const LoginPage = () => {
         err.code === 'ERR_NETWORK' ||
         (typeof responseData === 'string' && responseData.includes('ECONNREFUSED'))
       ) {
-        errMsg = 'Backend server connection error: Unable to reach FastAPI backend on port 8000. Please verify the backend server is running.';
+        errMsg = 'Backend server connection error: Unable to reach FastAPI backend. If the backend is waking up on Render, please wait ~30 seconds and retry.';
+      } else if (err.response?.status === 404) {
+        errMsg = 'Authentication endpoint not found (404). Backend service is waking up or deploying. Please wait a few moments and try again.';
       } else if (err.response?.status === 502 || err.response?.status === 504) {
-        errMsg = 'Backend gateway unavailable (502/504). Please ensure the backend server is running on port 8000.';
+        errMsg = 'Backend gateway unavailable (502/504). Backend is warming up on Render, please wait a moment and retry.';
       } else if (typeof responseData?.detail === 'string') {
         errMsg = responseData.detail;
       } else if (Array.isArray(responseData?.detail)) {

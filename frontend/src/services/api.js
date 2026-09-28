@@ -1,12 +1,36 @@
 import axios from 'axios';
 
-const getBaseURL = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+export const getBaseURL = () => {
+  let url = (import.meta.env.VITE_API_URL || '').trim();
+
+  // 1. If explicitly defined via env variables
+  if (url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    url = url.replace(/\/+$/, '');
+    if (!url.endsWith('/api')) {
+      url = `${url}/api`;
+    }
+    return url;
   }
-  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost')) {
+
+  // 2. Local development
+  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://localhost:8000/api';
   }
+
+  // 3. Render cloud deployment auto-detection:
+  // If running on Render (*.onrender.com), point to the companion backend service
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.onrender.com')) {
+    const host = window.location.hostname;
+    let backendHost = 'equipfixai-backend.onrender.com';
+    if (host.includes('-frontend')) {
+      backendHost = host.replace('-frontend', '-backend');
+    }
+    return `https://${backendHost}/api`;
+  }
+
   return '/api';
 };
 

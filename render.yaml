@@ -45,11 +45,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: equipfixai-backend
-          property: host
-          path: /api
+        value: https://equipfixai-backend.onrender.com/api
 
 databases:
   # -------------------------------------------------------------
