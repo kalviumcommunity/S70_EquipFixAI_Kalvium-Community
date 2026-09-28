@@ -74,6 +74,8 @@ app.include_router(upload.router, prefix=settings.API_V1_STR)
 app.include_router(upload.uploads_router, prefix=settings.API_V1_STR)
 
 
+@app.get("/", tags=["Health Check"])
+@app.get("/health", tags=["Health Check"])
 @app.get("/api/health", tags=["Health Check"])
 def health_check():
     """Health status check endpoint."""
