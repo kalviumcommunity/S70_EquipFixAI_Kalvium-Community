@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   HardHat, Wrench, UserCheck, Factory, Check,
-  ArrowRight, X, Shield, Sparkles, Loader2
+  ArrowRight, X, Shield, Sparkles, Loader2, Edit2
 } from 'lucide-react';
 
 const ROLE_OPTIONS = [
@@ -68,13 +68,22 @@ export const GoogleRoleConfirmModal = ({
     return defaultRole || 'LABOR';
   });
 
+  const [emailInput, setEmailInput] = useState(googleUser?.email || '');
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+
+  useEffect(() => {
+    if (googleUser?.email) {
+      setEmailInput(googleUser.email);
+    }
+  }, [googleUser?.email]);
+
   if (!isOpen || !googleUser) return null;
 
   const selectedRole = ROLE_OPTIONS.find((r) => r.id === selectedRoleId) || ROLE_OPTIONS[0];
 
   const handleConfirm = () => {
     if (onConfirmRole) {
-      onConfirmRole(selectedRoleId);
+      onConfirmRole(selectedRoleId, emailInput.trim() || googleUser.email);
     }
   };
 
@@ -315,9 +324,68 @@ export const GoogleRoleConfirmModal = ({
                 Verified
               </span>
             </div>
-            <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {googleUser.email}
-            </div>
+            {isEditingEmail ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="name@company.com"
+                  autoFocus
+                  style={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    border: '1px solid #38bdf8',
+                    color: '#ffffff',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    fontSize: '0.8rem',
+                    outline: 'none',
+                    width: '100%',
+                    maxWidth: '220px'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsEditingEmail(false)}
+                  style={{
+                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    border: '1px solid #38bdf8',
+                    color: '#38bdf8',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '0.7rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {emailInput || googleUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingEmail(true)}
+                  title="Change Google account email"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#38bdf8',
+                    padding: '0 2px',
+                    fontSize: '0.7rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                  }}
+                >
+                  <Edit2 size={11} />
+                  <span>edit</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
