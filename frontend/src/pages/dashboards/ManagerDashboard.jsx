@@ -16,34 +16,16 @@ import { Link, useLocation } from 'react-router-dom';
 import AICopilotPromptCard from '../../components/ai/AICopilotPromptCard';
 
 const DEFAULT_ANALYTICS = {
-  machine_status: { running: 5, warning: 1, down: 1, maintenance: 1, total: 8 },
-  active_incidents_count: 3,
-  pending_approvals_count: 1,
-  total_downtime_hours: 4.8,
-  total_maintenance_cost: 155.0,
-  low_stock_parts_count: 1,
-  technician_workload: [
-    { technician_id: 2, technician_name: 'Ravi Sharma (Senior Tech)', active_jobs: 2, completed_jobs: 0, avg_resolution_hours: 0.0 },
-    { technician_id: 3, technician_name: 'Carlos Mendez (Field Tech)', active_jobs: 0, completed_jobs: 1, avg_resolution_hours: 1.8 },
-  ],
-  recurring_failures: [
-    { machine_code: 'MILL-01', machine_name: 'Vertical Knee Milling Machine', failure_count: 2, primary_root_cause: 'Normal operational fatigue and oil mist accumulation causing belt slippage.' },
-    { machine_code: 'CNC-03', machine_name: 'Horizontal CNC Boring Mill', failure_count: 1, primary_root_cause: 'Coolant flow pressure sensor showing erratic spikes.' },
-    { machine_code: 'CNC-04', machine_name: 'High-Speed Precision Spindle CNC 04', failure_count: 1, primary_root_cause: 'Spindle abnormal noise and excessive vibration exceeding 7mm/s.' },
-  ],
-  downtime_by_machine: [
-    { machine_code: 'PRESS-01', machine_name: '200-Ton Hydraulic Stamping Press', department: 'Stamping Dept', total_downtime_minutes: 180, incident_count: 0, mttr_minutes: 180.0 },
-    { machine_code: 'MILL-01', machine_name: 'Vertical Knee Milling Machine', department: 'Fabrication Dept', total_downtime_minutes: 105, incident_count: 1, mttr_minutes: 105.0 },
-    { machine_code: 'CNC-04', machine_name: 'High-Speed Precision Spindle CNC 04', department: 'Machining Dept', total_downtime_minutes: 0, incident_count: 1, mttr_minutes: 0.0 },
-    { machine_code: 'CNC-03', machine_name: 'Horizontal CNC Boring Mill', department: 'Machining Dept', total_downtime_minutes: 0, incident_count: 1, mttr_minutes: 0.0 },
-  ],
-  subsystem_failures: [
-    { subsystem: 'Spindle & Drive Motor', failure_count: 3, common_cause: 'Normal operational fatigue and oil mist accumulation causing belt slippage.' },
-    { subsystem: 'Hydraulic & Fluid Power', failure_count: 2, common_cause: 'Damaged cylinder rod wiper seal caused by contamination particles.' },
-    { subsystem: 'Bearings & Motion Guides', failure_count: 0, common_cause: 'Operating within normal nominal limits' },
-    { subsystem: 'Cooling & Thermal Unit', failure_count: 0, common_cause: 'Operating within normal nominal limits' },
-    { subsystem: 'Electrical & Sensors', failure_count: 0, common_cause: 'Operating within normal nominal limits' },
-  ],
+  machine_status: { running: 0, warning: 0, down: 0, maintenance: 0, total: 0 },
+  active_incidents_count: 0,
+  pending_approvals_count: 0,
+  total_downtime_hours: 0.0,
+  total_maintenance_cost: 0.0,
+  low_stock_parts_count: 0,
+  technician_workload: [],
+  recurring_failures: [],
+  downtime_by_machine: [],
+  subsystem_failures: [],
   maintenance_trends: [],
 };
 

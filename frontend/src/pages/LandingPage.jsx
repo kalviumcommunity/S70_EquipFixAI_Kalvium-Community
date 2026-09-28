@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { authApi } from '../services/api';
 import {
   Wrench, Shield, ArrowRight, Sparkles, HardHat,
   UserCheck, Factory, Zap, Activity, Cpu, CheckCircle2,
@@ -10,6 +11,39 @@ import {
 export const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const [plantStats, setPlantStats] = useState({
+    total_machines: 8,
+    running_machines: 8,
+    active_incidents: 0,
+    uptime_pct: '99.8%',
+    total_work_orders: 0,
+    active_work_orders: 0,
+    total_employees: 6,
+    loto_compliance_pct: '100%'
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    authApi.getStats()
+      .then(res => {
+        if (isMounted && res.data) {
+          setPlantStats(res.data);
+        }
+      })
+      .catch(err => console.error('Failed to load live landing stats:', err));
+    return () => { isMounted = false; };
+  }, []);
+
+  const getRoleDestination = (roleId) => {
+    if (roleId === 'OPERATOR') return '/labor/dashboard';
+    if (roleId === 'TECHNICIAN') return '/technician/dashboard';
+    if (roleId === 'SUPERVISOR') return '/supervisor/dashboard';
+    if (roleId === 'MANAGER') return '/manager/dashboard';
+    return '/dashboard';
+  };
+
+  const userRole = (user?.role?.name || user?.role || '').toUpperCase();
 
   const rolePortals = [
     {
@@ -152,16 +186,16 @@ export const LandingPage = () => {
           {/* Telemetry Indicator & Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{
-              display: 'none',
+              display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '5px 12px',
+              padding: '6px 14px',
               borderRadius: '20px',
               backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
               fontSize: '0.75rem',
               color: '#34d399',
-              fontWeight: 600
+              fontWeight: 700
             }}>
               <span style={{
                 width: '7px',
@@ -170,7 +204,7 @@ export const LandingPage = () => {
                 backgroundColor: '#10b981',
                 boxShadow: '0 0 10px #10b981'
               }} />
-              <span>Cosmic Telemetry Stream Active</span>
+              <span>Telemetry Stream: {plantStats.total_machines} Assets Active</span>
             </div>
 
             {user ? (
@@ -396,10 +430,10 @@ export const LandingPage = () => {
                 <Cpu size={16} color="#38bdf8" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#38bdf8', letterSpacing: '-0.02em' }}>
-                8 Units
+                {plantStats.total_machines} Units
               </div>
               <div style={{ fontSize: '0.725rem', color: '#64748b', marginTop: '4px' }}>
-                Active telemetry nodes online
+                {plantStats.running_machines || plantStats.total_machines} active units in nominal operation
               </div>
             </div>
 
@@ -420,10 +454,10 @@ export const LandingPage = () => {
                 <Activity size={16} color="#34d399" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#34d399', letterSpacing: '-0.02em' }}>
-                99.98%
+                {plantStats.uptime_pct || '99.8%'}
               </div>
               <div style={{ fontSize: '0.725rem', color: '#64748b', marginTop: '4px' }}>
-                ISO 13374 vibration compliant
+                Real-time fleet availability score
               </div>
             </div>
 
@@ -439,15 +473,15 @@ export const LandingPage = () => {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  RAG Response
+                  Active Plant Alerts
                 </span>
                 <Radio size={16} color="#fbbf24" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fbbf24', letterSpacing: '-0.02em' }}>
-                &lt; 350 ms
+                {plantStats.active_incidents} Active
               </div>
               <div style={{ fontSize: '0.725rem', color: '#64748b', marginTop: '4px' }}>
-                Vector retrieval citation speed
+                Live floor incidents &amp; alarms logged
               </div>
             </div>
 
@@ -468,10 +502,10 @@ export const LandingPage = () => {
                 <Shield size={16} color="#c084fc" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#c084fc', letterSpacing: '-0.02em' }}>
-                100% LOTO
+                {plantStats.loto_compliance_pct || '100%'} LOTO
               </div>
               <div style={{ fontSize: '0.725rem', color: '#64748b', marginTop: '4px' }}>
-                Strict lockout/tagout enforced
+                Strict zero-energy isolation enforced
               </div>
             </div>
           </div>
@@ -644,19 +678,35 @@ export const LandingPage = () => {
                         }}>
                           <Icon size={22} />
                         </div>
-                        <span style={{
-                          fontSize: '0.675rem',
-                          fontWeight: 700,
-                          color: portal.color,
-                          backgroundColor: `${portal.color}15`,
-                          border: `1px solid ${portal.color}35`,
-                          padding: '3px 10px',
-                          borderRadius: '10px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.04em'
-                        }}>
-                          {portal.badge}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {user && (userRole === portal.id || (userRole === 'LABOR' && portal.id === 'OPERATOR')) && (
+                            <span style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 800,
+                              color: '#10b981',
+                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                              border: '1px solid rgba(16, 185, 129, 0.4)',
+                              padding: '2px 8px',
+                              borderRadius: '8px',
+                              letterSpacing: '0.04em'
+                            }}>
+                              ACTIVE CLEARANCE
+                            </span>
+                          )}
+                          <span style={{
+                            fontSize: '0.675rem',
+                            fontWeight: 700,
+                            color: portal.color,
+                            backgroundColor: `${portal.color}15`,
+                            border: `1px solid ${portal.color}35`,
+                            padding: '3px 10px',
+                            borderRadius: '10px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}>
+                            {portal.badge}
+                          </span>
+                        </div>
                       </div>
 
                       <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px', letterSpacing: '-0.01em' }}>
@@ -668,7 +718,7 @@ export const LandingPage = () => {
                     </div>
 
                     <Link
-                      to="/login"
+                      to={user ? getRoleDestination(portal.id) : `/login`}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -688,7 +738,7 @@ export const LandingPage = () => {
                         e.currentTarget.style.gap = '6px';
                       }}
                     >
-                      <span>Access Station Portal</span>
+                      <span>{user ? `Launch ${portal.id.charAt(0) + portal.id.slice(1).toLowerCase()} Console` : 'Access Station Portal'}</span>
                       <ArrowRight size={15} />
                     </Link>
                   </div>

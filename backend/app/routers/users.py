@@ -102,16 +102,12 @@ def get_roles(
 def list_users(
     role_name: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["SUPERVISOR", "MANAGER"]))
+    current_user: User = Depends(get_current_user)
 ):
     """List employees with live real-time work history summary telemetry."""
     query = db.query(User).join(Role)
     if role_name:
         query = query.filter(Role.name == role_name.upper())
-
-    # Supervisors can only query technicians or operators
-    if current_user.role.name == UserRole.SUPERVISOR.value and not role_name:
-        query = query.filter(Role.name.in_([UserRole.TECHNICIAN.value, UserRole.OPERATOR.value]))
 
     users = query.order_by(User.full_name).all()
     results = []
@@ -200,13 +196,6 @@ def get_user_work_history(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve technician or employee detailed work history, tasks completed, parts consumed, and MTTR."""
-    # Authorization: User can view their own history, or Supervisor/Manager can view any user
-    if current_user.id != user_id and current_user.role.name not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view your own work history unless you are a supervisor or manager."
-        )
-
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(

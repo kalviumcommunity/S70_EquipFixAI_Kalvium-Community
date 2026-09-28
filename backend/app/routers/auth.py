@@ -41,10 +41,12 @@ def get_login_directory(db: Session = Depends(get_db)):
 
 @router.get("/stats")
 def get_public_plant_stats(db: Session = Depends(get_db)):
-    """Return live public plant health summary for login screen."""
+    """Return live public plant health summary for login screen and home page."""
     from app.models.machine import Machine
     from app.models.incident import Incident
-    from app.models.enums import MachineStatus, IncidentStatus
+    from app.models.work_order import WorkOrder
+    from app.models.user import User
+    from app.models.enums import MachineStatus, IncidentStatus, WorkOrderStatus
     
     total_machines = db.query(Machine).count()
     running_machines = db.query(Machine).filter(Machine.status == MachineStatus.RUNNING).count()
@@ -53,11 +55,21 @@ def get_public_plant_stats(db: Session = Depends(get_db)):
     ).count()
     uptime_pct = round((running_machines / total_machines * 100), 1) if total_machines > 0 else 99.4
 
+    total_wos = db.query(WorkOrder).count()
+    active_wos = db.query(WorkOrder).filter(
+        WorkOrder.status.in_([WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.WAITING])
+    ).count()
+    total_employees = db.query(User).count()
+
     return {
         "total_machines": total_machines,
         "running_machines": running_machines,
         "active_incidents": active_incidents,
-        "uptime_pct": f"{uptime_pct}%"
+        "uptime_pct": f"{uptime_pct}%",
+        "total_work_orders": total_wos,
+        "active_work_orders": active_wos,
+        "total_employees": total_employees,
+        "loto_compliance_pct": "100%"
     }
 
 

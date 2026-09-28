@@ -238,7 +238,7 @@ export const UsersPage = () => {
               gap: '4px'
             }}>
               {isManager ? <ShieldCheck size={13} color="#15803d" /> : <Lock size={12} color="#1d4ed8" />}
-              {isManager ? 'MANAGER ACCESS: STRICT CONTROL ACTIVE' : 'READ-ONLY ACCESS: SUPERVISOR'}
+              {isManager ? 'MANAGER ACCESS: STRICT CONTROL ACTIVE' : `DIRECTORY ACCESS: ${currentUser?.role?.name || 'STAFF'}`}
             </span>
           </div>
           <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '4px', marginBottom: 0 }}>
@@ -295,7 +295,7 @@ export const UsersPage = () => {
         }}>
           <Lock size={16} color="#2563eb" style={{ flexShrink: 0 }} />
           <div>
-            <strong>Strict Access Control Enforced:</strong> Logged in as <strong>{currentUser?.role?.name || 'Supervisor'}</strong>. Role alterations, privilege promotions, and account provisioning are strictly restricted to <strong>Plant Operations Manager</strong> clearance.
+            <strong>Strict Access Control Enforced:</strong> Logged in as <strong>{currentUser?.role?.name || 'Staff'}</strong>. Role alterations, privilege promotions, and account provisioning are strictly restricted to <strong>Plant Operations Manager</strong> clearance.
           </div>
         </div>
       )}

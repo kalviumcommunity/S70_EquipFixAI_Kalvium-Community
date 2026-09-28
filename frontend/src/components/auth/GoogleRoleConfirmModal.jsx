@@ -89,7 +89,11 @@ export const GoogleRoleConfirmModal = ({
   const selectedRole = ROLE_OPTIONS.find((r) => r.id === selectedRoleId) || ROLE_OPTIONS[0];
 
   const handleConfirm = () => {
-    const finalEmail = (emailInput || '').trim() || googleUser?.email || 'operator@equipfix.internal';
+    const finalEmail = (emailInput || '').trim() || (googleUser?.email || '').trim();
+    if (!finalEmail) {
+      alert('Please enter your valid Google account email address.');
+      return;
+    }
     if (onConfirmRole) {
       onConfirmRole(selectedRoleId, finalEmail);
     }
@@ -371,36 +375,6 @@ export const GoogleRoleConfirmModal = ({
                       Done
                     </button>
                   )}
-                </div>
-                {/* Quick Station Profile Selectors */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                  {[
-                    { label: 'Floor Operator', email: 'operator1@equipfix.internal', role: 'LABOR' },
-                    { label: 'Senior Tech', email: 'tech1@equipfix.internal', role: 'TECHNICIAN' },
-                    { label: 'Supervisor', email: 'super1@equipfix.internal', role: 'SUPERVISOR' },
-                    { label: 'Plant Manager', email: 'manager1@equipfix.internal', role: 'MANAGER' }
-                  ].map((p) => (
-                    <button
-                      key={p.role}
-                      type="button"
-                      onClick={() => {
-                        setEmailInput(p.email);
-                        setSelectedRoleId(p.role);
-                      }}
-                      style={{
-                        backgroundColor: emailInput === p.email ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                        border: emailInput === p.email ? '1px solid #38bdf8' : '1px solid #334155',
-                        color: emailInput === p.email ? '#38bdf8' : '#94a3b8',
-                        borderRadius: '4px',
-                        padding: '2px 6px',
-                        fontSize: '0.675rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
                 </div>
               </div>
             ) : (

@@ -308,15 +308,13 @@ export const LoginPage = () => {
       // 2. Extract Firebase JWT ID token
       const idToken = await fbUser.getIdToken();
 
-      // 3. User authenticated with their real Google account!
-      setPendingGoogleAuth({
+      // 3. Authenticate directly with the user's authentic Google account
+      await handleCompleteGoogleLogin({
         email: fbUser.email,
         full_name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Google User',
         photoURL: fbUser.photoURL || null,
         idToken,
-        isFallback: false,
       });
-      setShowGoogleRoleModal(true);
     } catch (err) {
       console.error('Firebase Google Sign-In Error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
@@ -344,9 +342,10 @@ export const LoginPage = () => {
       }
 
       // Seamless auto-fallback: Open Google SSO Modal so user can complete sign-in immediately
+      const initialEmail = (identifier && identifier.includes('@')) ? identifier.trim() : '';
       setPendingGoogleAuth({
-        email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
-        full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station User',
+        email: initialEmail,
+        full_name: initialEmail ? initialEmail.split('@')[0].replace('.', ' ') : '',
         idToken: 'direct-auth-fallback-token',
         isFallback: true,
       });
@@ -360,7 +359,12 @@ export const LoginPage = () => {
     if (!pendingGoogleAuth) return;
     setConfirmRoleLoading(true);
     setError('');
-    const targetEmail = (customEmail || pendingGoogleAuth.email || '').trim().toLowerCase() || 'operator1@equipfix.internal';
+    const targetEmail = (customEmail || pendingGoogleAuth.email || (identifier && identifier.includes('@') ? identifier.trim() : '')).trim().toLowerCase();
+    if (!targetEmail) {
+      setError('Please provide a valid account email.');
+      setConfirmRoleLoading(false);
+      return;
+    }
     const normalizedRole = (chosenRole === 'LABOR' || chosenRole === 'LABOUR') ? 'OPERATOR' : chosenRole;
     const derivedName = (pendingGoogleAuth.full_name && !['Google Verified User', 'Google Station Operator', 'Google Station User', 'Google User'].includes(pendingGoogleAuth.full_name))
       ? pendingGoogleAuth.full_name
@@ -752,9 +756,10 @@ export const LoginPage = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      const initialEmail = (identifier && identifier.includes('@')) ? identifier.trim() : '';
                       setPendingGoogleAuth({
-                        email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
-                        full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station Operator',
+                        email: initialEmail,
+                        full_name: initialEmail ? initialEmail.split('@')[0].replace('.', ' ') : '',
                         idToken: 'direct-auth-fallback-token',
                         isFallback: true,
                       });
@@ -872,9 +877,10 @@ export const LoginPage = () => {
             <button
               type="button"
               onClick={() => {
+                const initialEmail = (identifier && identifier.includes('@')) ? identifier.trim() : '';
                 setPendingGoogleAuth({
-                  email: (identifier && identifier.includes('@')) ? identifier.trim() : 'operator1@equipfix.internal',
-                  full_name: identifier ? identifier.replace('@', ' ').replace('.', ' ') : 'Google Station Operator',
+                  email: initialEmail,
+                  full_name: initialEmail ? initialEmail.split('@')[0].replace('.', ' ') : '',
                   idToken: 'direct-auth-fallback-token',
                   isFallback: true,
                 });

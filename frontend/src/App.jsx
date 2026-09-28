@@ -150,14 +150,7 @@ const ProtectedLayout = () => {
                 </RoleProtectedRoute>
               }
             />
-            <Route
-              path="/users"
-              element={
-                <RoleProtectedRoute allowedRoles={['SUPERVISOR', 'MANAGER']}>
-                  <UsersPage />
-                </RoleProtectedRoute>
-              }
-            />
+            <Route path="/users" element={<UsersPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
 
