@@ -356,6 +356,7 @@ def execute_ai_chat(
         or os.getenv("GEMINI_API_KEY")
         or os.getenv("GOOGLE_API_KEY")
         or os.getenv("OPENAI_API_KEY")
+        or os.getenv("LLM_API_KEY")
         or ""
     ).strip().replace('"', '').replace("'", "")
 
@@ -363,14 +364,23 @@ def execute_ai_chat(
     selected_model = req.model or ("gemini-2.0-flash" if provider == "gemini" else "gpt-4o-mini")
 
     # 2. Extract Plant Grounding Context (Machine details, telemetry, relevant document chunks)
-    machine_context = ""
-    doc_context = ""
     machine = None
+    classification = StructuredTools.classify_query(message)
 
     if req.machine_id:
         machine = db.query(Machine).filter(Machine.id == req.machine_id).first()
+    elif classification.get("machine_code"):
+        machine = db.query(Machine).filter(Machine.machine_code.ilike(classification["machine_code"].strip())).first()
         if machine:
-            machine_context = f"Machine Code: {machine.machine_code} | Name: {machine.name} | Type: {machine.type} | Department: {machine.department} | Status: {machine.status.value}"
+            req.machine_id = machine.id
+
+    machine_context = ""
+    if machine:
+        machine_context = (
+            f"Machine Code: {machine.machine_code} | Name: {machine.name} | "
+            f"Type: {machine.type} | Department: {machine.department} | "
+            f"Status: {machine.status.value} | Location: {machine.location}"
+        )
 
     try:
         retriever = RAGRetriever()
@@ -379,37 +389,51 @@ def execute_ai_chat(
             query=message,
             machine_id=req.machine_id,
             work_order_id=req.work_order_id,
-            top_k=3
+            top_k=4
         )
         chunks = retrieval_data.get("chunks", [])
+        doc_context = ""
         if chunks:
-            doc_context = "\n---\n".join([f"[{c.get('document_title', 'Manual')} - Section: {c.get('section_title', 'N/A')}]:\n{c.get('content', '')}" for c in chunks[:3]])
+            doc_context = "\n---\n".join([
+                f"[{c.get('document_title', 'Technical Manual')} - Section: {c.get('section_title', 'General')} (Page {c.get('page_number', 1)})]:\n{c.get('content', '')}"
+                for c in chunks[:4]
+            ])
+        previous_repairs = retrieval_data.get("previous_repairs", [])
+        repair_context = ""
+        if previous_repairs:
+            repair_context = "\n".join([
+                f"- Verified Repair ({pr.get('date', 'N/A')}): Problem: {pr.get('summary')} | Cause: {pr.get('root_cause')} | Action: {pr.get('repair_action')}"
+                for pr in previous_repairs[:3]
+            ])
     except Exception:
         retrieval_data = {"chunks": []}
+        doc_context = ""
+        repair_context = ""
 
-    # 3. System Instruction for EquipFix AI Copilot
+    # 3. System Instruction for EquipFix AI Copilot (Accurate, Grounded, Professional, No unwanted spam)
     system_instruction = (
-        "You are EquipFix AI Operations Director Copilot — an expert industrial AI diagnostics engineer, "
-        "plant operations director, and reliability specialist.\n"
-        "Your mission is to provide rigorous, actionable, source-informed answers for manufacturing plant operations, "
-        "CNC milling, hydraulic presses, robotics, safety protocols (OSHA 1910.147 Lockout/Tagout - LOTO), and predictive maintenance.\n\n"
-        "CRITICAL PRESENTATION RULES:\n"
-        "1. EMOJIS ARE MANDATORY: Add intuitive, relevant emojis across your entire response:\n"
-        "   - Headers: e.g. ### 🔍 Root Cause Analysis, ### 🛠️ Recommended Action Steps, ### ⚠️ Safety & LOTO Protocol, ### 💡 Operational Insights, ### 📋 Parts & Tools Needed, ### 📊 Telemetry Diagnostics.\n"
-        "   - Bullets and action steps: e.g. 🔧, ⚙️, 🔩, ⚡, 🛡️, 🚨, 🧯, ✅, ⏱️, 🌡️, 📐, 🏭, 🔌.\n"
-        "2. DIAGRAMS & SCHEMATICS: When explaining physical parts, mechanisms, electrical circuits, hydraulic flow, or procedural sequences, "
-        "ALWAYS include a clear visual ASCII diagram (e.g. [Motor] ──▶ [Coupling] ──▶ [Bearing] ──▶ [Spindle]) to help the user understand the concept visually.\n"
-        "3. When analyzing images, inspect mechanical components, electrical wear, thermal discoloration, structural fatigue, or safety hazards with engineering precision.\n"
-        "4. Format output with clean markdown headings, numbered steps, bold highlights, and safety callouts.\n"
+        "You are EquipFix AI Copilot — an expert industrial maintenance diagnostics engineer and reliability specialist.\n"
+        "Your mission is to provide technically accurate, source-grounded, actionable troubleshooting guidance for plant machinery.\n\n"
+        "CORE ENGINEERING PRINCIPLES:\n"
+        "1. FACTUAL GROUNDING: Rely strictly on plant equipment manuals, safety SOPs, and engineering facts provided below. If certain details are unknown, state so plainly without hallucination.\n"
+        "2. SAFETY FIRST (OSHA 1910.147 LOTO): Enforce zero-energy state isolation (Lockout/Tagout) before any physical inspection, electrical testing, or mechanical disassembly.\n"
+        "3. STRUCTURE & CLARITY: Format answers cleanly with markdown headings:\n"
+        "   - ### 🔍 Root Cause Analysis\n"
+        "   - ### 🛠️ Recommended Action Steps (numbered sequentially)\n"
+        "   - ### ⚠️ Safety & Lockout/Tagout (LOTO) Compliance\n"
+        "   - ### 📋 Parts & Tools Needed (if applicable)\n"
+        "4. NO UNWANTED CONTENT: Do not spam excessive emojis. Do not output canned ASCII diagrams or dummy schematics unless the user explicitly asks for a diagram or schematic. Keep explanations concise, professional, and directly useful to the maintenance technician.\n"
     )
     if machine_context:
-        system_instruction += f"\nPlant Asset Context: {machine_context}\n"
+        system_instruction += f"\nPlant Equipment Context: {machine_context}\n"
     if doc_context:
-        system_instruction += f"\nRelevant Plant Technical Manual Context:\n{doc_context}\n"
+        system_instruction += f"\nRelevant Plant Technical Documentation:\n{doc_context}\n"
+    if repair_context:
+        system_instruction += f"\nVerified Historical Maintenance Records:\n{repair_context}\n"
 
     # 4. Handle Execution with Google Gemini if API Key is Present
     if api_key and provider == "gemini":
-        candidate_models = [selected_model, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        candidate_models = [selected_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         seen_m = set()
         clean_models = []
         for m in candidate_models:
@@ -418,7 +442,7 @@ def execute_ai_chat(
                 seen_m.add(clean_m)
                 clean_models.append(clean_m)
 
-        # Build conversation contents ensuring alternating turns starting with "user"
+        # Build clean conversation contents
         clean_contents = []
         for h in (req.history or []):
             h_role = "user" if h.role == "user" else "model"
@@ -434,9 +458,8 @@ def execute_ai_chat(
         while clean_contents and clean_contents[0]["role"] != "user":
             clean_contents.pop(0)
 
-        # Merge or append current message
-        prompt_text = f"{system_instruction}\n\nUser Question/Instruction: {message}" if not clean_contents else message
-        current_parts = [{"text": prompt_text}]
+        # Current user turn
+        current_parts = [{"text": message}]
         if req.image_base64:
             clean_base64 = re.sub(r"^data:image/[^;]+;base64,", "", req.image_base64)
             current_parts.append({
@@ -451,7 +474,11 @@ def execute_ai_chat(
         else:
             clean_contents.append({"role": "user", "parts": current_parts})
 
+        # Standard payload with top-level systemInstruction
         payload = {
+            "systemInstruction": {
+                "parts": [{"text": system_instruction}]
+            },
             "contents": clean_contents,
             "generationConfig": {
                 "temperature": 0.2,
@@ -465,6 +492,20 @@ def execute_ai_chat(
             try:
                 with httpx.Client(timeout=14.0) as client:
                     resp = client.post(endpoint, json=payload)
+                    # If model rejects systemInstruction (HTTP 400), retry with system instruction prepended to first user turn
+                    if resp.status_code == 400 and "systemInstruction" in resp.text:
+                        fallback_contents = [
+                            {"role": c["role"], "parts": [{"text": p.get("text", "")} for p in c["parts"]]}
+                            for c in clean_contents
+                        ]
+                        if fallback_contents:
+                            fallback_contents[0]["parts"][0]["text"] = f"{system_instruction}\n\n{fallback_contents[0]['parts'][0]['text']}"
+                        fallback_payload = {
+                            "contents": fallback_contents,
+                            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
+                        }
+                        resp = client.post(endpoint, json=fallback_payload)
+
                     if resp.status_code == 200:
                         data = resp.json()
                         candidates = data.get("candidates", [])
@@ -477,7 +518,7 @@ def execute_ai_chat(
                                     provider=f"Google Gemini ({cur_model})",
                                     model=cur_model,
                                     realtime=True,
-                                    grounded_source=f"Gemini {cur_model} Direct Engine"
+                                    grounded_source=f"Gemini {cur_model} + Plant RAG Knowledge Base"
                                 )
                     err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
@@ -494,10 +535,9 @@ def execute_ai_chat(
                 last_error = str(e)
 
         if last_error:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Google Gemini inference failed across attempted models: {last_error}"
-            )
+            # Fall back to grounded local response if external call failed
+            logger_detail = f"Gemini API attempt encountered: {last_error}. Falling back to internal grounded knowledge base."
+            pass
 
     # 5. Handle Execution with OpenAI if API Key is Present
     if api_key and provider == "openai":
@@ -521,7 +561,7 @@ def execute_ai_chat(
                         "model": selected_model,
                         "messages": messages,
                         "max_tokens": 2048,
-                        "temperature": 0.25
+                        "temperature": 0.2
                     }
                 )
                 if resp.status_code == 200:
@@ -532,7 +572,7 @@ def execute_ai_chat(
                         provider=f"OpenAI ({selected_model})",
                         model=selected_model,
                         realtime=True,
-                        grounded_source=f"OpenAI {selected_model} Direct Engine"
+                        grounded_source=f"OpenAI {selected_model} + Plant RAG Knowledge Base"
                     )
                 else:
                     err_msg = resp.json().get("error", {}).get("message", f"HTTP {resp.status_code}")
@@ -544,9 +584,11 @@ def execute_ai_chat(
 
     # 6. Fallback / No API Key: Intelligent Industrial Operations Copilot
     msg_lower = message.lower().strip()
-    is_greeting = any(w == msg_lower or msg_lower.startswith(w + " ") or msg_lower.startswith(w + "!") for w in [
-        "hi", "hello", "hey", "who are you", "what can you do", "help", "good morning", "good afternoon"
-    ])
+    pure_greetings = ["hi", "hello", "hey", "who are you", "what can you do", "good morning", "good afternoon", "greetings"]
+    is_greeting = msg_lower in pure_greetings or (
+        any(msg_lower.startswith(g) for g in ["hi ", "hello ", "hey "]) and len(msg_lower.split()) <= 3
+    )
+
     if is_greeting:
         return AIChatResponse(
             text=(
@@ -555,7 +597,7 @@ def execute_ai_chat(
                 "parse technical manuals, enforce OSHA 1910.147 LOTO compliance, and diagnose equipment anomalies.\n\n"
                 "### 💡 Available Capabilities\n"
                 "• 🔍 **Real-Time Fault Diagnostics**: Inquire about machine error codes, vibration spikes, or hydraulic leaks.\n"
-                "• 🛡️ **OSHA LOTO Safety Standard**: Execute 7-step zero-energy isolation checklists with certified sign-off.\n"
+                "• 🛡️ **OSHA LOTO Safety Standard**: Execute zero-energy isolation checklists with certified safety sign-off.\n"
                 "• 📦 **Spare Parts & Inventory**: Look up compatible OEM parts and restock levels.\n"
                 "• ⚡ **Direct AI Key**: Click **Configure AI Key** above to link your Google Gemini API key for instant multi-turn reasoning and visual inspection!"
             ),
@@ -565,6 +607,36 @@ def execute_ai_chat(
             grounded_source="EquipFix Core Knowledge Base"
         )
 
+    # 7. Check if user asked a direct structured fact (e.g. machine status, spare parts stock)
+    if classification.get("type") == "STRUCTURED":
+        tool_name = classification["tool"]
+        tool_params = classification["params"]
+        tool_result = StructuredTools.execute_tool(db, tool_name, **tool_params)
+        m_code = classification.get("machine_code") or (machine.machine_code if machine else "")
+
+        fact_text = f"### 📊 Relational Database Record: {tool_name.replace('get_', '').replace('_', ' ').title()}\n"
+        if "status" in tool_result:
+            fact_text += f"- **Equipment**: {m_code}\n- **Operational Status**: `{tool_result.get('status')}`\n- **Location**: {tool_result.get('location', 'N/A')}\n"
+            if tool_result.get("next_scheduled_maintenance"):
+                fact_text += f"- **Next Scheduled Maintenance**: {tool_result.get('next_scheduled_maintenance')}\n"
+            if tool_result.get("active_incidents_count") is not None:
+                fact_text += f"- **Active Incidents**: {tool_result.get('active_incidents_count')}\n"
+        elif "parts" in tool_result:
+            fact_text += f"- **Parts Found**: {tool_result.get('total_parts', len(tool_result.get('parts', [])))}\n"
+            for p in tool_result.get("parts", [])[:5]:
+                fact_text += f"  • `{p.get('part_code')}`: **{p.get('name')}** — In Stock: **{p.get('current_stock')}** (Min: {p.get('minimum_stock')}) | Unit Cost: ${p.get('unit_cost')}\n"
+        else:
+            fact_text += f"```json\n{json.dumps(tool_result, indent=2, default=str)}\n```\n"
+
+        return AIChatResponse(
+            text=fact_text,
+            provider="EquipFix Structured Fact Engine",
+            model="PostgreSQL Relational Store",
+            realtime=True,
+            grounded_source="PostgreSQL Operational Tables"
+        )
+
+    # 8. Grounded Local RAG Synthesis (Clean, Accurate, NO unwanted dummy flowcharts)
     generator = GroundedGenerator()
     rag_res = generator.generate_response(
         query=message,
@@ -574,17 +646,16 @@ def execute_ai_chat(
         user_role=current_user.role.name if current_user.role else "TECHNICIAN"
     )
 
-    formatted_text = f"### 🔍 Root Cause Analysis & Sensor Telemetry\n{rag_res.possible_cause}\n\n"
+    formatted_text = f"### 🔍 Root Cause Analysis\n{rag_res.possible_cause}\n\n"
     if rag_res.recommended_checks:
         formatted_text += "### 🛠️ Recommended Action Steps\n" + "\n".join([f"🔹 **Step {i+1}**: {c}" for i, c in enumerate(rag_res.recommended_checks)]) + "\n\n"
     if rag_res.safety_warnings:
         formatted_text += "### ⚠️ Safety & Lockout/Tagout (LOTO) Compliance\n" + "\n".join(rag_res.safety_warnings) + "\n\n"
-    formatted_text += (
-        "### 📋 Visual Schematic Layout\n"
-        "```\n"
-        "[Power Feed ⚡] ──▶ [Emergency Stop 🚨] ──▶ [Motor Drive ⚙️] ──▶ [Bearing Unit 🔩] ──▶ [Spindle Output 🏭]\n"
-        "```\n"
-    )
+    if rag_res.sources:
+        formatted_text += "### 📚 Plant Documentation Sources\n" + "\n".join([
+            f"• **{s.document_title}** (Page {s.page_number}, {s.section_title}) — Relevance: {int(s.relevance_score * 100)}%"
+            for s in rag_res.sources[:3]
+        ]) + "\n"
 
     return AIChatResponse(
         text=formatted_text,
