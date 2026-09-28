@@ -308,13 +308,16 @@ export const LoginPage = () => {
       // 2. Extract Firebase JWT ID token
       const idToken = await fbUser.getIdToken();
 
-      // 3. Authenticate directly with the user's authentic Google account
-      await handleCompleteGoogleLogin({
+      // 3. User authenticated with their real Google account!
+      // Open Roles Confirmation Modal so user can choose/confirm their operational role
+      setPendingGoogleAuth({
         email: fbUser.email,
         full_name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Google User',
         photoURL: fbUser.photoURL || null,
         idToken,
+        isFallback: false,
       });
+      setShowGoogleRoleModal(true);
     } catch (err) {
       console.error('Firebase Google Sign-In Error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
