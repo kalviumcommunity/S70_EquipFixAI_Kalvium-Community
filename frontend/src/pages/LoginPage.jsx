@@ -5,13 +5,12 @@ import { authApi } from '../services/api';
 import PasswordInput from '../components/common/PasswordInput';
 import { signInWithGoogle } from '../firebase';
 import GoogleRoleConfirmModal from '../components/auth/GoogleRoleConfirmModal';
-import GoogleAccountChooserModal from '../components/auth/GoogleAccountChooserModal';
 import AuthSuccessPopup from '../components/auth/AuthSuccessPopup';
 import {
   Wrench, Shield, CheckCircle, AlertCircle, Sparkles,
   Lock, Mail, ArrowRight, Activity, Clock, Database, Cpu,
   HardHat, UserCheck, ShieldAlert, Zap, Factory,
-  Check, Info, RefreshCw, Loader2, Eye, EyeOff, User, Users, X, ShieldCheck
+  Check, Info, RefreshCw, Loader2, Eye, EyeOff, User, Users, X, ShieldCheck, Copy
 } from 'lucide-react';
 
 export const LoginPage = () => {
@@ -24,9 +23,9 @@ export const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [googleNotice, setGoogleNotice] = useState(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [showGoogleAccountChooser, setShowGoogleAccountChooser] = useState(false);
 
   // Real-time live plant statistics from backend
   const [liveStats, setLiveStats] = useState({
@@ -238,8 +237,8 @@ export const LoginPage = () => {
 
     try {
       const loggedUser = await googleLogin({
-        credential: idToken || 'direct-auth-fallback-token',
-        token: idToken || 'direct-auth-fallback-token',
+        credential: idToken,
+        token: idToken,
         email: cleanEmail,
         full_name: full_name || cleanEmail.split('@')[0].replace('.', ' ').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
         role: targetRole,
@@ -295,7 +294,7 @@ export const LoginPage = () => {
     setGoogleNotice(null);
     setGoogleLoading(true);
     try {
-      // 1. Trigger Firebase Google popup
+      // 1. Trigger authentic Firebase Google popup
       const result = await signInWithGoogle();
       const fbUser = result?.user;
       if (!fbUser) {
@@ -305,7 +304,7 @@ export const LoginPage = () => {
       // 2. Extract Firebase JWT ID token
       const idToken = await fbUser.getIdToken();
 
-      // 3. User selected their Google account in the native popup!
+      // 3. User authenticated with their real Google account!
       // Log straight into that particular account:
       await handleCompleteGoogleLogin({
         email: fbUser.email,
@@ -314,29 +313,35 @@ export const LoginPage = () => {
         idToken,
       });
     } catch (err) {
-      console.warn('Firebase popup unavailable or domain unauthorized, opening Google Account Chooser:', err);
+      console.error('Firebase Google Sign-In Error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setGoogleLoading(false);
         return;
       }
-      // If Firebase blocked due to unauthorized domain, network glitch, or unconfigured domain:
-      // Immediately open Google Account Chooser modal asking which account to use!
-      setGoogleNotice(null);
-      setShowGoogleAccountChooser(true);
+      if (err.code === 'auth/unauthorized-domain') {
+        const host = window.location.hostname;
+        setGoogleNotice(
+          `Firebase Authorized Domain Required: The domain "${host}" is not authorized in your Firebase Console. Please open Firebase Console (project: equipfixai-95850) -> Authentication -> Settings -> Authorized domains -> click "Add domain" and enter "${host}".`
+        );
+        return;
+      }
+      if (err.code === 'auth/popup-blocked') {
+        setGoogleNotice('Popup Blocked: Your browser blocked the Google Sign-In popup. Please allow popups for this site and try again.');
+        return;
+      }
+      if (err.code === 'auth/network-request-failed') {
+        setGoogleNotice('Network Error: Unable to reach Google/Firebase Authentication servers. Please check your internet connection.');
+        return;
+      }
+      const detail = err.response?.data?.detail;
+      setGoogleNotice(
+        detail ||
+        err.message ||
+        'Google Sign-In could not be completed.'
+      );
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  const handleSelectGoogleAccount = async (account) => {
-    setShowGoogleAccountChooser(false);
-    await handleCompleteGoogleLogin({
-      email: account.email,
-      full_name: account.name || account.full_name,
-      photoURL: account.photoURL,
-      idToken: 'direct-auth-fallback-token',
-      role: account.role || 'OPERATOR'
-    });
   };
 
   const handleConfirmGoogleRole = async (chosenRole, customEmail) => {
@@ -718,14 +723,15 @@ export const LoginPage = () => {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                 <Info size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#38bdf8' }} />
                 <div>
-                  <strong style={{ display: 'block', color: '#38bdf8', marginBottom: '2px' }}>Google SSO Notice</strong>
+                  <strong style={{ display: 'block', color: '#38bdf8', marginBottom: '2px' }}>Firebase Google SSO Notice</strong>
                   <span>{googleNotice}</span>
                 </div>
               </div>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-end',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
                 gap: '8px',
                 paddingTop: '8px',
                 borderTop: '1px solid rgba(56, 189, 248, 0.2)'
@@ -733,32 +739,43 @@ export const LoginPage = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setPendingGoogleAuth({
-                      email: 'google.user@equipfix.ai',
-                      full_name: 'Google Verified User',
-                      photoURL: null,
-                      idToken: 'direct-auth-fallback-token',
-                    });
-                    setShowGoogleRoleModal(true);
+                    navigator.clipboard.writeText(window.location.hostname);
+                    setCopiedDomain(true);
+                    setTimeout(() => setCopiedDomain(false), 2500);
                   }}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
                     border: '1px solid #38bdf8',
                     color: '#38bdf8',
-                    padding: '6px 12px',
+                    padding: '5px 10px',
                     borderRadius: '6px',
-                    fontSize: '0.78rem',
+                    fontSize: '0.75rem',
                     fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    cursor: 'pointer'
                   }}
                 >
-                  <Sparkles size={14} />
-                  Continue with Google SSO (Role Selector)
+                  <Copy size={13} />
+                  <span>{copiedDomain ? 'Copied Domain!' : `Copy "${window.location.hostname}"`}</span>
                 </button>
+                <a
+                  href="https://console.firebase.google.com/project/equipfixai-95850/authentication/settings"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: '#38bdf8',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    textDecoration: 'none'
+                  }}
+                >
+                  Open Firebase Console Settings →
+                </a>
               </div>
             </div>
           )}
@@ -983,14 +1000,6 @@ export const LoginPage = () => {
         </div>
       </div>
 
-      {/* Google Account Chooser Modal */}
-      <GoogleAccountChooserModal
-        isOpen={showGoogleAccountChooser}
-        onSelectAccount={handleSelectGoogleAccount}
-        onClose={() => setShowGoogleAccountChooser(false)}
-        loading={googleLoading}
-        directoryAccounts={recentAccounts}
-      />
 
       {/* Google SSO Role Confirmation Modal with Bubble-Up Animation */}
       <GoogleRoleConfirmModal
