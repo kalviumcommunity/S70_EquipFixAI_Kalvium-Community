@@ -116,3 +116,12 @@ class AIVerifyKeyResponse(BaseModel):
     message: str
     provider: str
     model: Optional[str] = None
+
+
+class AIModelItem(BaseModel):
+    id: str
+    name: str
+    display_name: str
+    description: Optional[str] = None
+    supported_generation_methods: Optional[List[str]] = []
+    is_default: bool = False

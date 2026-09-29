@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Key, CheckCircle, AlertCircle, Eye, EyeOff, X, ExternalLink, Loader2, Cpu, Sparkles, Sliders, Zap } from 'lucide-react';
+import { Key, CheckCircle, AlertCircle, Eye, EyeOff, X, ExternalLink, Loader2, Cpu, Sparkles, Sliders, Zap, RefreshCw } from 'lucide-react';
 import {
-  getAIConfig, saveAIConfig, clearAIConfig, testAIConnection,
+  getAIConfig, saveAIConfig, clearAIConfig, testAIConnection, fetchAvailableGeminiModels,
   GEMINI_MODELS, OPENAI_MODELS, DEFAULT_MODELS
 } from '../../services/aiCopilotService';
 
@@ -12,6 +12,8 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
   const [customModel, setCustomModel] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [availableGeminiModels, setAvailableGeminiModels] = useState(GEMINI_MODELS);
   const [testResult, setTestResult] = useState(null); // { success: boolean, message: string }
 
   useEffect(() => {
@@ -22,6 +24,12 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       setModel(cfg.model || DEFAULT_MODELS[cfg.provider || 'gemini']);
       setCustomModel(cfg.customModel || '');
       setTestResult(null);
+
+      if (cfg.apiKey && (cfg.provider || 'gemini') === 'gemini') {
+        fetchAvailableGeminiModels(cfg.apiKey).then((m) => {
+          if (m && m.length > 0) setAvailableGeminiModels(m);
+        }).catch(() => {});
+      }
     }
   }, [isOpen]);
 
@@ -92,6 +100,29 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
   };
 
 
+  const handleDiscoverModels = async () => {
+    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
+    if (!cleanKey) {
+      setTestResult({ success: false, message: 'Please paste your Google Gemini API key first to discover live models.' });
+      return;
+    }
+    setFetchingModels(true);
+    try {
+      const models = await fetchAvailableGeminiModels(cleanKey);
+      if (models && models.length > 0) {
+        setAvailableGeminiModels(models);
+        setTestResult({
+          success: true,
+          message: `Discovered ${models.length} Gemini models live for your Google account!`
+        });
+      }
+    } catch (err) {
+      setTestResult({ success: false, message: 'Could not fetch live models: ' + (err.message || 'Network error') });
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
   const handleClear = () => {
     clearAIConfig();
     setApiKey('');
@@ -101,7 +132,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     }
   };
 
-  const currentModels = provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
+  const currentModels = provider === 'gemini' ? availableGeminiModels : OPENAI_MODELS;
 
   return (
     <div
@@ -273,9 +304,28 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                 Select Active Model ({currentModels.length} available):
               </label>
               {provider === 'gemini' && (
-                <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 600 }}>
-                  Supports all latest Gemini models
-                </span>
+                <button
+                  type="button"
+                  onClick={handleDiscoverModels}
+                  disabled={fetchingModels || !apiKey.trim()}
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    borderRadius: '6px',
+                    color: '#38bdf8',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    cursor: apiKey.trim() ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Query Google API to discover all live models on your account"
+                >
+                  <RefreshCw size={11} className={fetchingModels ? 'spin' : ''} />
+                  <span>{fetchingModels ? 'Discovering...' : '↻ Discover Live Models'}</span>
+                </button>
               )}
             </div>
 

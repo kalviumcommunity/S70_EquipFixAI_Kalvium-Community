@@ -308,33 +308,43 @@ export const AIAssistantPage = () => {
 
       {/* 2. Structured Asset Context & Live Telemetry Selector Bar */}
       <div style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '12px',
-        padding: '14px 18px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        backgroundColor: '#0b1329',
+        border: '1px solid #1e3a8a',
+        borderRadius: '14px',
+        padding: '16px 20px',
+        boxShadow: '0 8px 24px -6px rgba(0, 0, 0, 0.4)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px'
+        gap: '14px',
+        color: '#f8fafc'
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '12px'
+          gap: '14px'
         }}>
           {/* Machine & Work Order Selectors */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', flex: '1' }}>
             <div style={{ minWidth: '240px', flex: '1' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', display: 'block', marginBottom: '4px', letterSpacing: '0.04em' }}>
                 Operational Asset Context
               </label>
               <select
-                className="form-select"
                 value={selectedMachineId}
                 onChange={(e) => handleMachineChange(e.target.value)}
-                style={{ fontSize: '0.85rem', fontWeight: 600, padding: '7px 12px' }}
+                style={{
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  padding: '9px 14px',
+                  backgroundColor: '#070c18',
+                  color: '#ffffff',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  width: '100%',
+                  outline: 'none'
+                }}
               >
                 {machines.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -345,14 +355,22 @@ export const AIAssistantPage = () => {
             </div>
 
             <div style={{ minWidth: '240px', flex: '1' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', display: 'block', marginBottom: '4px', letterSpacing: '0.04em' }}>
                 Active Work Order (Optional)
               </label>
               <select
-                className="form-select"
                 value={selectedWOId}
                 onChange={(e) => setSelectedWOId(e.target.value)}
-                style={{ fontSize: '0.85rem', padding: '7px 12px' }}
+                style={{
+                  fontSize: '0.85rem',
+                  padding: '9px 14px',
+                  backgroundColor: '#070c18',
+                  color: '#ffffff',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  width: '100%',
+                  outline: 'none'
+                }}
               >
                 <option value="">None (General Asset Diagnostics)</option>
                 {activeWorkOrdersForMachine.map((wo) => (
@@ -369,24 +387,24 @@ export const AIAssistantPage = () => {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              backgroundColor: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '6px 14px'
+              gap: '14px',
+              backgroundColor: '#070c18',
+              border: '1px solid #1e293b',
+              borderRadius: '10px',
+              padding: '8px 16px'
             }}>
               <div>
-                <span style={{ fontSize: '0.675rem', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Department</span>
-                <strong style={{ fontSize: '0.825rem', color: '#0f172a' }}>{selectedMachine.department || 'Production'}</strong>
+                <span style={{ fontSize: '0.675rem', color: '#94a3b8', textTransform: 'uppercase', display: 'block' }}>Department</span>
+                <strong style={{ fontSize: '0.825rem', color: '#ffffff' }}>{selectedMachine.department || 'Production'}</strong>
               </div>
-              <div style={{ height: '24px', width: '1px', backgroundColor: '#e2e8f0' }} />
+              <div style={{ height: '24px', width: '1px', backgroundColor: '#1e293b' }} />
               <div>
-                <span style={{ fontSize: '0.675rem', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Bay Location</span>
-                <strong style={{ fontSize: '0.825rem', color: '#0f172a' }}>{selectedMachine.location || 'Cell A'}</strong>
+                <span style={{ fontSize: '0.675rem', color: '#94a3b8', textTransform: 'uppercase', display: 'block' }}>Bay Location</span>
+                <strong style={{ fontSize: '0.825rem', color: '#ffffff' }}>{selectedMachine.location || 'Cell A'}</strong>
               </div>
-              <div style={{ height: '24px', width: '1px', backgroundColor: '#e2e8f0' }} />
+              <div style={{ height: '24px', width: '1px', backgroundColor: '#1e293b' }} />
               <div>
-                <span style={{ fontSize: '0.675rem', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Live State</span>
+                <span style={{ fontSize: '0.675rem', color: '#94a3b8', textTransform: 'uppercase', display: 'block' }}>Live State</span>
                 <span className={`badge badge-${(selectedMachine.status || 'RUNNING').toLowerCase()}`} style={{ fontSize: '0.725rem' }}>
                   {selectedMachine.status}
                 </span>
@@ -402,11 +420,11 @@ export const AIAssistantPage = () => {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '8px',
-          paddingTop: '8px',
-          borderTop: '1px solid #f1f5f9'
+          paddingTop: '10px',
+          borderTop: '1px solid #1e293b'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
               Direct DB Tools:
             </span>
 
@@ -456,8 +474,8 @@ export const AIAssistantPage = () => {
           </div>
 
           {selectedWorkOrder && (
-            <div style={{ fontSize: '0.75rem', color: '#0284c7', backgroundColor: '#f0f9ff', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
-              Targeting Work Order: <strong>{selectedWorkOrder.work_order_number}</strong>
+            <div style={{ fontSize: '0.75rem', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+              Targeting Work Order: <strong style={{ color: '#ffffff' }}>{selectedWorkOrder.work_order_number}</strong>
             </div>
           )}
         </div>

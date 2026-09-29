@@ -24,8 +24,14 @@ class GroundedGenerator:
         r"bypass\s+security",
     ]
 
-    def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = (
+            api_key
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or ""
+        ).strip().replace('"', '').replace("'", "")
 
     @classmethod
     def is_prompt_injection(cls, query: str) -> bool:
@@ -195,7 +201,8 @@ class GroundedGenerator:
             if sentences:
                 causes.append(f"Documented root cause: {sentences[0]}.")
             else:
-                causes.append("Identified mechanical wear or misalignment based on operating manual specifications.")
+                doc_name = chunks[0].get("document_title") or "plant technical manual"
+                causes.append(f"Refer to {doc_name} for operating specifications and diagnostic thresholds.")
 
         if not checks:
             for c in chunks[:2]:

@@ -2,6 +2,7 @@ import os
 import re
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.document import Document, DocumentVersion
@@ -283,6 +284,45 @@ def get_document(
             detail=f"Document #{document_id} not found."
         )
     return doc
+
+
+@router.get("/{document_id}/download")
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download the actual technical manual, SOP or schematic document file."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document #{document_id} not found."
+        )
+
+    file_path = resolve_document_file_path(doc.file_url)
+    if file_path and os.path.exists(file_path):
+        filename = os.path.basename(file_path)
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="application/octet-stream"
+        )
+
+    # Fallback to generating raw content if file is text-based or virtual
+    filename = f"{re.sub(r'[^a-zA-Z0-9_-]', '_', doc.title)}.txt"
+    content = f"# {doc.title}\n"
+    content += f"Category: {doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type}\n"
+    if doc.machine:
+        content += f"Asset: {doc.machine.machine_code} - {doc.machine.name}\n"
+    content += f"Status: {doc.indexing_status.value if hasattr(doc.indexing_status, 'value') else doc.indexing_status}\n\n"
+    content += f"--- End of Document #{doc.id} Header ---"
+
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)

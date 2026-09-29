@@ -61,3 +61,26 @@ def require_role(allowed_roles: List[str]):
             )
         return current_user
     return role_checker
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login",
+    auto_error=False
+)
+
+
+def get_current_user_optional(
+    db: Session = Depends(get_db),
+    token: Optional[str] = Depends(oauth2_scheme_optional)
+) -> Optional[User]:
+    """Optionally validate bearer JWT token if present; returns None if unauthenticated."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if not username:
+            return None
+        return db.query(User).filter(User.username == username).first()
+    except Exception:
+        return None
