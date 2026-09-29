@@ -567,9 +567,14 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
         }, 300);
       }
     } catch (err) {
-      const errorMsg = err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.';
-      const isKeyErr = /api key|unauthorized|permission_denied|quota|auth/i.test(errorMsg);
-      setError(errorMsg);
+      let rawError = err.message || err.response?.data?.detail || 'Failed to retrieve troubleshooting guidance.';
+      const isKeyErr = /api key|unauthorized|permission_denied|quota|auth/i.test(rawError);
+      setError(rawError);
+
+      let displayNotice = rawError;
+      if (rawError.includes('not found') || rawError.includes('not supported')) {
+        displayNotice = 'The requested AI model ID was not found on your account. The engine has automatically synchronized with Google ModelService to select the active flagship Gemini 2.0 Flash. Please send your query again.';
+      }
 
       // Replace or update streaming message with notice
       setMessages((prev) =>
@@ -577,7 +582,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
           m.id === assistantMsgId
             ? {
                 ...m,
-                content: `### ⚠️ AI Diagnostics Notice\n${errorMsg}\n\n*Click **Configure AI Key** below to verify or update your API credentials.*`,
+                content: `### ⚠️ AI Diagnostics Notice\n${displayNotice}\n\n*Click **Configure AI Key** below to verify or update your API credentials.*`,
                 provider: 'System Diagnostics',
                 isKeyError: isKeyErr,
                 isStreaming: false

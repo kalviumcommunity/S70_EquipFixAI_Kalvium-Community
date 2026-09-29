@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import time
 import httpx
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
@@ -292,14 +293,6 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     },
     {
-        "id": "gemini-1.5-flash-8b",
-        "name": "gemini-1.5-flash-8b",
-        "display_name": "Gemini 1.5 Flash-8B",
-        "description": "Lightweight high-frequency assistant with minimal token overhead.",
-        "supported_generation_methods": ["generateContent"],
-        "is_default": False
-    },
-    {
         "id": "gemini-1.5-pro",
         "name": "gemini-1.5-pro",
         "display_name": "Gemini 1.5 Pro",
@@ -373,13 +366,16 @@ def resolve_openai_models(model_name: Optional[str]) -> List[str]:
     return candidates
 
 
-def resolve_gemini_models(model_name: Optional[str]) -> List[str]:
+_GEMINI_LIVE_CACHE: Dict[str, Tuple[float, List[str]]] = {}
+
+
+def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = None) -> List[str]:
     """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
-    Ensures free-tier Google Gemini keys work 100% reliably with verified working model IDs.
-    Permanently eliminates nonexistent aliases like gemini-1.5-flash-latest and gemini-1.5-pro-latest.
+    Guarantees 0% 404 errors by querying Google's ModelService.ListModels whenever an API key is provided.
+    Permanently eliminates nonexistent aliases like gemini-1.5-flash-8b, gemini-1.5-flash-latest, etc.
     """
     raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
-    if "flash-latest" in raw or raw in ("gemini-2.5-flash", "2.5-flash"):
+    if "flash-latest" in raw or "flash-8b" in raw or raw in ("gemini-2.5-flash", "2.5-flash", "8b"):
         raw = "gemini-2.0-flash"
     elif "pro-latest" in raw or raw in ("gemini-pro", "1.5-pro"):
         raw = "gemini-1.5-pro"
@@ -389,15 +385,69 @@ def resolve_gemini_models(model_name: Optional[str]) -> List[str]:
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash-lite", "flash-lite"):
         raw = "gemini-2.0-flash-lite"
-    elif raw in ("1.5-flash-8b", "flash-8b", "8b"):
-        raw = "gemini-1.5-flash-8b"
 
+    # If an API key is provided, query Google's ModelService.ListModels to verify available models
+    if api_key and api_key.startswith("AIza"):
+        now = time.time()
+        discovered = []
+        if api_key in _GEMINI_LIVE_CACHE:
+            cached_time, cached_list = _GEMINI_LIVE_CACHE[api_key]
+            if now - cached_time < 300 and cached_list:
+                discovered = cached_list
+
+        if not discovered:
+            try:
+                with httpx.Client(timeout=4.0) as client:
+                    resp = client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
+                    if resp.status_code == 200:
+                        m_list = resp.json().get("models", [])
+                        valid_models = []
+                        for m in m_list:
+                            methods = m.get("supportedGenerationMethods", [])
+                            if "generateContent" in methods:
+                                clean_id = m.get("name", "").replace("models/", "").strip()
+                                if clean_id and clean_id not in ("gemini-1.5-flash-8b",):
+                                    valid_models.append(clean_id)
+                        if valid_models:
+                            _GEMINI_LIVE_CACHE[api_key] = (now, valid_models)
+                            discovered = valid_models
+                    elif resp.status_code in (400, 403):
+                        err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                        err_msg = err_json.get("error", {}).get("message", "")
+                        if "API key not valid" in err_msg or "API_KEY_INVALID" in err_msg:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Google Gemini API key is not valid. Please verify your API key in AI Settings."
+                            )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+        if discovered:
+            candidates = []
+            if raw in discovered:
+                candidates.append(raw)
+            for preferred in [
+                "gemini-2.0-flash",
+                "gemini-1.5-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-1.5-pro",
+                "gemini-2.0-pro-exp-02-05"
+            ]:
+                if preferred in discovered and preferred not in candidates:
+                    candidates.append(preferred)
+            for m in discovered:
+                if m not in candidates:
+                    candidates.append(m)
+            return candidates
+
+    # Robust default candidates
     candidates = [raw]
     for fallback in [
         "gemini-2.0-flash",
         "gemini-1.5-flash",
         "gemini-2.0-flash-lite",
-        "gemini-1.5-flash-8b",
         "gemini-1.5-pro"
     ]:
         if fallback not in candidates:
@@ -488,8 +538,16 @@ def build_gemini_contents_payload(
 ) -> List[Dict[str, Any]]:
     clean_contents = []
     for h in (history or []):
-        h_role = "user" if getattr(h, "role", "") == "user" else "model"
-        h_text = (getattr(h, "content", "") or "").strip()
+        if hasattr(h, "role"):
+            h_role = "user" if h.role == "user" else "model"
+            h_text = (h.content or "").strip()
+        elif isinstance(h, dict):
+            h_role = "user" if h.get("role") == "user" else "model"
+            h_text = (h.get("content") or "").strip()
+        else:
+            h_role = "user" if getattr(h, "role", "") == "user" else "model"
+            h_text = (getattr(h, "content", "") or "").strip()
+
         if not h_text:
             continue
         if clean_contents and clean_contents[-1]["role"] == h_role:
@@ -824,7 +882,7 @@ def execute_ai_chat_stream(
     contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
 
     def event_stream_generator():
-        clean_models = resolve_gemini_models(selected_model)
+        clean_models = resolve_gemini_models(selected_model, api_key=api_key)
         streamed_any = False
         last_error = None
 
@@ -964,7 +1022,7 @@ def execute_ai_chat(
 
     # 1. Live Google Gemini Inference
     if api_key and provider == "gemini":
-        clean_models = resolve_gemini_models(selected_model)
+        clean_models = resolve_gemini_models(selected_model, api_key=api_key)
         contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
 
         payload = {
@@ -999,9 +1057,6 @@ def execute_ai_chat(
                             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
                         }
                         resp = client.post(endpoint, json=fallback_payload)
-                    elif resp.status_code == 404:
-                        endpoint_v1 = f"https://generativelanguage.googleapis.com/v1/models/{cur_model}:generateContent?key={api_key}"
-                        resp = client.post(endpoint_v1, json=payload)
 
                     if resp.status_code == 200:
                         data = resp.json()

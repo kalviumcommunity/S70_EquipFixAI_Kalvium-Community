@@ -39,12 +39,6 @@ export const GEMINI_MODELS = [
     desc: 'Proven production workhorse supported on all Google AI Studio accounts.'
   },
   {
-    id: 'gemini-1.5-flash-8b',
-    name: 'Gemini 1.5 Flash-8B',
-    badge: 'HIGH FREQUENCY',
-    desc: 'Lightweight high-frequency diagnostic assistant with minimal token overhead.'
-  },
-  {
     id: 'gemini-1.5-pro',
     name: 'Gemini 1.5 Pro',
     badge: '2M CONTEXT PRO',
@@ -86,11 +80,11 @@ export const DEFAULT_MODELS = {
 /**
  * Resolve user-selected model identifier to an ordered list of verified working models.
  * Ensures free tier Google Gemini keys work 100% reliably.
- * Permanently eliminates nonexistent aliases like gemini-1.5-flash-latest and gemini-1.5-pro-latest.
+ * Permanently eliminates nonexistent aliases like gemini-1.5-flash-8b, gemini-1.5-flash-latest, etc.
  */
 export const resolveGeminiCandidateModels = (modelName) => {
   let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
-  if (raw.includes('flash-latest') || raw === 'gemini-2.5-flash' || raw === '2.5-flash') {
+  if (raw.includes('flash-latest') || raw.includes('flash-8b') || raw === 'gemini-2.5-flash' || raw === '2.5-flash' || raw === '8b') {
     raw = 'gemini-2.0-flash';
   } else if (raw.includes('pro-latest') || raw === 'gemini-pro' || raw === '1.5-pro') {
     raw = 'gemini-1.5-pro';
@@ -100,8 +94,6 @@ export const resolveGeminiCandidateModels = (modelName) => {
     raw = 'gemini-2.0-flash';
   } else if (raw === '2.0-flash-lite' || raw === 'flash-lite') {
     raw = 'gemini-2.0-flash-lite';
-  } else if (raw === '1.5-flash-8b' || raw === 'flash-8b' || raw === '8b') {
-    raw = 'gemini-1.5-flash-8b';
   }
 
   const list = [raw];
@@ -109,7 +101,6 @@ export const resolveGeminiCandidateModels = (modelName) => {
     'gemini-2.0-flash',
     'gemini-1.5-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-flash-8b',
     'gemini-1.5-pro'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
@@ -146,7 +137,7 @@ export const getAIConfig = () => {
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
     // Sanitize any stale or deprecated model names to prevent 404s
-    if (model === 'gemini-2.5-flash' || model === 'gemini-pro' || model === 'gemini-1.5-flash-latest') {
+    if (model === 'gemini-2.5-flash' || model === 'gemini-pro' || model === 'gemini-1.5-flash-latest' || model === 'gemini-1.5-flash-8b') {
       model = 'gemini-2.0-flash';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     } else if (model === 'gemini-1.5-pro-latest') {
@@ -185,7 +176,7 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
     } else if (effectiveProvider === 'gemini' && (cleanModel.startsWith('gpt') || cleanModel.startsWith('o1') || cleanModel.startsWith('o3'))) {
       cleanModel = 'gemini-2.0-flash';
     }
-    if (cleanModel === 'gemini-2.5-flash' || cleanModel === 'gemini-1.5-flash-latest') cleanModel = 'gemini-2.0-flash';
+    if (cleanModel === 'gemini-2.5-flash' || cleanModel === 'gemini-1.5-flash-latest' || cleanModel === 'gemini-1.5-flash-8b') cleanModel = 'gemini-2.0-flash';
     if (cleanModel === 'gemini-1.5-pro-latest') cleanModel = 'gemini-1.5-pro';
     localStorage.setItem(STORAGE_KEYS.MODEL, cleanModel);
   }
@@ -435,7 +426,7 @@ export const askEquipFixCopilot = async ({
     if (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3') || !effectiveModel) {
       effectiveModel = 'gemini-2.0-flash';
     }
-    if (effectiveModel === 'gemini-2.5-flash') {
+    if (effectiveModel === 'gemini-2.5-flash' || effectiveModel.includes('flash-8b') || effectiveModel.includes('flash-latest')) {
       effectiveModel = 'gemini-2.0-flash';
     }
   }
