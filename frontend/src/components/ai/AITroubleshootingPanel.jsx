@@ -4,16 +4,14 @@ import {
   Copy, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, History,
   Send, RefreshCw, Cpu, ExternalLink, Image, Upload, Camera,
   X, Download, Key, Zap, FileText, Eye, Layers, Palette,
-  Bot, User, CornerDownLeft
+  Bot, User, CornerDownLeft, EyeOff, Trash2, ArrowUpRight
 } from 'lucide-react';
 import { aiApi } from '../../services/api';
 import {
-  getAIConfig, askEquipFixCopilot, generateIndustrialImage
+  getAIConfig, saveAIConfig, askEquipFixCopilot, generateIndustrialImage, testAIConnection
 } from '../../services/aiCopilotService';
 import AIKeyConfigModal from './AIKeyConfigModal';
 import AIThinkingEffect from './AIThinkingEffect';
-
-
 
 // --- RICH HTML-STYLE FORMATTED MESSAGE RENDERER ---
 export const FormattedAIMessage = ({ content }) => {
@@ -38,7 +36,7 @@ export const FormattedAIMessage = ({ content }) => {
             borderRadius: '8px',
             fontSize: '0.8rem',
             overflowX: 'auto',
-            fontFamily: 'var(--font-mono)',
+            fontFamily: 'monospace',
             margin: '10px 0',
             border: '1px solid #1e3a8a'
           }}>
@@ -67,7 +65,7 @@ export const FormattedAIMessage = ({ content }) => {
     if (trimmed.startsWith('### ')) {
       elements.push(
         <div key={`h3-${idx}`} style={{
-          fontSize: '0.95rem',
+          fontSize: '0.92rem',
           fontWeight: 800,
           color: '#38bdf8',
           margin: '14px 0 6px 0',
@@ -76,7 +74,7 @@ export const FormattedAIMessage = ({ content }) => {
           gap: '8px',
           borderLeft: '4px solid #0284c7',
           paddingLeft: '10px',
-          backgroundColor: 'rgba(14, 165, 233, 0.12)',
+          backgroundColor: 'rgba(14, 165, 233, 0.1)',
           padding: '6px 12px',
           borderRadius: '0 6px 6px 0'
         }}>
@@ -90,7 +88,7 @@ export const FormattedAIMessage = ({ content }) => {
     if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
       elements.push(
         <h3 key={`h2-${idx}`} style={{
-          fontSize: '1.05rem',
+          fontSize: '1.02rem',
           fontWeight: 800,
           color: '#ffffff',
           margin: '16px 0 8px 0',
@@ -104,11 +102,11 @@ export const FormattedAIMessage = ({ content }) => {
       return;
     }
 
-    // Safety / Warning Callout Banner
-    if (/^(warning|caution|danger|safety notice|loto mandatory|safety)/i.test(trimmed)) {
+    // Safety / Warning Callout Banner (OSHA, Warning, Danger, LOTO)
+    if (/^(warning|caution|danger|safety notice|loto mandatory|safety|notice)/i.test(trimmed)) {
       elements.push(
         <div key={`warn-${idx}`} style={{
-          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+          backgroundColor: 'rgba(245, 158, 11, 0.12)',
           borderLeft: '4px solid #f59e0b',
           border: '1px solid rgba(245, 158, 11, 0.35)',
           padding: '10px 14px',
@@ -175,7 +173,7 @@ export const FormattedAIMessage = ({ content }) => {
       return;
     }
 
-    // Standard HTML paragraph
+    // Standard paragraph
     elements.push(
       <p key={`p-${idx}`} style={{
         margin: '5px 0',
@@ -235,8 +233,10 @@ export const AITroubleshootingPanel = ({
   // API Key State & Modal
   const [aiConfig, setAiConfig] = useState(getAIConfig());
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showInlineKeyForm, setShowInlineKeyForm] = useState(!aiConfig.apiKey);
   const [inlineKey, setInlineKey] = useState('');
   const [inlineModel, setInlineModel] = useState('gemini-2.0-flash');
+  const [showKeyPassword, setShowKeyPassword] = useState(false);
   const [savingInlineKey, setSavingInlineKey] = useState(false);
   const [inlineKeyError, setInlineKeyError] = useState(null);
 
@@ -245,12 +245,13 @@ export const AITroubleshootingPanel = ({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `### 🤖 EquipFix AI Diagnostics Copilot
-Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause analysis powered live by Google Gemini & OpenAI.
+      content: `### 🤖 EquipFix AI Engineering Diagnostics Copilot
+Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-cause analysis powered live by your Google Gemini or OpenAI API key.
 
-* 🔍 **Real-Time Fault Diagnostics**: Ask about machine error codes, vibration spikes, or hydraulic pressure anomalies.
-* 🛡️ **Safety & LOTO Compliance**: Zero-energy isolation steps compliant with OSHA 1910.147.
-* 👁️ **Multimodal Vision**: Switch to **Multimodal Inspection** to inspect equipment photos in real time.`,
+* 🔍 **Real-Time Fault Diagnostics**: Ask about machine error codes, abnormal vibration, or hydraulic anomalies.
+* 🛡️ **OSHA LOTO Compliance**: Zero-energy isolation steps compliant with OSHA 1910.147.
+* 👁️ **Multimodal Vision**: Switch to **Multimodal Inspection** to analyze photos of broken components or gauge dials.
+* 📐 **Industrial Schematics**: Generate isometric exploded assembly diagrams and CAD blueprints on demand.`,
       timestamp: 'Now',
       provider: 'EquipFix AI'
     }
@@ -265,7 +266,7 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
   const [error, setError] = useState(null);
   const [copiedStatus, setCopiedStatus] = useState(null);
 
-  // Scroll Anchor
+  // Scroll Anchors
   const chatBottomRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -308,6 +309,13 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
     'Mandatory OSHA Lockout/Tagout Danger Warning sign'
   ];
 
+  // Refresh config on mount
+  useEffect(() => {
+    const cfg = getAIConfig();
+    setAiConfig(cfg);
+    setShowInlineKeyForm(!cfg.apiKey);
+  }, []);
+
   const handleInlineKeyChange = (val) => {
     setInlineKey(val);
     setInlineKeyError(null);
@@ -331,7 +339,7 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
       return;
     }
 
-    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : 'gemini');
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : 'gemini';
     let effectiveModel = inlineModel;
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || !effectiveModel)) {
       effectiveModel = 'gpt-4o-mini';
@@ -346,8 +354,10 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
       const newCfg = { apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel: '' };
       saveAIConfig(newCfg);
       setAiConfig(newCfg);
+      setShowInlineKeyForm(false);
       setCopiedStatus(`${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} connected! Model: ${effectiveModel}`);
       setTimeout(() => setCopiedStatus(null), 4000);
+
       setMessages((prev) => [
         ...prev,
         {
@@ -390,7 +400,7 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
         work_order_id: workOrderId || undefined,
         limit: 5
       });
-      setRecentQueries(res.data);
+      setRecentQueries(res.data || []);
     } catch (err) {
       console.warn('Could not load AI query history', err);
     }
@@ -399,19 +409,17 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
   // Called when API key is saved in modal
   const handleConfigSaved = (newCfg) => {
     setAiConfig(newCfg);
-    setActiveTab('DIAGNOSTICS'); // Redirect straight to chat view!
+    setShowInlineKeyForm(false);
+    setActiveTab('DIAGNOSTICS');
     setCopiedStatus(`API Key verified & activated! Model: ${newCfg.model || 'Gemini 2.0 Flash'}`);
     setTimeout(() => setCopiedStatus(null), 4000);
 
-    // Add confirmation message to chat thread
     setMessages((prev) => [
       ...prev,
       {
         id: `sys-${Date.now()}`,
         role: 'assistant',
-        content: `### ⚡ Real-Time AI Connected
-Active model updated to **${newCfg.model || 'Gemini 2.0 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).
-Direct multimodal streaming inference is now active. Send any diagnostic prompt below!`,
+        content: `### ⚡ Real-Time AI Connected\nActive model updated to **${newCfg.model || 'Gemini 2.0 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).\nDirect multimodal streaming inference is now active. Send any diagnostic prompt below!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         provider: `${newCfg.provider.toUpperCase()} ENGINE`
       }
@@ -430,7 +438,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     }, 50);
 
     try {
-      // Create an engineering schematic prompt from the diagnosis
       const promptSnippet = (queryPrompt || answerContent.slice(0, 160))
         .replace(/[#*`_🔹⚙️🔍🛠️⚠️📋]/g, '')
         .trim();
@@ -470,21 +477,17 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     const q = (queryText || question).trim();
     if (!q) return;
 
-    // Refresh aiConfig right before query so newly configured keys are immediately active
     const activeConfig = getAIConfig();
     setAiConfig(activeConfig);
 
-    // Require API Key for real-time diagnostics
     if (!activeConfig.apiKey) {
       setError('Google Gemini API key required. Please enter your API key to activate real-time responses.');
-      setShowConfigModal(true);
+      setShowInlineKeyForm(true);
       return;
     }
 
-    // 1. Immediately make text in search bar invisible / cleared
     setQuestion('');
 
-    // 2. Append user prompt to messages thread
     const userMsg = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -492,7 +495,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // 3. Immediately prepare real-time streaming assistant placeholder
     const assistantMsgId = `ai-${Date.now()}`;
     const activeModelLabel = (activeConfig.model === 'custom' && activeConfig.customModel)
       ? activeConfig.customModel
@@ -502,7 +504,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       role: 'assistant',
       content: '',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      provider: `Google Gemini (${activeModelLabel})`,
+      provider: `${activeConfig.provider === 'openai' ? 'OpenAI' : 'Google Gemini'} (${activeModelLabel})`,
       isStreaming: true
     };
 
@@ -510,13 +512,11 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
     setLoading(true);
     setError(null);
 
-    // Auto-scroll down smoothly
     setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
 
     try {
-      // Build conversation history excluding system and error notices
       const conversationHistory = messages
         .filter(m => m.id !== 'welcome' && !m.id.startsWith('sys-') && !m.id.startsWith('ai-err-') && m.content)
         .slice(-8)
@@ -544,7 +544,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       const aiText = result.text;
       const providerLabel = result.provider;
 
-      // Finalize assistant message
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
@@ -559,7 +558,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       );
       fetchHistory();
 
-      // Automatically generate visual diagram only when explicitly requested
       const wantsDiagram = /\b(generate (a )?(diagram|schematic|blueprint)|draw (a )?(diagram|schematic))\b/i.test(q);
       if (wantsDiagram) {
         setTimeout(() => {
@@ -576,7 +574,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
         displayNotice = 'The requested AI model ID was not found on your account. The engine has automatically synchronized with Google ModelService to select the active flagship Gemini 2.0 Flash. Please send your query again.';
       }
 
-      // Replace or update streaming message with notice
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
@@ -597,7 +594,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       }, 100);
     }
   };
-
 
   // --- TAB 2: MULTIMODAL IMAGE ANALYSIS ---
   const handleImageFileChange = (e) => {
@@ -622,7 +618,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
 
     const p = (customPrompt || question || 'Inspect this equipment for defects, wear, safety hazards, and diagnostic anomalies.').trim();
 
-    // Clear search bar
     setQuestion('');
     setVisionLoading(true);
     setError(null);
@@ -651,7 +646,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       return;
     }
 
-    // Clear input bar
     setImagePrompt('');
     setGeneratingImage(true);
     setError(null);
@@ -675,23 +669,43 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
       onCopyToLog(stepTitle, itemText);
       setCopiedStatus('Copied to Work Log input!');
       setTimeout(() => setCopiedStatus(null), 3000);
+    } else {
+      navigator.clipboard.writeText(itemText);
+      setCopiedStatus('Copied to clipboard!');
+      setTimeout(() => setCopiedStatus(null), 3000);
     }
   };
 
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: `### 🤖 EquipFix AI Engineering Diagnostics Copilot\nChat thread cleared. Ready for equipment diagnostics on ${machineCode || 'all plant machinery'}.`,
+        timestamp: 'Now',
+        provider: 'EquipFix AI'
+      }
+    ]);
+  };
+
+  const activeModelDisplay = (aiConfig.model === 'custom' && aiConfig.customModel)
+    ? aiConfig.customModel
+    : (aiConfig.model || (aiConfig.provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'));
+
   return (
     <div style={{
-      backgroundColor: '#0b1329',
+      backgroundColor: '#070d1e',
       borderRadius: '16px',
       border: '1px solid #1e3a8a',
-      boxShadow: '0 12px 36px -8px rgba(0, 0, 0, 0.5), 0 0 20px rgba(14, 165, 233, 0.08)',
+      boxShadow: '0 16px 40px -10px rgba(0, 0, 0, 0.6), 0 0 24px rgba(14, 165, 233, 0.1)',
       overflow: 'hidden',
       marginBottom: '24px'
     }}>
-      {/* Panel Header */}
+      {/* 1. TOP HEADER BAR */}
       <div style={{
-        backgroundColor: '#070c1a',
+        backgroundColor: '#050a17',
         color: '#ffffff',
-        padding: '14px 18px',
+        padding: '14px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -699,27 +713,28 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
         gap: '12px',
         borderBottom: '1px solid #1e293b'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Left: Branding & Machine Context */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
             background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 14px rgba(14, 165, 233, 0.5)'
+            boxShadow: '0 0 16px rgba(14, 165, 233, 0.5)'
           }}>
-            <Sparkles size={18} color="#ffffff" />
+            <Sparkles size={20} color="#ffffff" />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <strong style={{ fontSize: '1rem', letterSpacing: '-0.01em', color: '#f8fafc' }}>
-                EquipFix AI Operations Director Copilot
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '1.02rem', letterSpacing: '-0.01em', color: '#f8fafc' }}>
+                EquipFix AI Copilot
               </strong>
               {machineCode && (
                 <span style={{
-                  backgroundColor: '#1e293b',
+                  backgroundColor: '#0f172a',
                   color: '#38bdf8',
                   fontSize: '0.725rem',
                   fontWeight: 700,
@@ -732,44 +747,45 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               )}
             </div>
             <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-              Real-time engineering intelligence, multimodal inspection & diagram generation.
+              Real-time engineering intelligence, multimodal inspection &amp; industrial schematics
             </span>
           </div>
         </div>
 
-        {/* Right Header: Active Key Status & Config Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Right: Key Status Badge & Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <div
             onClick={() => setShowConfigModal(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: aiConfig.apiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.12)',
-              border: `1px solid ${aiConfig.apiKey ? 'rgba(16, 185, 129, 0.4)' : 'rgba(56, 189, 248, 0.25)'}`,
-              padding: '4px 10px',
+              backgroundColor: aiConfig.apiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              border: `1px solid ${aiConfig.apiKey ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+              padding: '5px 12px',
               borderRadius: '20px',
               cursor: 'pointer',
               transition: 'all 0.15s ease'
             }}
-            title="Click to view or edit AI Key configuration"
+            title="Click to configure AI API key and model"
           >
             <span style={{
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: aiConfig.apiKey ? '#10b981' : '#38bdf8',
-              boxShadow: `0 0 8px ${aiConfig.apiKey ? '#10b981' : '#38bdf8'}`
+              backgroundColor: aiConfig.apiKey ? '#10b981' : '#f59e0b',
+              boxShadow: `0 0 8px ${aiConfig.apiKey ? '#10b981' : '#f59e0b'}`
             }} />
             <span style={{
               fontSize: '0.725rem',
               fontWeight: 700,
-              color: aiConfig.apiKey ? '#6ee7b7' : '#7dd3fc',
-              textTransform: 'uppercase'
+              color: aiConfig.apiKey ? '#6ee7b7' : '#fcd34d',
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em'
             }}>
               {aiConfig.apiKey
-                ? `${aiConfig.provider === 'openai' ? 'OpenAI' : 'Gemini'} • ${aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || (aiConfig.provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'))} ACTIVE`
-                : 'Internal RAG Mode'}
+                ? `${aiConfig.provider === 'openai' ? 'OpenAI' : 'Gemini'} • ${activeModelDisplay} ACTIVE`
+                : 'API Key Required'}
             </span>
           </div>
 
@@ -816,15 +832,36 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
             <History size={13} />
             <span>History ({recentQueries.length})</span>
           </button>
+
+          <button
+            type="button"
+            onClick={handleClearChat}
+            style={{
+              backgroundColor: '#0f172a',
+              color: '#94a3b8',
+              border: '1px solid #334155',
+              fontSize: '0.75rem',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+            title="Clear Chat Thread"
+          >
+            <Trash2 size={13} />
+          </button>
         </div>
       </div>
 
-      {/* Mode Switcher Navigation Tabs */}
+      {/* 2. MODE NAVIGATION TABS */}
       <div style={{
         display: 'flex',
-        backgroundColor: '#0f172a',
+        backgroundColor: '#091124',
         borderBottom: '1px solid #1e293b',
-        padding: '0 16px'
+        padding: '0 16px',
+        overflowX: 'auto'
       }}>
         <button
           type="button"
@@ -841,11 +878,12 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap'
           }}
         >
           <Zap size={16} color={activeTab === 'DIAGNOSTICS' ? '#38bdf8' : '#64748b'} />
-          <span>Real-Time Diagnosis & Chat</span>
+          <span>Real-Time Diagnosis &amp; Chat</span>
         </button>
 
         <button
@@ -863,13 +901,14 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap'
           }}
         >
           <Eye size={16} color={activeTab === 'VISION' ? '#38bdf8' : '#64748b'} />
           <span>Multimodal Visual Inspection</span>
           <span style={{ fontSize: '0.65rem', backgroundColor: '#0284c7', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>
-            IMAGE ANALYSIS
+            PHOTO AI
           </span>
         </button>
 
@@ -888,38 +927,40 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap'
           }}
         >
           <Palette size={16} color={activeTab === 'IMAGE_GEN' ? '#38bdf8' : '#64748b'} />
-          <span>AI Diagram & Image Generator</span>
+          <span>AI CAD &amp; Schematic Generator</span>
         </button>
       </div>
 
-      {/* Panel Content Body */}
-      <div style={{ padding: '22px', backgroundColor: '#0b1329', color: '#f8fafc' }}>
-        {/* Error Feedback */}
+      {/* 3. MAIN CONTENT BODY */}
+      <div style={{ padding: '20px', backgroundColor: '#070d1e', color: '#f8fafc' }}>
+        {/* Error Feedback Banner */}
         {error && (
           <div style={{
-            backgroundColor: '#fef2f2',
-            color: '#991b1b',
-            border: '1px solid #fecaca',
+            backgroundColor: '#450a0a',
+            color: '#fecaca',
+            border: '1px solid #7f1d1d',
             padding: '12px 16px',
-            borderRadius: '8px',
+            borderRadius: '10px',
             fontSize: '0.825rem',
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={18} color="#dc2626" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertTriangle size={18} color="#ef4444" />
               <span>{error}</span>
             </div>
             <button
               type="button"
               onClick={() => setError(null)}
-              style={{ background: 'none', border: 'none', color: '#991b1b', cursor: 'pointer' }}
+              style={{ background: 'none', border: 'none', color: '#fecaca', cursor: 'pointer' }}
             >
               <X size={16} />
             </button>
@@ -929,18 +970,19 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
         {/* Copy Status Notification */}
         {copiedStatus && (
           <div style={{
-            backgroundColor: '#ecfdf5',
-            color: '#065f46',
-            border: '1px solid #a7f3d0',
+            backgroundColor: '#064e3b',
+            color: '#a7f3d0',
+            border: '1px solid #059669',
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '0.8rem',
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
           }}>
-            <CheckCircle2 size={16} color="#059669" />
+            <CheckCircle2 size={16} color="#10b981" />
             <strong>{copiedStatus}</strong>
           </div>
         )}
@@ -950,17 +992,17 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
             ======================================================== */}
         {activeTab === 'DIAGNOSTICS' && (
           <div>
-            {/* Recent History Drawer */}
+            {/* History Drawer */}
             {showHistory && recentQueries.length > 0 && (
               <div style={{
-                backgroundColor: '#070c18',
+                backgroundColor: '#050a17',
                 border: '1px solid #1e293b',
-                borderRadius: '8px',
-                padding: '12px',
+                borderRadius: '10px',
+                padding: '14px',
                 marginBottom: '16px'
               }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Recent Queries:
+                  Recent Diagnostic Queries:
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {recentQueries.map((q) => (
@@ -971,29 +1013,29 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        padding: '6px 12px',
-                        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                        padding: '8px 12px',
+                        backgroundColor: '#0b1329',
                         border: '1px solid #1e293b',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontSize: '0.775rem',
+                        fontSize: '0.8rem',
                         transition: 'all 0.15s ease'
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#38bdf8'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e293b'; }}
                     >
                       <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{q.query_text}</span>
-                      <span style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 600 }}>Run Query →</span>
+                      <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 700 }}>Run Query →</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Inline Google Gemini or OpenAI API Key Banner if not yet configured */}
-            {!aiConfig.apiKey && (
+            {/* Inline API Key Setup Banner if key is missing or explicitly expanded */}
+            {(!aiConfig.apiKey || showInlineKeyForm) && (
               <div style={{
-                backgroundColor: '#070c1a',
+                backgroundColor: '#050a17',
                 border: '1px solid rgba(56, 189, 248, 0.4)',
                 borderRadius: '12px',
                 padding: '16px 20px',
@@ -1005,10 +1047,10 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Key size={18} color="#38bdf8" />
                     <strong style={{ fontSize: '0.95rem', color: '#f8fafc' }}>
-                      Google Gemini or OpenAI API Key Required for Real-Time AI
+                      Connect Google Gemini API Key for Real-Time Inference
                     </strong>
                     <span style={{ fontSize: '0.675rem', backgroundColor: '#0284c7', color: '#ffffff', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
-                      REAL-TIME RESPONSE
+                      REAL-TIME ACTIVE
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -1016,59 +1058,90 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       href="https://aistudio.google.com/app/apikey"
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                      style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', fontWeight: 600 }}
                     >
-                      Get Gemini Key <ExternalLink size={12} />
+                      Get Free Gemini Key <ExternalLink size={12} />
                     </a>
                     <span style={{ color: '#334155' }}>•</span>
                     <a
                       href="https://platform.openai.com/api-keys"
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: '0.75rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                      style={{ fontSize: '0.75rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', fontWeight: 600 }}
                     >
                       Get OpenAI Key <ExternalLink size={12} />
                     </a>
+                    {aiConfig.apiKey && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInlineKeyForm(false)}
+                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '0 0 12px 0' }}>
-                  EquipFix AI runs exclusively in real time using authenticated models (Gemini 2.0 Flash, OpenAI GPT-4o, etc.). No dummy or random data is used.
+                  EquipFix AI streams tokens directly using verified production models (Gemini 2.0 Flash, OpenAI GPT-4o). Zero dummy or static simulated data.
                 </p>
+
                 <form onSubmit={handleSaveInlineKey} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input
-                    type="password"
-                    value={inlineKey}
-                    onChange={(e) => handleInlineKeyChange(e.target.value)}
-                    placeholder="Paste Google Gemini (AIzaSy...) or OpenAI (sk-...) API Key"
-                    style={{
-                      flex: '1',
-                      minWidth: '260px',
-                      padding: '9px 12px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                      border: inlineKeyError ? '1px solid #ef4444' : '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      fontSize: '0.85rem',
-                      fontFamily: 'monospace'
-                    }}
-                  />
+                  <div style={{ position: 'relative', flex: '1', minWidth: '280px' }}>
+                    <input
+                      type={showKeyPassword ? 'text' : 'password'}
+                      value={inlineKey}
+                      onChange={(e) => handleInlineKeyChange(e.target.value)}
+                      placeholder="Paste Google Gemini (AIzaSy...) or OpenAI (sk-...) API Key"
+                      style={{
+                        width: '100%',
+                        padding: '10px 38px 10px 14px',
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        border: inlineKeyError ? '1px solid #ef4444' : '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                        fontSize: '0.85rem',
+                        fontFamily: 'monospace',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKeyPassword(!showKeyPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#94a3b8',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {showKeyPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+
                   <select
                     value={inlineModel}
                     onChange={(e) => setInlineModel(e.target.value)}
                     style={{
-                      padding: '9px 12px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                      padding: '10px 14px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)',
                       border: '1px solid #334155',
                       borderRadius: '8px',
                       color: '#ffffff',
                       fontSize: '0.8rem',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      outline: 'none'
                     }}
                   >
                     {inlineKey.trim().startsWith('sk-') ? (
                       <>
-                        <option value="gpt-4o-mini">GPT-4o Mini (Fast & Light)</option>
-                        <option value="gpt-4o">GPT-4o Flagship (Vision & Reasoning)</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Fast &amp; Light)</option>
+                        <option value="gpt-4o">GPT-4o Flagship (Vision &amp; Reasoning)</option>
                         <option value="o1">o1 (Deep STEM Reasoning)</option>
                         <option value="o3-mini">o3-mini (Reasoning Mini)</option>
                       </>
@@ -1076,39 +1149,52 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       <>
                         <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
                         <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Next-Gen)</option>
                         <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Experimental</option>
-                        <option value="gemini-exp-1206">Gemini Experimental 1206</option>
                       </>
                     )}
                   </select>
+
                   <button
                     type="submit"
                     disabled={savingInlineKey || !inlineKey.trim()}
-                    className="btn btn-primary btn-sm"
-                    style={{ fontSize: '0.8rem', padding: '9px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 18px',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      cursor: savingInlineKey || !inlineKey.trim() ? 'not-allowed' : 'pointer',
+                      opacity: savingInlineKey || !inlineKey.trim() ? 0.7 : 1
+                    }}
                   >
                     {savingInlineKey ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
-                    <span>{savingInlineKey ? 'Connecting...' : 'Activate Real-Time AI'}</span>
+                    <span>{savingInlineKey ? 'Verifying...' : 'Activate Real-Time AI'}</span>
                   </button>
                 </form>
+
                 {inlineKeyError && (
-                  <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '8px' }}>
-                    ⚠️ {inlineKeyError}
+                  <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={14} />
+                    <span>{inlineKeyError}</span>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Conversational Chat Scroll Box */}
+            {/* Conversation Thread Box */}
             <div
               ref={chatContainerRef}
               style={{
-                minHeight: '280px',
-                maxHeight: '460px',
+                minHeight: '300px',
+                maxHeight: '480px',
                 overflowY: 'auto',
-                backgroundColor: '#030712',
+                backgroundColor: '#040814',
                 border: '1px solid #1e293b',
                 borderRadius: '12px',
                 padding: '18px',
@@ -1116,7 +1202,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '14px',
-                boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.4)'
+                boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.5)'
               }}
             >
               {messages.map((msg) => (
@@ -1139,7 +1225,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   }}>
                     {msg.role === 'user' ? (
                       <>
-                        <span style={{ color: '#cbd5e1' }}>You</span>
+                        <span style={{ color: '#cbd5e1' }}>Technician</span>
                         <User size={12} color="#38bdf8" />
                         <span>• {msg.timestamp}</span>
                       </>
@@ -1157,7 +1243,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       maxWidth: msg.role === 'user' ? '82%' : '92%',
                       padding: msg.role === 'user' ? '12px 16px' : '16px 20px',
                       borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                      background: msg.role === 'user' ? 'linear-gradient(135deg, #0284c7 0%, #1e40af 100%)' : '#0f172a',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg, #0284c7 0%, #1e40af 100%)' : '#0b1329',
                       color: '#f8fafc',
                       border: msg.role === 'user' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid #1e293b',
                       boxShadow: msg.role === 'user' ? '0 4px 14px rgba(2, 132, 199, 0.25)' : '0 4px 14px rgba(0, 0, 0, 0.4)',
@@ -1168,31 +1254,29 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{msg.content}</div>
                     ) : (
                       <>
-                        {/* Live Streaming Message Content */}
+                        {/* Live Streaming or Thinking State */}
                         {msg.isStreaming && !msg.content ? (
                           <AIThinkingEffect
                             mode="chat"
-                            modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.5 Flash')}
+                            modelName={activeModelDisplay}
                             machineCode={machineCode}
                           />
                         ) : (
                           <>
-                            {/* Rich HTML-formatted message output */}
                             <FormattedAIMessage content={msg.content} />
 
-                            {/* Live Streaming Progress Indicator */}
                             {msg.isStreaming && (
                               <div style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                marginTop: '8px',
+                                marginTop: '10px',
                                 padding: '3px 8px',
                                 borderRadius: '12px',
-                                backgroundColor: '#f0f9ff',
-                                border: '1px solid #bae6fd',
+                                backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                                border: '1px solid rgba(14, 165, 233, 0.3)',
                                 fontSize: '0.72rem',
-                                color: '#0284c7',
+                                color: '#38bdf8',
                                 fontWeight: 700
                               }}>
                                 <span style={{
@@ -1200,29 +1284,29 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                                   width: '6px',
                                   height: '6px',
                                   borderRadius: '50%',
-                                  backgroundColor: '#0284c7',
-                                  boxShadow: '0 0 6px #0284c7'
+                                  backgroundColor: '#38bdf8',
+                                  boxShadow: '0 0 6px #38bdf8'
                                 }} />
                                 <span>Real-Time Streaming Active</span>
-                                <span style={{ fontWeight: 900, color: '#0284c7' }}>▍</span>
+                                <span style={{ fontWeight: 900, color: '#38bdf8' }}>▍</span>
                               </div>
                             )}
                           </>
                         )}
 
-                        {/* Inline Generated Visual Diagram (if ready) */}
+                        {/* Inline Generated Visual Diagram (if generated) */}
                         {messageDiagrams[msg.id]?.diagramUrl && (
                           <div style={{
                             marginTop: '12px',
-                            backgroundColor: '#070c18',
+                            backgroundColor: '#040814',
                             border: '1px solid #1e3a8a',
                             borderRadius: '10px',
                             padding: '12px',
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
-                                📐 Exploded View & Part Schematic ({messageDiagrams[msg.id].provider})
+                                📐 Exploded View &amp; Part Schematic ({messageDiagrams[msg.id].provider})
                               </span>
                               <a
                                 href={messageDiagrams[msg.id].diagramUrl}
@@ -1264,9 +1348,20 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                           </div>
                         )}
 
-                        {/* Message Action Row: Generate Visual Diagram & Copy */}
+                        {/* Inline diagram loading state */}
+                        {messageDiagrams[msg.id]?.loading && (
+                          <div style={{ marginTop: '10px' }}>
+                            <AIThinkingEffect
+                              mode="diagram"
+                              modelName="CAD Schematic Generator"
+                              machineCode={machineCode}
+                            />
+                          </div>
+                        )}
+
+                        {/* Message Action Bar */}
                         <div style={{
-                          marginTop: '10px',
+                          marginTop: '12px',
                           paddingTop: '8px',
                           borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                           display: 'flex',
@@ -1279,7 +1374,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                             <button
                               type="button"
                               onClick={() => setShowConfigModal(true)}
-                              className="btn btn-primary btn-sm"
                               style={{
                                 fontSize: '0.72rem',
                                 padding: '4px 10px',
@@ -1289,7 +1383,9 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                                 background: 'linear-gradient(135deg, #0284c7, #2563eb)',
                                 color: '#ffffff',
                                 border: 'none',
-                                borderRadius: '6px'
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 700
                               }}
                             >
                               <Key size={12} />
@@ -1297,38 +1393,75 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                             </button>
                           )}
 
-                          {!messageDiagrams[msg.id]?.diagramUrl && !messageDiagrams[msg.id]?.loading && (
+                          {!messageDiagrams[msg.id]?.diagramUrl && !messageDiagrams[msg.id]?.loading && msg.content && (
                             <button
                               type="button"
                               onClick={() => handleGenerateInlineDiagram(msg.id, null, msg.content)}
-                              className="btn btn-secondary btn-sm"
                               style={{
                                 fontSize: '0.72rem',
                                 padding: '4px 10px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                color: '#0284c7',
-                                borderColor: '#bae6fd',
-                                backgroundColor: '#f0f9ff'
+                                color: '#38bdf8',
+                                borderColor: 'rgba(56, 189, 248, 0.3)',
+                                backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 600
                               }}
-                              title="Generate an AI visual schematic or CAD exploded assembly diagram to understand this part"
+                              title="Generate an AI visual schematic or CAD exploded assembly diagram for this diagnostic step"
                             >
-                              <Palette size={12} color="#0284c7" />
-                              <span>🎨 Generate Visual Diagram to Understand</span>
+                              <Palette size={12} color="#38bdf8" />
+                              <span>🎨 Generate CAD Diagram to Understand</span>
                             </button>
                           )}
 
-                          {onCopyToLog && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyLogs(msg.content, 'AI Copilot Diagnostic Answer')}
-                              className="btn btn-secondary btn-sm"
-                              style={{ fontSize: '0.7rem', padding: '4px 8px', marginLeft: 'auto' }}
-                            >
-                              <Copy size={11} /> Copy to Work Log
-                            </button>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                            {onCopyToLog && msg.content && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyLogs(msg.content, 'AI Copilot Diagnostic Step')}
+                                style={{
+                                  fontSize: '0.7rem',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#1e293b',
+                                  color: '#cbd5e1',
+                                  border: '1px solid #334155',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <Copy size={11} /> Copy to Work Log
+                              </button>
+                            )}
+
+                            {msg.content && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyLogs(msg.content, 'AI Response')}
+                                style={{
+                                  fontSize: '0.7rem',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#1e293b',
+                                  color: '#cbd5e1',
+                                  border: '1px solid #334155',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Copy full response"
+                              >
+                                <Copy size={11} /> Copy
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}
@@ -1336,11 +1469,10 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                 </div>
               ))}
 
-              {/* Auto scroll bottom anchor */}
               <div ref={chatBottomRef} style={{ height: '1px' }} />
             </div>
 
-            {/* Input Bar — Prompt Area */}
+            {/* Prompt Input Form */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1358,11 +1490,11 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   flex: 1,
                   padding: '12px 18px',
                   borderRadius: '10px',
-                  backgroundColor: '#070c18',
+                  backgroundColor: '#040814',
                   color: '#ffffff',
                   border: '1px solid #334155',
                   outline: 'none',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.4)'
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)'
                 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#38bdf8'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#334155'; }}
@@ -1391,7 +1523,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               </button>
             </form>
 
-            {/* Suggested Chips */}
+            {/* Quick Diagnostic Chips */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700, alignSelf: 'center', textTransform: 'uppercase' }}>
                 Quick Prompts:
@@ -1402,10 +1534,10 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   type="button"
                   onClick={() => handleSearch(p)}
                   style={{
-                    backgroundColor: '#070c18',
+                    backgroundColor: '#0b1329',
                     border: '1px solid #1e293b',
                     borderRadius: '16px',
-                    padding: '4px 12px',
+                    padding: '5px 12px',
                     fontSize: '0.725rem',
                     color: '#94a3b8',
                     cursor: 'pointer',
@@ -1442,7 +1574,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                 borderRadius: '12px',
                 padding: '24px',
                 textAlign: 'center',
-                backgroundColor: selectedImageBase64 ? 'rgba(15, 23, 42, 0.8)' : '#070c18',
+                backgroundColor: selectedImageBase64 ? 'rgba(15, 23, 42, 0.8)' : '#040814',
                 cursor: 'pointer',
                 marginBottom: '16px',
                 position: 'relative'
@@ -1473,7 +1605,6 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       }}
                     />
                   </div>
-
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ffffff' }}>
@@ -1555,7 +1686,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   fontSize: '0.85rem',
                   flex: 1,
                   borderRadius: '10px',
-                  backgroundColor: '#070c18',
+                  backgroundColor: '#040814',
                   border: '1px solid #334155',
                   color: '#ffffff',
                   padding: '10px 14px'
@@ -1563,12 +1694,25 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               />
               <button
                 type="button"
-                className="btn btn-primary"
                 disabled={visionLoading || !selectedImageBase64}
                 onClick={() => handleAnalyzeImage()}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 22px', borderRadius: '10px', whiteSpace: 'nowrap' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 22px',
+                  borderRadius: '10px',
+                  whiteSpace: 'nowrap',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                  color: '#ffffff',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  fontWeight: 700,
+                  fontSize: '0.825rem',
+                  cursor: visionLoading || !selectedImageBase64 ? 'not-allowed' : 'pointer',
+                  opacity: visionLoading || !selectedImageBase64 ? 0.7 : 1
+                }}
               >
-                {visionLoading ? <RefreshCw size={16} className="animate-spin" /> : <Eye size={16} />}
+                {visionLoading ? <RefreshCw size={16} className="spin" /> : <Eye size={16} />}
                 <span>{visionLoading ? 'Inspecting Image...' : 'Analyze Image with AI'}</span>
               </button>
             </div>
@@ -1584,7 +1728,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                     backgroundColor: 'rgba(15, 23, 42, 0.8)',
                     border: '1px solid #1e293b',
                     borderRadius: '16px',
-                    padding: '4px 12px',
+                    padding: '5px 12px',
                     fontSize: '0.725rem',
                     color: '#cbd5e1',
                     cursor: 'pointer',
@@ -1598,23 +1742,21 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               ))}
             </div>
 
-            {/* Clean AI Thinking Effect for Vision */}
+            {/* Vision Thinking Effect */}
             {visionLoading && (
               <div style={{ marginBottom: '20px' }}>
                 <AIThinkingEffect
                   mode="vision"
-                  modelName={aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')}
+                  modelName={activeModelDisplay}
                   machineCode={machineCode}
                 />
               </div>
             )}
 
-
-            {/* Vision Response Card with HTML Rendering */}
-
+            {/* Vision Response Card */}
             {visionResponse && (
               <div style={{
-                backgroundColor: '#070c18',
+                backgroundColor: '#040814',
                 border: '1px solid #1e3a8a',
                 borderRadius: '12px',
                 padding: '20px',
@@ -1635,8 +1777,18 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                     <button
                       type="button"
                       onClick={() => handleCopyLogs(visionResponse.text, 'AI Visual Inspection Breakdown')}
-                      className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.725rem', padding: '4px 10px' }}
+                      style={{
+                        fontSize: '0.725rem',
+                        padding: '4px 10px',
+                        backgroundColor: '#1e293b',
+                        color: '#cbd5e1',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
                     >
                       <Copy size={12} /> Copy to Log
                     </button>
@@ -1656,7 +1808,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
           <div>
             <div style={{ marginBottom: '18px' }}>
               <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', margin: '0 0 6px 0' }}>
-                AI Industrial Schematic &amp; Diagram Generator
+                AI Industrial Schematic &amp; CAD Blueprint Generator
               </h4>
               <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
                 Generate mechanical CAD blueprints, isometric exploded assemblies, photorealistic manufacturing scenes, or OSHA safety signage on demand.
@@ -1675,7 +1827,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   fontSize: '0.85rem',
                   padding: '10px 14px',
                   borderRadius: '10px',
-                  backgroundColor: '#070c18',
+                  backgroundColor: '#040814',
                   border: '1px solid #334155',
                   color: '#ffffff'
                 }}
@@ -1688,7 +1840,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   fontSize: '0.825rem',
                   padding: '10px 12px',
                   borderRadius: '10px',
-                  backgroundColor: '#070c18',
+                  backgroundColor: '#040814',
                   border: '1px solid #334155',
                   color: '#ffffff'
                 }}
@@ -1696,17 +1848,30 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                 <option value="schematic">📐 Engineering CAD Blueprint</option>
                 <option value="exploded">⚙️ Isometric Exploded Assembly</option>
                 <option value="realistic">🏭 Realistic Plant Equipment</option>
-                <option value="safety">⚠️ OSHA Warning & Safety Sign</option>
+                <option value="safety">⚠️ OSHA Warning &amp; Safety Sign</option>
               </select>
 
               <button
                 type="button"
-                className="btn btn-primary"
                 disabled={generatingImage || !imagePrompt.trim()}
                 onClick={() => handleGenerateDiagram()}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 22px', borderRadius: '10px', whiteSpace: 'nowrap' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 22px',
+                  borderRadius: '10px',
+                  whiteSpace: 'nowrap',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                  color: '#ffffff',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  fontWeight: 700,
+                  fontSize: '0.825rem',
+                  cursor: generatingImage || !imagePrompt.trim() ? 'not-allowed' : 'pointer',
+                  opacity: generatingImage || !imagePrompt.trim() ? 0.7 : 1
+                }}
               >
-                {generatingImage ? <RefreshCw size={16} className="animate-spin" /> : <Palette size={16} />}
+                {generatingImage ? <RefreshCw size={16} className="spin" /> : <Palette size={16} />}
                 <span>{generatingImage ? 'Generating...' : 'Generate Image'}</span>
               </button>
             </div>
@@ -1722,7 +1887,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                     backgroundColor: 'rgba(15, 23, 42, 0.8)',
                     border: '1px solid #1e293b',
                     borderRadius: '16px',
-                    padding: '4px 12px',
+                    padding: '5px 12px',
                     fontSize: '0.725rem',
                     color: '#cbd5e1',
                     cursor: 'pointer',
@@ -1736,30 +1901,28 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               ))}
             </div>
 
-            {/* Clean AI Thinking Effect for Diagram Generation */}
+            {/* Diagram Thinking Effect */}
             {generatingImage && (
               <div style={{ marginBottom: '20px' }}>
                 <AIThinkingEffect
                   mode="diagram"
-                  modelName={aiConfig.imageProvider === 'openai' ? 'DALL-E 3 (OpenAI)' : 'Imagen 3 (Google)'}
+                  modelName={aiConfig.provider === 'openai' ? 'DALL-E 3 (OpenAI)' : 'Imagen 3 (Google)'}
                   machineCode={machineCode}
                 />
               </div>
             )}
 
-
             {/* Generated Image Result Card */}
-
             {generatedImage && (
               <div style={{
-                backgroundColor: '#070c18',
+                backgroundColor: '#040814',
                 border: '1px solid #1e3a8a',
                 borderRadius: '16px',
                 padding: '24px',
                 textAlign: 'center',
-                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.4)'
+                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5)'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
                       Generated Asset: {generatedImage.provider}
@@ -1784,7 +1947,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       fontWeight: 700
                     }}
                   >
-                    <Download size={14} /> Open & Download Full-Res
+                    <Download size={14} /> Open &amp; Download Full-Res
                   </a>
                 </div>
 

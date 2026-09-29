@@ -33,34 +33,22 @@ export const GEMINI_MODELS = [
     desc: 'High-speed, cost-effective inference for rapid plant checks and live metrics.'
   },
   {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash',
-    badge: 'ROCK-SOLID STABILITY',
-    desc: 'Proven production workhorse supported on all Google AI Studio accounts.'
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    badge: '2M CONTEXT PRO',
-    desc: 'Massive context window for comprehensive technical manuals, schematics & MTTR analysis.'
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badge: 'NEXT-GEN PREVIEW',
+    desc: 'Cutting-edge reasoning benchmark for complex root-cause calculations and multi-step diagnostics.'
   },
   {
     id: 'gemini-2.0-pro-exp-02-05',
     name: 'Gemini 2.0 Pro Experimental',
     badge: 'DEEP REASONING PRO',
-    desc: 'Cutting-edge reasoning benchmark for complex root-cause calculations.'
-  },
-  {
-    id: 'gemini-exp-1206',
-    name: 'Gemini Experimental 1206',
-    badge: 'EXPERIMENTAL',
-    desc: 'Experimental multimodal reasoning model for advanced diagnostics.'
+    desc: 'Google flagship reasoning model for intricate schematics & MTTR failure tree calculations.'
   },
   {
     id: 'custom',
     name: 'Custom Gemini Model ID',
     badge: 'CUSTOM MODEL',
-    desc: 'Specify any Gemini model identifier (e.g. gemini-2.5-flash, gemini-3.0-preview, or Vertex model)'
+    desc: 'Specify any Gemini model identifier (e.g. gemini-2.0-flash, gemini-2.5-flash, or Vertex model)'
   }
 ];
 
@@ -80,28 +68,33 @@ export const DEFAULT_MODELS = {
 /**
  * Resolve user-selected model identifier to an ordered list of verified working models.
  * Ensures free tier Google Gemini keys work 100% reliably.
- * Permanently eliminates nonexistent aliases like gemini-1.5-flash-8b, gemini-1.5-flash-latest, etc.
+ * Permanently eliminates nonexistent aliases like gemini-1.5-flash, gemini-1.5-pro, etc.
  */
 export const resolveGeminiCandidateModels = (modelName) => {
   let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
-  if (raw.includes('flash-latest') || raw.includes('flash-8b') || raw === 'gemini-2.5-flash' || raw === '2.5-flash' || raw === '8b') {
+  if (
+    raw.startsWith('gemini-1.5') ||
+    raw.includes('flash-8b') ||
+    raw.includes('flash-latest') ||
+    raw.includes('pro-latest') ||
+    raw === 'gemini-pro' ||
+    raw === '1.5-flash' ||
+    raw === '1.5-pro'
+  ) {
     raw = 'gemini-2.0-flash';
-  } else if (raw.includes('pro-latest') || raw === 'gemini-pro' || raw === '1.5-pro') {
-    raw = 'gemini-1.5-pro';
-  } else if (raw === '1.5-flash' || raw === 'flash') {
-    raw = 'gemini-1.5-flash';
-  } else if (raw === '2.0-flash' || raw === '2.0') {
+  } else if (raw === '2.0-flash' || raw === '2.0' || raw === 'flash') {
     raw = 'gemini-2.0-flash';
   } else if (raw === '2.0-flash-lite' || raw === 'flash-lite') {
     raw = 'gemini-2.0-flash-lite';
+  } else if (raw === '2.5-flash' || raw === '2.5') {
+    raw = 'gemini-2.5-flash';
   }
 
   const list = [raw];
   for (const fallback of [
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-pro'
+    'gemini-2.5-flash'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
   }
@@ -137,11 +130,16 @@ export const getAIConfig = () => {
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
     // Sanitize any stale or deprecated model names to prevent 404s
-    if (model === 'gemini-2.5-flash' || model === 'gemini-pro' || model === 'gemini-1.5-flash-latest' || model === 'gemini-1.5-flash-8b') {
+    if (
+      model.startsWith('gemini-1.5') ||
+      model.includes('flash-8b') ||
+      model.includes('flash-latest') ||
+      model.includes('pro-latest') ||
+      model === 'gemini-pro' ||
+      model === 'gemini-1.5-flash' ||
+      model === 'gemini-1.5-pro'
+    ) {
       model = 'gemini-2.0-flash';
-      localStorage.setItem(STORAGE_KEYS.MODEL, model);
-    } else if (model === 'gemini-1.5-pro-latest') {
-      model = 'gemini-1.5-pro';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
   }
@@ -176,8 +174,15 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
     } else if (effectiveProvider === 'gemini' && (cleanModel.startsWith('gpt') || cleanModel.startsWith('o1') || cleanModel.startsWith('o3'))) {
       cleanModel = 'gemini-2.0-flash';
     }
-    if (cleanModel === 'gemini-2.5-flash' || cleanModel === 'gemini-1.5-flash-latest' || cleanModel === 'gemini-1.5-flash-8b') cleanModel = 'gemini-2.0-flash';
-    if (cleanModel === 'gemini-1.5-pro-latest') cleanModel = 'gemini-1.5-pro';
+    if (
+      cleanModel.startsWith('gemini-1.5') ||
+      cleanModel.includes('flash-8b') ||
+      cleanModel.includes('flash-latest') ||
+      cleanModel.includes('pro-latest') ||
+      cleanModel === 'gemini-pro'
+    ) {
+      cleanModel = 'gemini-2.0-flash';
+    }
     localStorage.setItem(STORAGE_KEYS.MODEL, cleanModel);
   }
 
@@ -203,12 +208,14 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
   try {
     const res = await aiApi.getModels({ api_key: cleanKey });
     if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-      const items = res.data.map((m) => ({
-        id: m.id,
-        name: m.display_name || m.name,
-        badge: m.is_default ? 'RECOMMENDED' : 'AVAILABLE',
-        desc: m.description || `AI ${m.display_name} model for live diagnostics.`
-      }));
+      const items = res.data
+        .filter((m) => !String(m.id || '').startsWith('gemini-1.5'))
+        .map((m) => ({
+          id: m.id,
+          name: m.display_name || m.name,
+          badge: m.is_default ? 'RECOMMENDED' : 'AVAILABLE',
+          desc: m.description || `AI ${m.display_name} model for live diagnostics.`
+        }));
       // Always include Custom model option at bottom
       items.push({
         id: 'custom',
@@ -228,7 +235,11 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
     if (res.ok) {
       const data = await res.json();
       const raw = data.models || [];
-      const contentModels = raw.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'));
+      const contentModels = raw.filter((m) => {
+        const cleanId = (m.name || '').replace(/^models\//, '');
+        const methods = m.supportedGenerationMethods || [];
+        return methods.includes('generateContent') && cleanId && !cleanId.startsWith('gemini-1.5');
+      });
       if (contentModels.length > 0) {
         const items = contentModels.map((m) => {
           const cleanId = (m.name || '').replace(/^models\//, '');
@@ -551,6 +562,9 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
 
   // STRATEGY 1B: Direct Real-Time Streaming from Google Gemini API (SSE)
   if (effectiveProvider === 'gemini') {
+    // Ground system instruction directly into user query turn to avoid HTTP 400 systemInstruction rejection
+    const groundedPrompt = `[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n${systemPrompt}\n\n[TECHNICIAN DIAGNOSTIC QUERY]\n${prompt}`;
+
     // Build clean contents payload
     const contents = [];
     if (Array.isArray(history) && history.length > 0) {
@@ -580,7 +594,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
         }
       });
     }
-    currentParts.push({ text: prompt });
+    currentParts.push({ text: groundedPrompt });
 
     if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
       contents[contents.length - 1].parts.push(...currentParts);
@@ -592,44 +606,18 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
 
     for (const curModel of cleanList) {
       const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:streamGenerateContent?key=${encodeURIComponent(apiKey)}&alt=sse`;
+      const directEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const payload = {
+        contents,
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
+      };
 
       try {
-        const payload = {
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents,
-          generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
-        };
-
         let res = await fetch(streamEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
-        // If top-level systemInstruction is rejected (HTTP 400), retry with system prompt prepended into user turn
-        if (res.status === 400) {
-          const fallbackContents = JSON.parse(JSON.stringify(contents));
-          for (const c of fallbackContents) {
-            if (c.role === 'user') {
-              for (const p of c.parts || []) {
-                if (p.text) {
-                  p.text = `${systemPrompt}\n\n${p.text}`;
-                  break;
-                }
-              }
-              break;
-            }
-          }
-          const fallbackPayload = {
-            contents: fallbackContents,
-            generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
-          };
-          res = await fetch(streamEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fallbackPayload)
-          });
-        }
 
         if (res.ok && res.body) {
           const reader = res.body.getReader();
@@ -681,9 +669,33 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
               isStreamed: true
             };
           }
-        } else if (res.status === 400 || res.status === 403) {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = errData.error?.message || `HTTP ${res.status}`;
+        }
+
+        // Direct generateContent fallback if SSE response was not 200 or body was empty
+        const directRes = await fetch(directEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (directRes.ok) {
+          const data = await directRes.json();
+          const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
+          if (text.trim()) {
+            if (onChunk) onChunk(text, text);
+            return {
+              text,
+              provider: `Google Gemini (${curModel})`,
+              model: curModel,
+              realtime: true,
+              hasVision: Boolean(imageBase64),
+              groundedSource: `Gemini ${curModel} Direct Content`,
+              isStreamed: false
+            };
+          }
+        } else if (directRes.status === 400 || directRes.status === 403 || directRes.status === 401) {
+          const errData = await directRes.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `HTTP ${directRes.status}`;
           if (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID')) {
             throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key.`);
           }
@@ -692,7 +704,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
         if (streamErr.message && streamErr.message.includes('Authentication Failed')) {
           throw streamErr;
         }
-        console.warn(`[EquipFixAI] Direct stream attempt on ${curModel} failed:`, streamErr.message);
+        console.warn(`[EquipFixAI] Direct attempt on ${curModel} failed:`, streamErr.message);
       }
     }
   }

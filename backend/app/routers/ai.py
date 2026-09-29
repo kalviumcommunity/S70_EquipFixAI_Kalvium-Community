@@ -271,7 +271,7 @@ STANDARD_GEMINI_MODELS = [
     {
         "id": "gemini-2.0-flash",
         "name": "gemini-2.0-flash",
-        "display_name": "Gemini 2.0 Flash",
+        "display_name": "Gemini 2.0 Flash (Recommended)",
         "description": "Google flagship real-time multimodal model with lowest latency for industrial diagnostics.",
         "supported_generation_methods": ["generateContent"],
         "is_default": True
@@ -285,18 +285,10 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     },
     {
-        "id": "gemini-1.5-flash",
-        "name": "gemini-1.5-flash",
-        "display_name": "Gemini 1.5 Flash",
-        "description": "Fast, versatile production workhorse for plant diagnostics.",
-        "supported_generation_methods": ["generateContent"],
-        "is_default": False
-    },
-    {
-        "id": "gemini-1.5-pro",
-        "name": "gemini-1.5-pro",
-        "display_name": "Gemini 1.5 Pro",
-        "description": "Massive context window for comprehensive technical manuals and schematics.",
+        "id": "gemini-2.5-flash",
+        "name": "gemini-2.5-flash",
+        "display_name": "Gemini 2.5 Flash",
+        "description": "Next-generation production model with advanced engineering reasoning.",
         "supported_generation_methods": ["generateContent"],
         "is_default": False
     },
@@ -305,14 +297,6 @@ STANDARD_GEMINI_MODELS = [
         "name": "gemini-2.0-pro-exp-02-05",
         "display_name": "Gemini 2.0 Pro Experimental",
         "description": "Deep reasoning model for complex mechanical calculations.",
-        "supported_generation_methods": ["generateContent"],
-        "is_default": False
-    },
-    {
-        "id": "gemini-exp-1206",
-        "name": "gemini-exp-1206",
-        "display_name": "Gemini Experimental 1206",
-        "description": "Experimental multimodal reasoning model.",
         "supported_generation_methods": ["generateContent"],
         "is_default": False
     }
@@ -377,14 +361,12 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
     raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
     if "flash-latest" in raw or "flash-8b" in raw or raw in ("gemini-2.5-flash", "2.5-flash", "8b"):
         raw = "gemini-2.0-flash"
-    elif "pro-latest" in raw or raw in ("gemini-pro", "1.5-pro"):
-        raw = "gemini-1.5-pro"
-    elif raw in ("1.5-flash", "flash"):
-        raw = "gemini-1.5-flash"
-    elif raw in ("2.0-flash", "2.0"):
+    elif "pro" in raw or "1.5" in raw or "flash" in raw:
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash-lite", "flash-lite"):
         raw = "gemini-2.0-flash-lite"
+    else:
+        raw = "gemini-2.0-flash"
 
     # If an API key is provided, query Google's ModelService.ListModels to verify available models
     if api_key and api_key.startswith("AIza"):
@@ -406,7 +388,7 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
                             methods = m.get("supportedGenerationMethods", [])
                             if "generateContent" in methods:
                                 clean_id = m.get("name", "").replace("models/", "").strip()
-                                if clean_id and clean_id not in ("gemini-1.5-flash-8b",):
+                                if clean_id and not clean_id.startswith("gemini-1.5"):
                                     valid_models.append(clean_id)
                         if valid_models:
                             _GEMINI_LIVE_CACHE[api_key] = (now, valid_models)
@@ -430,9 +412,8 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
                 candidates.append(raw)
             for preferred in [
                 "gemini-2.0-flash",
-                "gemini-1.5-flash",
                 "gemini-2.0-flash-lite",
-                "gemini-1.5-pro",
+                "gemini-2.5-flash",
                 "gemini-2.0-pro-exp-02-05"
             ]:
                 if preferred in discovered and preferred not in candidates:
@@ -442,13 +423,12 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
                     candidates.append(m)
             return candidates
 
-    # Robust default candidates
+    # Robust default candidates (strictly verified 2.0 / 2.5 models)
     candidates = [raw]
     for fallback in [
         "gemini-2.0-flash",
-        "gemini-1.5-flash",
         "gemini-2.0-flash-lite",
-        "gemini-1.5-pro"
+        "gemini-2.5-flash"
     ]:
         if fallback not in candidates:
             candidates.append(fallback)
@@ -879,7 +859,13 @@ def execute_ai_chat_stream(
     if "gpt" in selected_model or selected_model.startswith("o"):
         selected_model = "gemini-2.0-flash"
 
-    contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
+    grounded_message = (
+        f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"
+        f"{system_instruction}\n\n"
+        f"[TECHNICIAN DIAGNOSTIC QUERY]\n"
+        f"{message}"
+    )
+    contents = build_gemini_contents_payload(grounded_message, req.history, req.image_base64, req.image_mime)
 
     def event_stream_generator():
         clean_models = resolve_gemini_models(selected_model, api_key=api_key)
@@ -889,7 +875,6 @@ def execute_ai_chat_stream(
         for cur_model in clean_models:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:streamGenerateContent?key={api_key}&alt=sse"
             payload = {
-                "systemInstruction": {"parts": [{"text": system_instruction}]},
                 "contents": contents,
                 "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
             }
@@ -897,42 +882,7 @@ def execute_ai_chat_stream(
             try:
                 with httpx.Client(timeout=30.0) as client:
                     with client.stream("POST", endpoint, json=payload) as resp:
-                        if resp.status_code == 400:
-                            # If model rejects top-level systemInstruction, prepend to user turn
-                            import copy
-                            fallback_contents = copy.deepcopy(contents)
-                            for c in fallback_contents:
-                                if c.get("role") == "user":
-                                    for p in c.get("parts", []):
-                                        if "text" in p:
-                                            p["text"] = f"{system_instruction}\n\n{p['text']}"
-                                            break
-                                    break
-                            fallback_payload = {
-                                "contents": fallback_contents,
-                                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
-                            }
-                            with client.stream("POST", endpoint, json=fallback_payload) as retry_resp:
-                                if retry_resp.status_code == 200:
-                                    for line in retry_resp.iter_lines():
-                                        if line.startswith("data: "):
-                                            json_str = line[6:].strip()
-                                            if json_str:
-                                                try:
-                                                    data = json.loads(json_str)
-                                                    candidates = data.get("candidates", [])
-                                                    if candidates:
-                                                        parts = candidates[0].get("content", {}).get("parts", [])
-                                                        chunk_text = "".join(p.get("text", "") for p in parts if "text" in p)
-                                                        if chunk_text:
-                                                            streamed_any = True
-                                                            yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
-                                                except Exception:
-                                                    pass
-                                    if streamed_any:
-                                        yield f"data: {json.dumps({'text': '', 'done': True, 'model': cur_model, 'provider': f'Google Gemini ({cur_model})'})}\n\n"
-                                        return
-                        elif resp.status_code == 200:
+                        if resp.status_code == 200:
                             for line in resp.iter_lines():
                                 if line.startswith("data: "):
                                     json_str = line[6:].strip()
@@ -1023,12 +973,15 @@ def execute_ai_chat(
     # 1. Live Google Gemini Inference
     if api_key and provider == "gemini":
         clean_models = resolve_gemini_models(selected_model, api_key=api_key)
-        contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
+        grounded_message = (
+            f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"
+            f"{system_instruction}\n\n"
+            f"[TECHNICIAN DIAGNOSTIC QUERY]\n"
+            f"{message}"
+        )
+        contents = build_gemini_contents_payload(grounded_message, req.history, req.image_base64, req.image_mime)
 
         payload = {
-            "systemInstruction": {
-                "parts": [{"text": system_instruction}]
-            },
             "contents": contents,
             "generationConfig": {
                 "temperature": 0.2,
@@ -1042,22 +995,6 @@ def execute_ai_chat(
             try:
                 with httpx.Client(timeout=16.0) as client:
                     resp = client.post(endpoint, json=payload)
-                    if resp.status_code == 400:
-                        import copy
-                        fallback_contents = copy.deepcopy(contents)
-                        for c in fallback_contents:
-                            if c.get("role") == "user":
-                                for p in c.get("parts", []):
-                                    if "text" in p:
-                                        p["text"] = f"{system_instruction}\n\n{p['text']}"
-                                        break
-                                break
-                        fallback_payload = {
-                            "contents": fallback_contents,
-                            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
-                        }
-                        resp = client.post(endpoint, json=fallback_payload)
-
                     if resp.status_code == 200:
                         data = resp.json()
                         candidates = data.get("candidates", [])
@@ -1209,7 +1146,7 @@ def execute_ai_chat(
             "Real-time AI diagnostics and live inference require an authenticated Google Gemini API key.\n\n"
             "• **Step 1**: Get a free API key at [Google AI Studio](https://aistudio.google.com/app/apikey).\n"
             "• **Step 2**: Click **Configure AI Key** above and paste your key.\n"
-            "• **Step 3**: Select your preferred Gemini model (e.g., `gemini-2.0-flash` or `gemini-1.5-pro`) for zero-latency, real-time responses."
+            "• **Step 3**: Select your preferred Gemini model (e.g., `gemini-2.0-flash` or `gemini-2.0-flash-lite`) for zero-latency, real-time responses."
         ),
         provider="EquipFix Industrial Engine",
         model="Key Required",
