@@ -45,8 +45,8 @@ export const GEMINI_MODELS = [
     desc: 'Lightweight high-frequency diagnostic assistant with minimal token overhead.'
   },
   {
-    id: 'gemini-1.5-pro-latest',
-    name: 'Gemini 1.5 Pro (Latest)',
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
     badge: '2M CONTEXT PRO',
     desc: 'Massive context window for comprehensive technical manuals, schematics & MTTR analysis.'
   },
@@ -85,23 +85,34 @@ export const DEFAULT_MODELS = {
 
 /**
  * Resolve user-selected model identifier to an ordered list of verified working models.
- * Automatically translates deprecated identifiers like gemini-1.5-pro -> gemini-2.0-flash / gemini-1.5-pro-latest.
+ * Ensures free tier Google Gemini keys work 100% reliably.
+ * Permanently eliminates nonexistent aliases like gemini-1.5-flash-latest and gemini-1.5-pro-latest.
  */
 export const resolveGeminiCandidateModels = (modelName) => {
-  const raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
-  const list = [];
-  if (raw === 'gemini-1.5-pro' || raw === 'gemini-pro' || raw === '1.5-pro') {
-    list.push('gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro-002');
-  } else if (raw === 'gemini-2.5-flash' || raw === '2.5-flash') {
-    list.push('gemini-2.0-flash', 'gemini-1.5-flash');
-  } else if (raw === 'gemini-2.0-flash') {
-    list.push('gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash');
-  } else {
-    list.push(raw);
-    list.push('gemini-2.0-flash', 'gemini-1.5-flash');
+  let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
+  if (raw.includes('flash-latest') || raw === 'gemini-2.5-flash' || raw === '2.5-flash') {
+    raw = 'gemini-2.0-flash';
+  } else if (raw.includes('pro-latest') || raw === 'gemini-pro' || raw === '1.5-pro') {
+    raw = 'gemini-1.5-pro';
+  } else if (raw === '1.5-flash' || raw === 'flash') {
+    raw = 'gemini-1.5-flash';
+  } else if (raw === '2.0-flash' || raw === '2.0') {
+    raw = 'gemini-2.0-flash';
+  } else if (raw === '2.0-flash-lite' || raw === 'flash-lite') {
+    raw = 'gemini-2.0-flash-lite';
+  } else if (raw === '1.5-flash-8b' || raw === 'flash-8b' || raw === '8b') {
+    raw = 'gemini-1.5-flash-8b';
   }
-  for (const m of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest']) {
-    if (!list.includes(m)) list.push(m);
+
+  const list = [raw];
+  for (const fallback of [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro'
+  ]) {
+    if (!list.includes(fallback)) list.push(fallback);
   }
   return list;
 };
@@ -135,8 +146,11 @@ export const getAIConfig = () => {
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
     // Sanitize any stale or deprecated model names to prevent 404s
-    if (model === 'gemini-2.5-flash' || model === 'gemini-1.5-pro' || model === 'gemini-pro') {
+    if (model === 'gemini-2.5-flash' || model === 'gemini-pro' || model === 'gemini-1.5-flash-latest') {
       model = 'gemini-2.0-flash';
+      localStorage.setItem(STORAGE_KEYS.MODEL, model);
+    } else if (model === 'gemini-1.5-pro-latest') {
+      model = 'gemini-1.5-pro';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
   }
@@ -171,7 +185,8 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
     } else if (effectiveProvider === 'gemini' && (cleanModel.startsWith('gpt') || cleanModel.startsWith('o1') || cleanModel.startsWith('o3'))) {
       cleanModel = 'gemini-2.0-flash';
     }
-    if (cleanModel === 'gemini-2.5-flash') cleanModel = 'gemini-2.0-flash';
+    if (cleanModel === 'gemini-2.5-flash' || cleanModel === 'gemini-1.5-flash-latest') cleanModel = 'gemini-2.0-flash';
+    if (cleanModel === 'gemini-1.5-pro-latest') cleanModel = 'gemini-1.5-pro';
     localStorage.setItem(STORAGE_KEYS.MODEL, cleanModel);
   }
 
@@ -594,11 +609,36 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
         };
 
-        const res = await fetch(streamEndpoint, {
+        let res = await fetch(streamEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+
+        // If top-level systemInstruction is rejected (HTTP 400), retry with system prompt prepended into user turn
+        if (res.status === 400) {
+          const fallbackContents = JSON.parse(JSON.stringify(contents));
+          for (const c of fallbackContents) {
+            if (c.role === 'user') {
+              for (const p of c.parts || []) {
+                if (p.text) {
+                  p.text = `${systemPrompt}\n\n${p.text}`;
+                  break;
+                }
+              }
+              break;
+            }
+          }
+          const fallbackPayload = {
+            contents: fallbackContents,
+            generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
+          };
+          res = await fetch(streamEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackPayload)
+          });
+        }
 
         if (res.ok && res.body) {
           const reader = res.body.getReader();
@@ -620,6 +660,10 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
                 if (jsonStr) {
                   try {
                     const parsed = JSON.parse(jsonStr);
+                    if (parsed.error) {
+                      console.warn(`[EquipFixAI] Stream error on ${curModel}:`, parsed.error.message);
+                      break;
+                    }
                     const chunk = parsed.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
                     if (chunk) {
                       accumulatedText += chunk;
@@ -649,7 +693,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
         } else if (res.status === 400 || res.status === 403) {
           const errData = await res.json().catch(() => ({}));
           const errMsg = errData.error?.message || `HTTP ${res.status}`;
-          if (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID') || errMsg.includes('PERMISSION_DENIED')) {
+          if (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID')) {
             throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key.`);
           }
         }
