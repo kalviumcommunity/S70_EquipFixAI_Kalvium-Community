@@ -1028,7 +1028,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                     <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
                     <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
                     <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Latest)</option>
                     <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Experimental</option>
                     <option value="gemini-exp-1206">Gemini Experimental 1206</option>
                   </select>

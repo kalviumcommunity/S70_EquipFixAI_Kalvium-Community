@@ -300,10 +300,10 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     },
     {
-        "id": "gemini-1.5-pro",
-        "name": "gemini-1.5-pro",
-        "display_name": "Gemini 1.5 Pro",
-        "description": "2M token context window for comprehensive technical manuals and schematics.",
+        "id": "gemini-1.5-pro-latest",
+        "name": "gemini-1.5-pro-latest",
+        "display_name": "Gemini 1.5 Pro (Latest)",
+        "description": "Massive context window for comprehensive technical manuals and schematics.",
         "supported_generation_methods": ["generateContent"],
         "is_default": False
     },
@@ -324,6 +324,31 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     }
 ]
+
+
+def resolve_gemini_models(model_name: Optional[str]) -> List[str]:
+    """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
+    Prevents 404 errors from deprecated model names (e.g. gemini-1.5-pro -> gemini-1.5-pro-latest or gemini-2.0-flash).
+    """
+    raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
+    candidates = []
+    if raw in ("gemini-1.5-pro", "gemini-pro", "1.5-pro"):
+        candidates.extend(["gemini-1.5-pro-latest", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro-002", "gemini-1.5-pro-001"])
+    elif raw in ("gemini-2.5-flash", "2.5-flash"):
+        candidates.extend(["gemini-2.0-flash", "gemini-1.5-flash"])
+    elif raw == "gemini-2.0-flash":
+        candidates.extend(["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"])
+    else:
+        candidates.append(raw)
+        candidates.extend(["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"])
+
+    seen = set()
+    result = []
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            result.append(c)
+    return result
 
 
 def get_plant_grounding_context(
@@ -601,14 +626,7 @@ def execute_ai_chat_stream(
     contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
 
     def event_stream_generator():
-        candidate_models = [selected_model, "gemini-2.0-flash", "gemini-1.5-flash"]
-        seen = set()
-        clean_models = []
-        for m in candidate_models:
-            if m and m not in seen:
-                seen.add(m)
-                clean_models.append(m)
-
+        clean_models = resolve_gemini_models(selected_model)
         streamed_any = False
         last_error = None
 
@@ -625,12 +643,15 @@ def execute_ai_chat_stream(
                     with client.stream("POST", endpoint, json=payload) as resp:
                         if resp.status_code == 400:
                             # If model rejects top-level systemInstruction, prepend to user turn
-                            fallback_contents = [
-                                {"role": c["role"], "parts": [{"text": p.get("text", "")} for p in c["parts"]]}
-                                for c in contents
-                            ]
-                            if fallback_contents:
-                                fallback_contents[0]["parts"][0]["text"] = f"{system_instruction}\n\n{fallback_contents[0]['parts'][0]['text']}"
+                            import copy
+                            fallback_contents = copy.deepcopy(contents)
+                            for c in fallback_contents:
+                                if c.get("role") == "user":
+                                    for p in c.get("parts", []):
+                                        if "text" in p:
+                                            p["text"] = f"{system_instruction}\n\n{p['text']}"
+                                            break
+                                    break
                             fallback_payload = {
                                 "contents": fallback_contents,
                                 "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
@@ -646,7 +667,7 @@ def execute_ai_chat_stream(
                                                     candidates = data.get("candidates", [])
                                                     if candidates:
                                                         parts = candidates[0].get("content", {}).get("parts", [])
-                                                        chunk_text = "".join(p.get("text", "") for p in parts)
+                                                        chunk_text = "".join(p.get("text", "") for p in parts if "text" in p)
                                                         if chunk_text:
                                                             streamed_any = True
                                                             yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
@@ -665,7 +686,7 @@ def execute_ai_chat_stream(
                                             candidates = data.get("candidates", [])
                                             if candidates:
                                                 parts = candidates[0].get("content", {}).get("parts", [])
-                                                chunk_text = "".join(p.get("text", "") for p in parts)
+                                                chunk_text = "".join(p.get("text", "") for p in parts if "text" in p)
                                                 if chunk_text:
                                                     streamed_any = True
                                                     yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
@@ -676,6 +697,7 @@ def execute_ai_chat_stream(
                                 return
                         else:
                             try:
+                                resp.read()
                                 err_data = resp.json()
                                 last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
                             except Exception:
@@ -727,15 +749,7 @@ def execute_ai_chat(
 
     # 1. Live Google Gemini Inference
     if api_key and provider == "gemini":
-        candidate_models = [selected_model, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
-        seen_m = set()
-        clean_models = []
-        for m in candidate_models:
-            clean_m = m.replace("models/", "")
-            if clean_m not in seen_m:
-                seen_m.add(clean_m)
-                clean_models.append(clean_m)
-
+        clean_models = resolve_gemini_models(selected_model)
         contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
 
         payload = {
@@ -756,12 +770,15 @@ def execute_ai_chat(
                 with httpx.Client(timeout=16.0) as client:
                     resp = client.post(endpoint, json=payload)
                     if resp.status_code == 400 and "systemInstruction" in resp.text:
-                        fallback_contents = [
-                            {"role": c["role"], "parts": [{"text": p.get("text", "")} for p in c["parts"]]}
-                            for c in contents
-                        ]
-                        if fallback_contents:
-                            fallback_contents[0]["parts"][0]["text"] = f"{system_instruction}\n\n{fallback_contents[0]['parts'][0]['text']}"
+                        import copy
+                        fallback_contents = copy.deepcopy(contents)
+                        for c in fallback_contents:
+                            if c.get("role") == "user":
+                                for p in c.get("parts", []):
+                                    if "text" in p:
+                                        p["text"] = f"{system_instruction}\n\n{p['text']}"
+                                        break
+                                break
                         fallback_payload = {
                             "contents": fallback_contents,
                             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
@@ -773,7 +790,7 @@ def execute_ai_chat(
                         candidates = data.get("candidates", [])
                         if candidates:
                             parts = candidates[0].get("content", {}).get("parts", [])
-                            text_out = "".join(p.get("text", "") for p in parts).strip()
+                            text_out = "".join(p.get("text", "") for p in parts if "text" in p).strip()
                             if text_out:
                                 return AIChatResponse(
                                     text=text_out,

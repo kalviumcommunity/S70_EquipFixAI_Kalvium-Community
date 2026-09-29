@@ -23,7 +23,7 @@ export const GEMINI_MODELS = [
   {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash',
-    badge: 'DEFAULT • LOWEST LATENCY',
+    badge: 'DEFAULT • RECOMMENDED',
     desc: 'Google flagship real-time multimodal model with lowest latency and state-of-the-art diagnostics.'
   },
   {
@@ -45,8 +45,8 @@ export const GEMINI_MODELS = [
     desc: 'Lightweight high-frequency diagnostic assistant with minimal token overhead.'
   },
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
+    id: 'gemini-1.5-pro-latest',
+    name: 'Gemini 1.5 Pro (Latest)',
     badge: '2M CONTEXT PRO',
     desc: 'Massive context window for comprehensive technical manuals, schematics & MTTR analysis.'
   },
@@ -83,6 +83,29 @@ export const DEFAULT_MODELS = {
   openai: 'gpt-4o-mini',
 };
 
+/**
+ * Resolve user-selected model identifier to an ordered list of verified working models.
+ * Automatically translates deprecated identifiers like gemini-1.5-pro -> gemini-2.0-flash / gemini-1.5-pro-latest.
+ */
+export const resolveGeminiCandidateModels = (modelName) => {
+  const raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
+  const list = [];
+  if (raw === 'gemini-1.5-pro' || raw === 'gemini-pro' || raw === '1.5-pro') {
+    list.push('gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro-002');
+  } else if (raw === 'gemini-2.5-flash' || raw === '2.5-flash') {
+    list.push('gemini-2.0-flash', 'gemini-1.5-flash');
+  } else if (raw === 'gemini-2.0-flash') {
+    list.push('gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash');
+  } else {
+    list.push(raw);
+    list.push('gemini-2.0-flash', 'gemini-1.5-flash');
+  }
+  for (const m of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest']) {
+    if (!list.includes(m)) list.push(m);
+  }
+  return list;
+};
+
 export const getAIConfig = () => {
   let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
   if (!apiKey && typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
@@ -92,8 +115,8 @@ export const getAIConfig = () => {
   const provider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
   let model = localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
 
-  // Sanitize any stale or invalid default model
-  if (model === 'gemini-2.5-flash') {
+  // Sanitize any stale or deprecated model names to prevent 404s
+  if (model === 'gemini-2.5-flash' || model === 'gemini-1.5-pro' || model === 'gemini-pro') {
     model = 'gemini-2.0-flash';
     localStorage.setItem(STORAGE_KEYS.MODEL, model);
   }
@@ -354,7 +377,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
     contents.shift();
   }
 
-  const currentParts = [{ text: prompt }];
+  const currentParts = [];
   if (imageBase64) {
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+]+;base64,/, '');
     currentParts.push({
@@ -364,6 +387,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       }
     });
   }
+  currentParts.push({ text: prompt });
 
   if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
     contents[contents.length - 1].parts.push(...currentParts);
@@ -373,15 +397,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
 
   // STRATEGY 1: Direct Real-Time Streaming from Google Gemini API (SSE)
   if (provider === 'gemini') {
-    const candidateModels = [effectiveModel, 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    const seen = new Set();
-    const cleanList = [];
-    for (const m of candidateModels) {
-      if (m && !seen.has(m)) {
-        seen.add(m);
-        cleanList.push(m);
-      }
-    }
+    const cleanList = resolveGeminiCandidateModels(effectiveModel);
 
     for (const curModel of cleanList) {
       const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:streamGenerateContent?key=${encodeURIComponent(apiKey)}&alt=sse`;
