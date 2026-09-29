@@ -14,9 +14,69 @@ import AIKeyConfigModal from './AIKeyConfigModal';
 import AIThinkingEffect from './AIThinkingEffect';
 
 // --- RICH HTML-STYLE FORMATTED MESSAGE RENDERER ---
+/* ─── Injected once — styles for all AI response HTML elements ─── */
+const AI_RESPONSE_STYLES = `
+  .ai-response-root { font-family: inherit; color: #e2e8f0; font-size: 0.875rem; line-height: 1.65; word-break: break-word; }
+  .ai-section { font-size: 0.97rem; font-weight: 800; color: #38bdf8; margin: 14px 0 8px 0; padding: 6px 12px 6px 14px; border-left: 4px solid #0284c7; background: rgba(14,165,233,0.08); border-radius: 0 8px 8px 0; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+  .ai-kv { display: flex; align-items: flex-start; gap: 10px; padding: 5px 10px; margin: 3px 0; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(30,58,138,0.4); flex-wrap: wrap; }
+  .ai-key { font-weight: 700; color: #94a3b8; font-size: 0.8rem; min-width: 110px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 1px; }
+  .ai-val { color: #f1f5f9; font-size: 0.86rem; flex: 1; }
+  .ai-steps { margin: 8px 0 8px 0; padding: 0; list-style: none; counter-reset: step-counter; }
+  .ai-steps li { counter-increment: step-counter; display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; font-size: 0.865rem; color: #e2e8f0; line-height: 1.55; }
+  .ai-steps li::before { content: counter(step-counter); background: #1e3a8a; color: #38bdf8; font-weight: 800; font-size: 0.72rem; min-width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .ai-facts { margin: 8px 0; padding: 0; list-style: none; }
+  .ai-facts li { display: flex; align-items: flex-start; gap: 8px; margin: 5px 0; font-size: 0.865rem; color: #e2e8f0; line-height: 1.55; }
+  .ai-facts li::before { content: "•"; color: #38bdf8; font-weight: 900; font-size: 1rem; flex-shrink: 0; margin-top: -1px; }
+  .ai-warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-left: 4px solid #f59e0b; border-radius: 6px; padding: 10px 14px; margin: 10px 0; color: #fef3c7; font-size: 0.855rem; font-weight: 600; line-height: 1.5; }
+  .ai-severity { font-size: 0.72rem; font-weight: 800; padding: 2px 9px; border-radius: 6px; letter-spacing: 0.06em; text-transform: uppercase; display: inline-block; margin: 0 4px 2px 0; }
+  .ai-severity.high, .ai-severity.HIGH { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+  .ai-severity.medium, .ai-severity.MEDIUM { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
+  .ai-severity.low, .ai-severity.LOW { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+  .ai-badge { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.35); border-radius: 5px; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; letter-spacing: 0.05em; text-transform: uppercase; display: inline-block; margin: 0 4px 2px 0; }
+  .ai-code { background: #020617; color: #38bdf8; padding: 2px 7px; border-radius: 4px; font-family: monospace; font-size: 0.83rem; border: 1px solid #1e3a8a; }
+  .ai-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.835rem; }
+  .ai-table th { background: rgba(30,58,138,0.45); color: #93c5fd; font-weight: 700; padding: 7px 10px; text-align: left; border: 1px solid #1e3a8a; font-size: 0.77rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .ai-table td { padding: 6px 10px; border: 1px solid rgba(30,58,138,0.4); color: #e2e8f0; vertical-align: top; }
+  .ai-table tr:nth-child(even) td { background: rgba(255,255,255,0.025); }
+  code { background: #020617; color: #38bdf8; padding: 2px 7px; border-radius: 4px; font-family: monospace; font-size: 0.83rem; border: 1px solid #1e3a8a; }
+  strong { color: #ffffff; font-weight: 700; }
+`;
+
+let _styleInjected = false;
+function injectAIStyles() {
+  if (_styleInjected || typeof document === 'undefined') return;
+  _styleInjected = true;
+  const el = document.createElement('style');
+  el.setAttribute('data-ai-styles', '1');
+  el.textContent = AI_RESPONSE_STYLES;
+  document.head.appendChild(el);
+}
+
 export const FormattedAIMessage = ({ content }) => {
+  React.useEffect(() => { injectAIStyles(); }, []);
   if (!content) return null;
 
+  // Sanitize: strip any script tags for safety but allow all structural HTML
+  const sanitized = content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/javascript:/gi, '');
+
+  // Detect if the AI returned HTML or fell back to markdown
+  const isHtml = /<(h[1-6]|div|ul|ol|li|table|span|p|code|pre)\b/i.test(sanitized);
+
+  if (isHtml) {
+    return (
+      <div
+        className="ai-response-root"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+        style={{ wordBreak: 'break-word' }}
+      />
+    );
+  }
+
+  // Fallback: render markdown-style content (for transitional responses)
   const lines = content.split('\n');
   const elements = [];
   let inCodeBlock = false;
@@ -24,200 +84,48 @@ export const FormattedAIMessage = ({ content }) => {
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
-
-    // Code block toggle
     if (trimmed.startsWith('```')) {
       if (inCodeBlock) {
         elements.push(
-          <pre key={`code-${idx}`} style={{
-            backgroundColor: '#020617',
-            color: '#38bdf8',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            fontSize: '0.8rem',
-            overflowX: 'auto',
-            fontFamily: 'monospace',
-            margin: '10px 0',
-            border: '1px solid #1e3a8a'
-          }}>
+          <pre key={`code-${idx}`} style={{ backgroundColor: '#020617', color: '#38bdf8', padding: '12px 16px', borderRadius: '8px', fontSize: '0.8rem', overflowX: 'auto', fontFamily: 'monospace', margin: '10px 0', border: '1px solid #1e3a8a' }}>
             <code>{codeBlockLines.join('\n')}</code>
           </pre>
         );
         codeBlockLines = [];
         inCodeBlock = false;
-      } else {
-        inCodeBlock = true;
-      }
+      } else { inCodeBlock = true; }
       return;
     }
-
-    if (inCodeBlock) {
-      codeBlockLines.push(line);
-      return;
-    }
-
-    if (!trimmed) {
-      elements.push(<div key={`sp-${idx}`} style={{ height: '8px' }} />);
-      return;
-    }
-
-    // Level 3 Headings: ### Title
+    if (inCodeBlock) { codeBlockLines.push(line); return; }
+    if (!trimmed) { elements.push(<div key={`sp-${idx}`} style={{ height: '8px' }} />); return; }
     if (trimmed.startsWith('### ')) {
-      elements.push(
-        <div key={`h3-${idx}`} style={{
-          fontSize: '0.92rem',
-          fontWeight: 800,
-          color: '#38bdf8',
-          margin: '14px 0 6px 0',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          borderLeft: '4px solid #0284c7',
-          paddingLeft: '10px',
-          backgroundColor: 'rgba(14, 165, 233, 0.1)',
-          padding: '6px 12px',
-          borderRadius: '0 6px 6px 0'
-        }}>
-          {parseInlineFormatting(trimmed.replace(/^###\s+/, ''))}
-        </div>
-      );
+      elements.push(<div key={`h3-${idx}`} className="ai-section">{trimmed.replace(/^###\s+/, '')}</div>);
       return;
     }
-
-    // Level 1 or 2 Headings: # Title or ## Title
     if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
-      elements.push(
-        <h3 key={`h2-${idx}`} style={{
-          fontSize: '1.02rem',
-          fontWeight: 800,
-          color: '#ffffff',
-          margin: '16px 0 8px 0',
-          borderBottom: '1px solid #1e3a8a',
-          paddingBottom: '4px',
-          letterSpacing: '-0.01em'
-        }}>
-          {parseInlineFormatting(trimmed.replace(/^#{1,2}\s+/, ''))}
-        </h3>
-      );
+      elements.push(<h3 key={`h2-${idx}`} style={{ fontSize: '1.02rem', fontWeight: 800, color: '#ffffff', margin: '16px 0 8px 0', borderBottom: '1px solid #1e3a8a', paddingBottom: '4px' }}>{trimmed.replace(/^#{1,2}\s+/, '')}</h3>);
       return;
     }
-
-    // Safety / Warning Callout Banner (OSHA, Warning, Danger, LOTO)
-    if (/^(warning|caution|danger|safety notice|loto mandatory|safety|notice)/i.test(trimmed)) {
-      elements.push(
-        <div key={`warn-${idx}`} style={{
-          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-          borderLeft: '4px solid #f59e0b',
-          border: '1px solid rgba(245, 158, 11, 0.35)',
-          padding: '10px 14px',
-          borderRadius: '6px',
-          margin: '10px 0',
-          color: '#fef3c7',
-          fontSize: '0.85rem',
-          fontWeight: 600,
-          lineHeight: 1.45
-        }}>
-          ⚠️ {parseInlineFormatting(trimmed)}
-        </div>
-      );
+    if (/^(warning|caution|danger|safety notice|loto|notice)/i.test(trimmed)) {
+      elements.push(<div key={`warn-${idx}`} className="ai-warn">⚠️ {trimmed}</div>);
       return;
     }
-
-    // Bullet point items: * , - , •
     if (trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
-      const textWithoutBullet = trimmed.replace(/^[\*\-•]\s+/, '');
-      elements.push(
-        <div key={`bullet-${idx}`} style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '8px',
-          margin: '5px 0',
-          fontSize: '0.85rem',
-          color: '#e2e8f0',
-          lineHeight: 1.55
-        }}>
-          <span style={{ color: '#38bdf8', fontWeight: 800, fontSize: '0.9rem', marginTop: '-1px' }}>•</span>
-          <div style={{ flex: 1 }}>{parseInlineFormatting(textWithoutBullet)}</div>
-        </div>
-      );
+      elements.push(<div key={`b-${idx}`} style={{ display: 'flex', gap: '8px', margin: '5px 0', fontSize: '0.865rem', color: '#e2e8f0' }}><span style={{ color: '#38bdf8', fontWeight: 900 }}>•</span><div style={{ flex: 1 }}>{trimmed.replace(/^[\*\-•]\s+/, '')}</div></div>);
       return;
     }
-
-    // Numbered step list: 1. or 2)
-    const numberMatch = trimmed.match(/^(\d+)[\.\)]\s+(.*)/);
-    if (numberMatch) {
-      elements.push(
-        <div key={`num-${idx}`} style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '10px',
-          margin: '6px 0',
-          fontSize: '0.85rem',
-          color: '#e2e8f0',
-          lineHeight: 1.55
-        }}>
-          <span style={{
-            backgroundColor: '#1e3a8a',
-            color: '#38bdf8',
-            fontWeight: 800,
-            fontSize: '0.725rem',
-            padding: '2px 7px',
-            borderRadius: '6px',
-            flexShrink: 0
-          }}>
-            {numberMatch[1]}
-          </span>
-          <div style={{ flex: 1 }}>{parseInlineFormatting(numberMatch[2])}</div>
-        </div>
-      );
+    const nm = trimmed.match(/^(\d+)[\.\)]\s+(.*)/);
+    if (nm) {
+      elements.push(<div key={`n-${idx}`} style={{ display: 'flex', gap: '10px', margin: '6px 0', fontSize: '0.865rem', color: '#e2e8f0' }}><span style={{ background: '#1e3a8a', color: '#38bdf8', fontWeight: 800, fontSize: '0.72rem', padding: '2px 7px', borderRadius: '6px', flexShrink: 0 }}>{nm[1]}</span><div style={{ flex: 1 }}>{nm[2]}</div></div>);
       return;
     }
-
-    // Standard paragraph
-    elements.push(
-      <p key={`p-${idx}`} style={{
-        margin: '5px 0',
-        fontSize: '0.875rem',
-        color: '#e2e8f0',
-        lineHeight: 1.6
-      }}>
-        {parseInlineFormatting(trimmed)}
-      </p>
-    );
+    elements.push(<p key={`p-${idx}`} style={{ margin: '5px 0', fontSize: '0.875rem', color: '#e2e8f0', lineHeight: 1.6 }}>{trimmed}</p>);
   });
 
   return <div style={{ wordBreak: 'break-word' }}>{elements}</div>;
 };
 
-// Parser for inline bold and code tags
-function parseInlineFormatting(text) {
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={i} style={{ color: '#ffffff', fontWeight: 700 }}>
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={i} style={{
-          backgroundColor: '#070c18',
-          color: '#38bdf8',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          fontSize: '0.825rem',
-          fontFamily: 'monospace',
-          border: '1px solid #1e3a8a'
-        }}>
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    return part;
-  });
-}
+
 
 export const AITroubleshootingPanel = ({
   machineId = null,
