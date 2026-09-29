@@ -359,71 +359,18 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
     Permanently eliminates nonexistent aliases like gemini-1.5-flash-8b, gemini-1.5-flash-latest, etc.
     """
     raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
-    if "flash-latest" in raw or "flash-8b" in raw or raw in ("gemini-2.5-flash", "2.5-flash", "8b"):
+    if "flash-latest" in raw or "flash-8b" in raw or "1.5" in raw or "gemini-pro" in raw:
         raw = "gemini-2.0-flash"
-    elif "pro" in raw or "1.5" in raw or "flash" in raw:
+    elif raw in ("2.0-flash", "2.0", "flash"):
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash-lite", "flash-lite"):
         raw = "gemini-2.0-flash-lite"
-    else:
+    elif raw in ("2.5-flash", "2.5"):
+        raw = "gemini-2.5-flash"
+    elif not raw.startswith("gemini-"):
         raw = "gemini-2.0-flash"
 
-    # If an API key is provided, query Google's ModelService.ListModels to verify available models
-    if api_key and api_key.startswith("AIza"):
-        now = time.time()
-        discovered = []
-        if api_key in _GEMINI_LIVE_CACHE:
-            cached_time, cached_list = _GEMINI_LIVE_CACHE[api_key]
-            if now - cached_time < 300 and cached_list:
-                discovered = cached_list
-
-        if not discovered:
-            try:
-                with httpx.Client(timeout=4.0) as client:
-                    resp = client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
-                    if resp.status_code == 200:
-                        m_list = resp.json().get("models", [])
-                        valid_models = []
-                        for m in m_list:
-                            methods = m.get("supportedGenerationMethods", [])
-                            if "generateContent" in methods:
-                                clean_id = m.get("name", "").replace("models/", "").strip()
-                                if clean_id and not clean_id.startswith("gemini-1.5"):
-                                    valid_models.append(clean_id)
-                        if valid_models:
-                            _GEMINI_LIVE_CACHE[api_key] = (now, valid_models)
-                            discovered = valid_models
-                    elif resp.status_code in (400, 403):
-                        err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                        err_msg = err_json.get("error", {}).get("message", "")
-                        if "API key not valid" in err_msg or "API_KEY_INVALID" in err_msg:
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="Google Gemini API key is not valid. Please verify your API key in AI Settings."
-                            )
-            except HTTPException:
-                raise
-            except Exception:
-                pass
-
-        if discovered:
-            candidates = []
-            if raw in discovered:
-                candidates.append(raw)
-            for preferred in [
-                "gemini-2.0-flash",
-                "gemini-2.0-flash-lite",
-                "gemini-2.5-flash",
-                "gemini-2.0-pro-exp-02-05"
-            ]:
-                if preferred in discovered and preferred not in candidates:
-                    candidates.append(preferred)
-            for m in discovered:
-                if m not in candidates:
-                    candidates.append(m)
-            return candidates
-
-    # Robust default candidates (strictly verified 2.0 / 2.5 models)
+    # Instant, verified candidates starting with the requested active model
     candidates = [raw]
     for fallback in [
         "gemini-2.0-flash",
@@ -876,11 +823,11 @@ def execute_ai_chat_stream(
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:streamGenerateContent?key={api_key}&alt=sse"
             payload = {
                 "contents": contents,
-                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
             }
 
             try:
-                with httpx.Client(timeout=30.0) as client:
+                with httpx.Client(timeout=15.0) as client:
                     with client.stream("POST", endpoint, json=payload) as resp:
                         if resp.status_code == 200:
                             for line in resp.iter_lines():
@@ -894,11 +841,14 @@ def execute_ai_chat_stream(
                                                 break
                                             candidates = data.get("candidates", [])
                                             if candidates:
-                                                parts = candidates[0].get("content", {}).get("parts", [])
+                                                cand = candidates[0]
+                                                parts = cand.get("content", {}).get("parts", [])
                                                 chunk_text = "".join(p.get("text", "") for p in parts if "text" in p)
                                                 if chunk_text:
                                                     streamed_any = True
                                                     yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                                                if cand.get("finishReason"):
+                                                    break
                                         except Exception:
                                             pass
                             if streamed_any:
@@ -909,8 +859,11 @@ def execute_ai_chat_stream(
                                 resp.read()
                                 err_data = resp.json()
                                 last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
-                                if resp.status_code in (400, 403) and ("API key not valid" in last_error or "API_KEY_INVALID" in last_error):
-                                    yield f"data: {json.dumps({'error': f'Google Gemini API error: {last_error}. Please check your API key.', 'done': True})}\n\n"
+                                if resp.status_code == 429 or "quota" in str(last_error).lower():
+                                    yield f"data: {json.dumps({'error': 'Google Gemini quota or rate limit exceeded. Please check your Google AI Studio plan limits.', 'done': True})}\n\n"
+                                    return
+                                elif resp.status_code in (400, 401, 403):
+                                    yield f"data: {json.dumps({'error': f'Google Gemini API key error: {last_error}. Please check your API key in Configure AI Key.', 'done': True})}\n\n"
                                     return
                             except Exception:
                                 last_error = f"HTTP {resp.status_code}"
@@ -985,7 +938,7 @@ def execute_ai_chat(
             "contents": contents,
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 4096
+                "maxOutputTokens": 2048
             }
         }
 
@@ -993,7 +946,7 @@ def execute_ai_chat(
         for cur_model in clean_models:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:generateContent?key={api_key}"
             try:
-                with httpx.Client(timeout=16.0) as client:
+                with httpx.Client(timeout=12.0) as client:
                     resp = client.post(endpoint, json=payload)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -1013,7 +966,12 @@ def execute_ai_chat(
                     err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
                     last_error = err_msg
 
-                    if resp.status_code in (400, 403) and ("API key not valid" in err_msg or "API_KEY_INVALID" in err_msg):
+                    if resp.status_code == 429 or "quota" in str(err_msg).lower():
+                        raise HTTPException(
+                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits."
+                        )
+                    elif resp.status_code in (400, 401, 403):
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Google Gemini API error: {err_msg}. Please check your API key."

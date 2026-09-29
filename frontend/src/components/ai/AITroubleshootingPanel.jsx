@@ -525,21 +525,43 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
           content: m.content
         }));
 
+      let lastChunkTime = 0;
+      let pendingChunkText = '';
+      let chunkRafId = null;
+
+      const updateChatChunk = (text) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: text, isStreaming: true }
+              : m
+          )
+        );
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      };
+
       const result = await askEquipFixCopilot({
         prompt: q,
         history: conversationHistory,
         context: { machineCode, incidentSummary, machineId, workOrderId },
         onChunk: (_chunk, accumulatedText) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? { ...m, content: accumulatedText, isStreaming: true }
-                : m
-            )
-          );
-          chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+          pendingChunkText = accumulatedText;
+          const now = Date.now();
+          if (now - lastChunkTime > 40) {
+            lastChunkTime = now;
+            updateChatChunk(accumulatedText);
+          } else if (!chunkRafId) {
+            chunkRafId = requestAnimationFrame(() => {
+              chunkRafId = null;
+              updateChatChunk(pendingChunkText);
+            });
+          }
         }
       });
+
+      if (chunkRafId) cancelAnimationFrame(chunkRafId);
 
       const aiText = result.text;
       const providerLabel = result.provider;
@@ -556,6 +578,9 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
             : m
         )
       );
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
       fetchHistory();
 
       const wantsDiagram = /\b(generate (a )?(diagram|schematic|blueprint)|draw (a )?(diagram|schematic))\b/i.test(q);

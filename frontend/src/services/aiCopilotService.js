@@ -478,94 +478,92 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       openAiMessages.push({ role: 'user', content: prompt });
     }
 
-    const openAiModelsToTry = [effectiveModel];
-    if (!openAiModelsToTry.includes('gpt-4o-mini')) openAiModelsToTry.push('gpt-4o-mini');
-    if (!openAiModelsToTry.includes('gpt-4o')) openAiModelsToTry.push('gpt-4o');
+    try {
+      const openAiController = new AbortController();
+      const openAiTimeout = setTimeout(() => openAiController.abort(), 8000);
 
-    for (const curModel of openAiModelsToTry) {
-      try {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: curModel,
-            messages: openAiMessages,
-            stream: true,
-            temperature: 0.2
-          })
-        });
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: effectiveModel,
+          messages: openAiMessages,
+          stream: true,
+          temperature: 0.2,
+          max_tokens: 2048
+        }),
+        signal: openAiController.signal
+      });
+      clearTimeout(openAiTimeout);
 
-        if (res.ok && res.body) {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let accumulatedText = '';
-          let buffer = '';
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = '';
+        let buffer = '';
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep partial line
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
 
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed === 'data: [DONE]') break;
-              if (trimmed.startsWith('data: ')) {
-                const jsonStr = trimmed.slice(6).trim();
-                if (jsonStr) {
-                  try {
-                    const parsed = JSON.parse(jsonStr);
-                    const chunk = parsed.choices?.[0]?.delta?.content || '';
-                    if (chunk) {
-                      accumulatedText += chunk;
-                      if (onChunk) {
-                        onChunk(chunk, accumulatedText);
-                      }
-                    }
-                  } catch (e) {
-                    // ignore partial json chunk
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === 'data: [DONE]') {
+              reader.cancel().catch(() => {});
+              break;
+            }
+            if (trimmed.startsWith('data: ')) {
+              const jsonStr = trimmed.slice(6).trim();
+              if (jsonStr) {
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const chunk = parsed.choices?.[0]?.delta?.content || '';
+                  if (chunk) {
+                    accumulatedText += chunk;
+                    if (onChunk) onChunk(chunk, accumulatedText);
                   }
-                }
+                } catch (e) {}
               }
             }
           }
+        }
 
-          if (accumulatedText.trim()) {
-            return {
-              text: accumulatedText,
-              provider: `OpenAI (${curModel})`,
-              model: curModel,
-              realtime: true,
-              hasVision: Boolean(imageBase64),
-              groundedSource: `OpenAI ${curModel} Live Stream`,
-              isStreamed: true
-            };
-          }
-        } else if (res.status === 401 || res.status === 403) {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = errData.error?.message || `HTTP ${res.status}`;
-          throw new Error(`OpenAI Authentication Failed: ${errMsg}. Please check your OpenAI API key.`);
+        if (accumulatedText.trim()) {
+          return {
+            text: accumulatedText,
+            provider: `OpenAI (${effectiveModel})`,
+            model: effectiveModel,
+            realtime: true,
+            hasVision: Boolean(imageBase64),
+            groundedSource: `OpenAI ${effectiveModel} Live Stream`,
+            isStreamed: true
+          };
         }
-      } catch (streamErr) {
-        if (streamErr.message && streamErr.message.includes('Authentication Failed')) {
-          throw streamErr;
-        }
-        console.warn(`[EquipFixAI] Direct OpenAI stream attempt on ${curModel} failed:`, streamErr.message);
+      } else if (res.status === 401 || res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`OpenAI Authentication Failed: ${errData.error?.message || 'Invalid API key'}`);
+      } else if (res.status === 429) {
+        throw new Error('OpenAI rate limit or quota exceeded. Please check your OpenAI account credits.');
       }
+    } catch (openAiErr) {
+      if (openAiErr.message && (openAiErr.message.includes('Authentication Failed') || openAiErr.message.includes('quota exceeded'))) {
+        throw openAiErr;
+      }
+      console.warn('[EquipFixAI] Direct OpenAI fetch bypassed (CORS/network), switching to backend stream proxy.');
     }
   }
 
-  // STRATEGY 1B: Direct Real-Time Streaming from Google Gemini API (SSE)
+  // STRATEGY 1B: Direct High-Speed Streaming from Google Gemini API (SSE)
   if (effectiveProvider === 'gemini') {
-    // Ground system instruction directly into user query turn to avoid HTTP 400 systemInstruction rejection
     const groundedPrompt = `[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n${systemPrompt}\n\n[TECHNICIAN DIAGNOSTIC QUERY]\n${prompt}`;
 
-    // Build clean contents payload
     const contents = [];
     if (Array.isArray(history) && history.length > 0) {
       for (const h of history) {
@@ -609,29 +607,35 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       const directEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const payload = {
         contents,
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 }
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
       };
 
       try {
+        const streamController = new AbortController();
+        const streamTimeout = setTimeout(() => streamController.abort(), 8000);
+
         let res = await fetch(streamEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: streamController.signal
         });
+        clearTimeout(streamTimeout);
 
         if (res.ok && res.body) {
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let accumulatedText = '';
           let buffer = '';
+          let streamDone = false;
 
-          while (true) {
+          while (!streamDone) {
             const { done, value } = await reader.read();
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep partial line
+            buffer = lines.pop();
 
             for (const line of lines) {
               if (line.startsWith('data: ')) {
@@ -640,18 +644,28 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
                   try {
                     const parsed = JSON.parse(jsonStr);
                     if (parsed.error) {
-                      console.warn(`[EquipFixAI] Stream error on ${curModel}:`, parsed.error.message);
-                      break;
+                      reader.cancel().catch(() => {});
+                      const errMsg = parsed.error.message || 'Stream error';
+                      if (parsed.error.code === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+                        throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
+                      }
+                      throw new Error(`Google Gemini Error: ${errMsg}`);
                     }
-                    const chunk = parsed.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
+                    const cand = parsed.candidates?.[0];
+                    const chunk = cand?.content?.parts?.map((p) => p.text).join('') || '';
                     if (chunk) {
                       accumulatedText += chunk;
-                      if (onChunk) {
-                        onChunk(chunk, accumulatedText);
-                      }
+                      if (onChunk) onChunk(chunk, accumulatedText);
+                    }
+                    if (cand?.finishReason) {
+                      streamDone = true;
+                      reader.cancel().catch(() => {});
+                      break;
                     }
                   } catch (e) {
-                    // ignore partial chunk json parse
+                    if (e.message && (e.message.includes('quota') || e.message.includes('Google Gemini Error'))) {
+                      throw e;
+                    }
                   }
                 }
               }
@@ -671,12 +685,35 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
           }
         }
 
-        // Direct generateContent fallback if SSE response was not 200 or body was empty
+        // Check authentication or quota errors directly
+        if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 429) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `HTTP ${res.status}`;
+          if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+            throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
+          }
+          if (errMsg.toLowerCase().includes('api key') || errMsg.toLowerCase().includes('key_invalid') || res.status === 401 || res.status === 403) {
+            throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key in Configure AI Key.`);
+          }
+          throw new Error(`Google Gemini API Error: ${errMsg}`);
+        }
+
+        if (res.status === 404) {
+          // Model not found on account, quickly try next candidate
+          continue;
+        }
+
+        // Direct generateContent fast fallback if SSE body was empty or buffered
+        const directController = new AbortController();
+        const directTimeout = setTimeout(() => directController.abort(), 6000);
+
         const directRes = await fetch(directEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: directController.signal
         });
+        clearTimeout(directTimeout);
 
         if (directRes.ok) {
           const data = await directRes.json();
@@ -689,20 +726,36 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
               model: curModel,
               realtime: true,
               hasVision: Boolean(imageBase64),
-              groundedSource: `Gemini ${curModel} Direct Content`,
+              groundedSource: `Gemini ${curModel} Direct High-Speed`,
               isStreamed: false
             };
           }
-        } else if (directRes.status === 400 || directRes.status === 403 || directRes.status === 401) {
+        } else if (directRes.status === 400 || directRes.status === 401 || directRes.status === 403 || directRes.status === 429) {
           const errData = await directRes.json().catch(() => ({}));
           const errMsg = errData.error?.message || `HTTP ${directRes.status}`;
-          if (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID')) {
-            throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key.`);
+          if (directRes.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+            throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
           }
+          if (errMsg.toLowerCase().includes('api key') || errMsg.toLowerCase().includes('key_invalid') || directRes.status === 401 || directRes.status === 403) {
+            throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key in Configure AI Key.`);
+          }
+          throw new Error(`Google Gemini API Error: ${errMsg}`);
+        } else if (directRes.status === 404) {
+          continue;
         }
       } catch (streamErr) {
-        if (streamErr.message && streamErr.message.includes('Authentication Failed')) {
+        if (streamErr.message && (
+          streamErr.message.includes('Authentication Failed') ||
+          streamErr.message.includes('quota exceeded') ||
+          streamErr.message.includes('Google Gemini API Error') ||
+          streamErr.message.includes('Google Gemini Error')
+        )) {
           throw streamErr;
+        }
+        // If network error (CORS or offline), break immediately to avoid wasting time on other models
+        if (streamErr.name === 'TypeError' || (streamErr.message && streamErr.message.includes('Failed to fetch'))) {
+          console.warn('[EquipFixAI] Direct Google API blocked by browser/CORS, switching to backend proxy.');
+          break;
         }
         console.warn(`[EquipFixAI] Direct attempt on ${curModel} failed:`, streamErr.message);
       }
