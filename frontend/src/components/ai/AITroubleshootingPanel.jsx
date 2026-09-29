@@ -324,7 +324,7 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
       if (inlineModel.startsWith('gemini')) {
         setInlineModel('gpt-4o-mini');
       }
-    } else if (clean.startsWith('AIza')) {
+    } else if (clean.startsWith('AIza') || clean.startsWith('AQ.')) {
       if (!inlineModel.startsWith('gemini')) {
         setInlineModel('gemini-2.0-flash');
       }

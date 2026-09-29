@@ -23,13 +23,25 @@ export const GEMINI_MODELS = [
   {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash',
-    badge: 'DEFAULT • RECOMMENDED',
+    badge: 'FLAGSHIP • FAST',
     desc: 'Google flagship real-time multimodal model with lowest latency and state-of-the-art diagnostics.'
+  },
+  {
+    id: 'gemini-flash-lite-latest',
+    name: 'Gemini Flash-Lite (Latest)',
+    badge: 'RECOMMENDED • UNIVERSAL',
+    desc: 'Universal high-speed production model active on all Google AI Studio & Vertex tiers.'
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash-Lite',
+    badge: 'NEXT-GEN • ACTIVE',
+    desc: 'Next-generation Gemini 3 speed benchmark for rapid plant diagnostics and vision.'
   },
   {
     id: 'gemini-2.0-flash-lite',
     name: 'Gemini 2.0 Flash-Lite',
-    badge: 'ULTRA FAST & LIGHT',
+    badge: 'ULTRA FAST',
     desc: 'High-speed, cost-effective inference for rapid plant checks and live metrics.'
   },
   {
@@ -42,7 +54,7 @@ export const GEMINI_MODELS = [
     id: 'custom',
     name: 'Custom Gemini Model ID',
     badge: 'CUSTOM MODEL',
-    desc: 'Specify any Gemini model identifier (e.g. gemini-2.0-flash or Vertex model)'
+    desc: 'Specify any Gemini model identifier (e.g. gemini-flash-lite-latest, gemini-3.8-flash, or Vertex model)'
   }
 ];
 
@@ -69,8 +81,6 @@ export const resolveGeminiCandidateModels = (modelName) => {
   if (
     raw.startsWith('gemini-1.5') ||
     raw.includes('flash-8b') ||
-    raw.includes('flash-latest') ||
-    raw.includes('pro-latest') ||
     raw.includes('2.5') ||
     raw === 'gemini-pro' ||
     raw === '1.5-flash' ||
@@ -88,7 +98,11 @@ export const resolveGeminiCandidateModels = (modelName) => {
   const list = [raw];
   for (const fallback of [
     'gemini-2.0-flash',
+    'gemini-flash-lite-latest',
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash-lite',
     'gemini-2.0-flash-lite',
+    'gemini-3-flash-preview',
     'gemini-2.0-pro-exp-02-05'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
@@ -107,7 +121,7 @@ export const getAIConfig = () => {
   // Auto-detect provider if key prefix is unmistakable
   if (apiKey.startsWith('sk-')) {
     provider = 'openai';
-  } else if (apiKey.startsWith('AIza')) {
+  } else if (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) {
     provider = 'gemini';
   } else if (!provider) {
     provider = 'gemini';
@@ -157,7 +171,7 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
   let effectiveProvider = provider;
   if (cleanKey.startsWith('sk-')) {
     effectiveProvider = 'openai';
-  } else if (cleanKey.startsWith('AIza')) {
+  } else if (cleanKey.startsWith('AIza') || cleanKey.startsWith('AQ.')) {
     effectiveProvider = 'gemini';
   } else if (!effectiveProvider) {
     effectiveProvider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
@@ -174,8 +188,6 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
     if (
       cleanModel.startsWith('gemini-1.5') ||
       cleanModel.includes('flash-8b') ||
-      cleanModel.includes('flash-latest') ||
-      cleanModel.includes('pro-latest') ||
       cleanModel.includes('2.5') ||
       cleanModel === 'gemini-pro' ||
       cleanModel === 'gemini-2.5-flash'
@@ -419,7 +431,7 @@ export const askEquipFixCopilot = async ({
 
   const effectiveProvider = apiKey.startsWith('sk-')
     ? 'openai'
-    : (apiKey.startsWith('AIza') ? 'gemini' : (provider || 'gemini'));
+    : (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.') ? 'gemini' : (provider || 'gemini'));
 
   let effectiveModel = _overrideModel || (
     (model === 'custom' && customModel?.trim())
@@ -935,7 +947,7 @@ export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) =
 
   const effectiveProvider = apiKey && apiKey.startsWith('sk-')
     ? 'openai'
-    : (apiKey && apiKey.startsWith('AIza') ? 'gemini' : (provider || 'gemini'));
+    : (apiKey && (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) ? 'gemini' : (provider || 'gemini'));
 
   let enhancedPrompt = prompt;
   if (style === 'schematic') {

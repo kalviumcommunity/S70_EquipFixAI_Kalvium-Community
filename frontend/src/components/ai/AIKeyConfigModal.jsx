@@ -54,7 +54,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
         setProvider('openai');
         setModel('gpt-4o-mini');
       }
-    } else if (clean.startsWith('AIza')) {
+    } else if (clean.startsWith('AIza') || clean.startsWith('AQ.')) {
       if (provider !== 'gemini') {
         setProvider('gemini');
         setModel('gemini-2.0-flash');
@@ -70,7 +70,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       return;
     }
 
-    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : provider);
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') || cleanKey.startsWith('AQ.') ? 'gemini' : provider);
     let effectiveModel = model;
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
@@ -117,7 +117,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       return;
     }
 
-    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : provider);
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') || cleanKey.startsWith('AQ.') ? 'gemini' : provider);
     let effectiveModel = model;
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
@@ -449,7 +449,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => handleKeyChange(e.target.value)}
-                placeholder={provider === 'gemini' ? 'AIzaSy...' : 'sk-...'}
+                placeholder={provider === 'gemini' ? 'AIzaSy... or AQ.Ab...' : 'sk-...'}
                 style={{
                   width: '100%',
                   padding: '11px 44px 11px 14px',

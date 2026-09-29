@@ -350,7 +350,7 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
     Guarantees 0% 404 errors by normalizing deprecated or restricted models (1.5, 2.5-flash) to active gemini-2.0-flash.
     """
     raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
-    if "flash-latest" in raw or "flash-8b" in raw or "1.5" in raw or "2.5" in raw or "gemini-pro" in raw:
+    if "flash-8b" in raw or "1.5" in raw or "2.5" in raw or "gemini-pro" in raw:
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash", "2.0", "flash"):
         raw = "gemini-2.0-flash"
@@ -365,7 +365,11 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
     candidates = [raw]
     for fallback in [
         "gemini-2.0-flash",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
         "gemini-2.0-flash-lite",
+        "gemini-3-flash-preview",
         "gemini-2.0-pro-exp-02-05"
     ]:
         if fallback not in candidates:
@@ -589,7 +593,7 @@ def verify_api_key(
     provider = (req.provider or "").strip().lower()
     if key.startswith("sk-"):
         provider = "openai"
-    elif key.startswith("AIza"):
+    elif key.startswith("AIza") or key.startswith("AQ."):
         provider = "gemini"
     elif not provider:
         provider = "gemini"
@@ -696,7 +700,7 @@ def execute_ai_chat_stream(
     provider = (req.provider or "").strip().lower()
     if api_key.startswith("sk-"):
         provider = "openai"
-    elif api_key.startswith("AIza"):
+    elif api_key.startswith("AIza") or api_key.startswith("AQ."):
         provider = "gemini"
     elif not provider:
         provider = "gemini"
@@ -850,7 +854,7 @@ def execute_ai_chat_stream(
                                 resp.read()
                                 err_data = resp.json()
                                 last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
-                                if "no longer available" in str(last_error).lower() or "not found" in str(last_error).lower() or "not supported" in str(last_error).lower():
+                                if resp.status_code in (404, 503) or "no longer available" in str(last_error).lower() or "not found" in str(last_error).lower() or "not supported" in str(last_error).lower() or "high demand" in str(last_error).lower() or "service unavailable" in str(last_error).lower():
                                     continue
                                 if resp.status_code == 429 or "quota" in str(last_error).lower():
                                     yield f"data: {json.dumps({'error': 'Google Gemini quota or rate limit exceeded. Please check your Google AI Studio plan limits.', 'done': True})}\n\n"
@@ -903,7 +907,7 @@ def execute_ai_chat(
     provider = (req.provider or "").strip().lower()
     if api_key.startswith("sk-"):
         provider = "openai"
-    elif api_key.startswith("AIza"):
+    elif api_key.startswith("AIza") or api_key.startswith("AQ."):
         provider = "gemini"
     elif not provider:
         provider = "gemini"
@@ -959,7 +963,7 @@ def execute_ai_chat(
                     err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
                     last_error = err_msg
 
-                    if "no longer available" in str(err_msg).lower() or "not found" in str(err_msg).lower() or "not supported" in str(err_msg).lower():
+                    if resp.status_code in (404, 503) or "no longer available" in str(err_msg).lower() or "not found" in str(err_msg).lower() or "not supported" in str(err_msg).lower() or "high demand" in str(err_msg).lower() or "service unavailable" in str(err_msg).lower():
                         continue
 
                     if resp.status_code == 429 or "quota" in str(err_msg).lower():
