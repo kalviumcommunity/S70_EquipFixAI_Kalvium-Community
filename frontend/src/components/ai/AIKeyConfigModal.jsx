@@ -393,7 +393,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
             {model === 'custom' && (
               <div style={{ marginTop: '10px' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>
-                  Enter Custom Model Identifier (e.g. gemini-2.5-flash, gemini-3.0-preview, etc.):
+                  Enter Custom Model Identifier (e.g. gemini-2.0-flash, gemini-2.0-flash-lite, etc.):
                 </label>
                 <input
                   type="text"

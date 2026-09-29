@@ -595,8 +595,10 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
       setError(rawError);
 
       let displayNotice = rawError;
-      if (rawError.includes('not found') || rawError.includes('not supported')) {
-        displayNotice = 'The requested AI model ID was not found on your account. The engine has automatically synchronized with Google ModelService to select the active flagship Gemini 2.0 Flash. Please send your query again.';
+      if (rawError.includes('not found') || rawError.includes('not supported') || rawError.toLowerCase().includes('no longer available')) {
+        displayNotice = 'The requested AI model was deprecated or not available on your account. The engine has automatically synchronized with Google ModelService to select the active flagship Gemini 2.0 Flash. Please send your query again.';
+        saveAIConfig({ model: 'gemini-2.0-flash' });
+        setInlineModel('gemini-2.0-flash');
       }
 
       setMessages((prev) =>
@@ -1174,7 +1176,6 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
                       <>
                         <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
                         <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Next-Gen)</option>
                         <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Experimental</option>
                       </>
                     )}

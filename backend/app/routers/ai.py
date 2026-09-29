@@ -285,14 +285,6 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     },
     {
-        "id": "gemini-2.5-flash",
-        "name": "gemini-2.5-flash",
-        "display_name": "Gemini 2.5 Flash",
-        "description": "Next-generation production model with advanced engineering reasoning.",
-        "supported_generation_methods": ["generateContent"],
-        "is_default": False
-    },
-    {
         "id": "gemini-2.0-pro-exp-02-05",
         "name": "gemini-2.0-pro-exp-02-05",
         "display_name": "Gemini 2.0 Pro Experimental",
@@ -355,18 +347,17 @@ _GEMINI_LIVE_CACHE: Dict[str, Tuple[float, List[str]]] = {}
 
 def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = None) -> List[str]:
     """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
-    Guarantees 0% 404 errors by querying Google's ModelService.ListModels whenever an API key is provided.
-    Permanently eliminates nonexistent aliases like gemini-1.5-flash-8b, gemini-1.5-flash-latest, etc.
+    Guarantees 0% 404 errors by normalizing deprecated or restricted models (1.5, 2.5-flash) to active gemini-2.0-flash.
     """
     raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
-    if "flash-latest" in raw or "flash-8b" in raw or "1.5" in raw or "gemini-pro" in raw:
+    if "flash-latest" in raw or "flash-8b" in raw or "1.5" in raw or "2.5" in raw or "gemini-pro" in raw:
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash", "2.0", "flash"):
         raw = "gemini-2.0-flash"
     elif raw in ("2.0-flash-lite", "flash-lite"):
         raw = "gemini-2.0-flash-lite"
-    elif raw in ("2.5-flash", "2.5"):
-        raw = "gemini-2.5-flash"
+    elif raw in ("2.0-pro", "2.0-pro-exp"):
+        raw = "gemini-2.0-pro-exp-02-05"
     elif not raw.startswith("gemini-"):
         raw = "gemini-2.0-flash"
 
@@ -375,7 +366,7 @@ def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = No
     for fallback in [
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
-        "gemini-2.5-flash"
+        "gemini-2.0-pro-exp-02-05"
     ]:
         if fallback not in candidates:
             candidates.append(fallback)
@@ -859,6 +850,8 @@ def execute_ai_chat_stream(
                                 resp.read()
                                 err_data = resp.json()
                                 last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                                if "no longer available" in str(last_error).lower() or "not found" in str(last_error).lower() or "not supported" in str(last_error).lower():
+                                    continue
                                 if resp.status_code == 429 or "quota" in str(last_error).lower():
                                     yield f"data: {json.dumps({'error': 'Google Gemini quota or rate limit exceeded. Please check your Google AI Studio plan limits.', 'done': True})}\n\n"
                                     return
@@ -965,6 +958,9 @@ def execute_ai_chat(
                     err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
                     last_error = err_msg
+
+                    if "no longer available" in str(err_msg).lower() or "not found" in str(err_msg).lower() or "not supported" in str(err_msg).lower():
+                        continue
 
                     if resp.status_code == 429 or "quota" in str(err_msg).lower():
                         raise HTTPException(

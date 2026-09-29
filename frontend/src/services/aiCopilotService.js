@@ -33,12 +33,6 @@ export const GEMINI_MODELS = [
     desc: 'High-speed, cost-effective inference for rapid plant checks and live metrics.'
   },
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    badge: 'NEXT-GEN PREVIEW',
-    desc: 'Cutting-edge reasoning benchmark for complex root-cause calculations and multi-step diagnostics.'
-  },
-  {
     id: 'gemini-2.0-pro-exp-02-05',
     name: 'Gemini 2.0 Pro Experimental',
     badge: 'DEEP REASONING PRO',
@@ -48,7 +42,7 @@ export const GEMINI_MODELS = [
     id: 'custom',
     name: 'Custom Gemini Model ID',
     badge: 'CUSTOM MODEL',
-    desc: 'Specify any Gemini model identifier (e.g. gemini-2.0-flash, gemini-2.5-flash, or Vertex model)'
+    desc: 'Specify any Gemini model identifier (e.g. gemini-2.0-flash or Vertex model)'
   }
 ];
 
@@ -68,7 +62,7 @@ export const DEFAULT_MODELS = {
 /**
  * Resolve user-selected model identifier to an ordered list of verified working models.
  * Ensures free tier Google Gemini keys work 100% reliably.
- * Permanently eliminates nonexistent aliases like gemini-1.5-flash, gemini-1.5-pro, etc.
+ * Permanently eliminates nonexistent or deprecated aliases like gemini-1.5-flash, gemini-2.5-flash, etc.
  */
 export const resolveGeminiCandidateModels = (modelName) => {
   let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
@@ -77,6 +71,7 @@ export const resolveGeminiCandidateModels = (modelName) => {
     raw.includes('flash-8b') ||
     raw.includes('flash-latest') ||
     raw.includes('pro-latest') ||
+    raw.includes('2.5') ||
     raw === 'gemini-pro' ||
     raw === '1.5-flash' ||
     raw === '1.5-pro'
@@ -86,15 +81,15 @@ export const resolveGeminiCandidateModels = (modelName) => {
     raw = 'gemini-2.0-flash';
   } else if (raw === '2.0-flash-lite' || raw === 'flash-lite') {
     raw = 'gemini-2.0-flash-lite';
-  } else if (raw === '2.5-flash' || raw === '2.5') {
-    raw = 'gemini-2.5-flash';
+  } else if (raw === '2.0-pro' || raw === '2.0-pro-exp') {
+    raw = 'gemini-2.0-pro-exp-02-05';
   }
 
   const list = [raw];
   for (const fallback of [
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
-    'gemini-2.5-flash'
+    'gemini-2.0-pro-exp-02-05'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
   }
@@ -129,15 +124,17 @@ export const getAIConfig = () => {
       model = 'gemini-2.0-flash';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
-    // Sanitize any stale or deprecated model names to prevent 404s
+    // Sanitize any stale or deprecated model names to prevent 404s/deprecation errors
     if (
       model.startsWith('gemini-1.5') ||
       model.includes('flash-8b') ||
       model.includes('flash-latest') ||
       model.includes('pro-latest') ||
+      model.includes('2.5') ||
       model === 'gemini-pro' ||
       model === 'gemini-1.5-flash' ||
-      model === 'gemini-1.5-pro'
+      model === 'gemini-1.5-pro' ||
+      model === 'gemini-2.5-flash'
     ) {
       model = 'gemini-2.0-flash';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
@@ -179,7 +176,9 @@ export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
       cleanModel.includes('flash-8b') ||
       cleanModel.includes('flash-latest') ||
       cleanModel.includes('pro-latest') ||
-      cleanModel === 'gemini-pro'
+      cleanModel.includes('2.5') ||
+      cleanModel === 'gemini-pro' ||
+      cleanModel === 'gemini-2.5-flash'
     ) {
       cleanModel = 'gemini-2.0-flash';
     }
@@ -209,7 +208,7 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
     const res = await aiApi.getModels({ api_key: cleanKey });
     if (res.data && Array.isArray(res.data) && res.data.length > 0) {
       const items = res.data
-        .filter((m) => !String(m.id || '').startsWith('gemini-1.5'))
+        .filter((m) => !String(m.id || '').startsWith('gemini-1.5') && !String(m.id || '').includes('2.5'))
         .map((m) => ({
           id: m.id,
           name: m.display_name || m.name,
@@ -238,7 +237,7 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
       const contentModels = raw.filter((m) => {
         const cleanId = (m.name || '').replace(/^models\//, '');
         const methods = m.supportedGenerationMethods || [];
-        return methods.includes('generateContent') && cleanId && !cleanId.startsWith('gemini-1.5');
+        return methods.includes('generateContent') && cleanId && !cleanId.startsWith('gemini-1.5') && !cleanId.includes('2.5');
       });
       if (contentModels.length > 0) {
         const items = contentModels.map((m) => {
@@ -437,7 +436,7 @@ export const askEquipFixCopilot = async ({
     if (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3') || !effectiveModel) {
       effectiveModel = 'gemini-2.0-flash';
     }
-    if (effectiveModel === 'gemini-2.5-flash' || effectiveModel.includes('flash-8b') || effectiveModel.includes('flash-latest')) {
+    if (effectiveModel.includes('2.5') || effectiveModel.includes('flash-8b') || effectiveModel.includes('flash-latest') || effectiveModel.startsWith('gemini-1.5')) {
       effectiveModel = 'gemini-2.0-flash';
     }
   }
@@ -649,6 +648,13 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
                       if (parsed.error.code === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
                         throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
                       }
+                      if (
+                        errMsg.toLowerCase().includes('no longer available') ||
+                        errMsg.toLowerCase().includes('not found') ||
+                        errMsg.toLowerCase().includes('not supported')
+                      ) {
+                        break;
+                      }
                       throw new Error(`Google Gemini Error: ${errMsg}`);
                     }
                     const cand = parsed.candidates?.[0];
@@ -691,6 +697,14 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
           const errMsg = errData.error?.message || `HTTP ${res.status}`;
           if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
             throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
+          }
+          if (
+            errMsg.toLowerCase().includes('no longer available') ||
+            errMsg.toLowerCase().includes('not found') ||
+            errMsg.toLowerCase().includes('not supported')
+          ) {
+            // Model deprecated or not supported on this account, seamlessly skip to next candidate
+            continue;
           }
           if (errMsg.toLowerCase().includes('api key') || errMsg.toLowerCase().includes('key_invalid') || res.status === 401 || res.status === 403) {
             throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key in Configure AI Key.`);
@@ -736,6 +750,13 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
           if (directRes.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
             throw new Error('Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits.');
           }
+          if (
+            errMsg.toLowerCase().includes('no longer available') ||
+            errMsg.toLowerCase().includes('not found') ||
+            errMsg.toLowerCase().includes('not supported')
+          ) {
+            continue;
+          }
           if (errMsg.toLowerCase().includes('api key') || errMsg.toLowerCase().includes('key_invalid') || directRes.status === 401 || directRes.status === 403) {
             throw new Error(`Google Gemini Authentication Failed: ${errMsg}. Please verify your API key in Configure AI Key.`);
           }
@@ -744,6 +765,13 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
           continue;
         }
       } catch (streamErr) {
+        if (streamErr.message && (
+          streamErr.message.toLowerCase().includes('no longer available') ||
+          streamErr.message.toLowerCase().includes('not found') ||
+          streamErr.message.toLowerCase().includes('not supported')
+        )) {
+          continue;
+        }
         if (streamErr.message && (
           streamErr.message.includes('Authentication Failed') ||
           streamErr.message.includes('quota exceeded') ||
