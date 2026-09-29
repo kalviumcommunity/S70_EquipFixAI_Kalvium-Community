@@ -112,13 +112,33 @@ export const getAIConfig = () => {
     apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   }
   apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
-  const provider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
-  let model = localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
 
-  // Sanitize any stale or deprecated model names to prevent 404s
-  if (model === 'gemini-2.5-flash' || model === 'gemini-1.5-pro' || model === 'gemini-pro') {
-    model = 'gemini-2.0-flash';
-    localStorage.setItem(STORAGE_KEYS.MODEL, model);
+  let provider = localStorage.getItem(STORAGE_KEYS.PROVIDER);
+  // Auto-detect provider if key prefix is unmistakable
+  if (apiKey.startsWith('sk-')) {
+    provider = 'openai';
+  } else if (apiKey.startsWith('AIza')) {
+    provider = 'gemini';
+  } else if (!provider) {
+    provider = 'gemini';
+  }
+
+  let model = localStorage.getItem(STORAGE_KEYS.MODEL);
+  if (provider === 'openai') {
+    if (!model || model.startsWith('gemini') || model === 'custom') {
+      model = 'gpt-4o-mini';
+      localStorage.setItem(STORAGE_KEYS.MODEL, model);
+    }
+  } else {
+    if (!model || model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) {
+      model = 'gemini-2.0-flash';
+      localStorage.setItem(STORAGE_KEYS.MODEL, model);
+    }
+    // Sanitize any stale or deprecated model names to prevent 404s
+    if (model === 'gemini-2.5-flash' || model === 'gemini-1.5-pro' || model === 'gemini-pro') {
+      model = 'gemini-2.0-flash';
+      localStorage.setItem(STORAGE_KEYS.MODEL, model);
+    }
   }
 
   const customModel = localStorage.getItem(STORAGE_KEYS.CUSTOM_MODEL) || '';
@@ -126,15 +146,35 @@ export const getAIConfig = () => {
 };
 
 export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
+  let cleanKey;
   if (apiKey !== undefined) {
-    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
+    cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
     localStorage.setItem(STORAGE_KEYS.API_KEY, cleanKey);
+  } else {
+    cleanKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
   }
-  if (provider !== undefined) localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
+
+  let effectiveProvider = provider;
+  if (cleanKey.startsWith('sk-')) {
+    effectiveProvider = 'openai';
+  } else if (cleanKey.startsWith('AIza')) {
+    effectiveProvider = 'gemini';
+  } else if (!effectiveProvider) {
+    effectiveProvider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
+  }
+  localStorage.setItem(STORAGE_KEYS.PROVIDER, effectiveProvider);
+
   if (model !== undefined) {
-    const cleanModel = model === 'gemini-2.5-flash' ? 'gemini-2.0-flash' : model;
+    let cleanModel = model;
+    if (effectiveProvider === 'openai' && (cleanModel.startsWith('gemini') || cleanModel === 'custom')) {
+      cleanModel = 'gpt-4o-mini';
+    } else if (effectiveProvider === 'gemini' && (cleanModel.startsWith('gpt') || cleanModel.startsWith('o1') || cleanModel.startsWith('o3'))) {
+      cleanModel = 'gemini-2.0-flash';
+    }
+    if (cleanModel === 'gemini-2.5-flash') cleanModel = 'gemini-2.0-flash';
     localStorage.setItem(STORAGE_KEYS.MODEL, cleanModel);
   }
+
   if (customModel !== undefined) localStorage.setItem(STORAGE_KEYS.CUSTOM_MODEL, customModel.trim());
 };
 
@@ -161,14 +201,14 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
         id: m.id,
         name: m.display_name || m.name,
         badge: m.is_default ? 'RECOMMENDED' : 'AVAILABLE',
-        desc: m.description || `Google Gemini ${m.display_name} model for live diagnostics.`
+        desc: m.description || `AI ${m.display_name} model for live diagnostics.`
       }));
       // Always include Custom model option at bottom
       items.push({
         id: 'custom',
-        name: 'Custom Gemini Model ID',
+        name: 'Custom Model ID',
         badge: 'CUSTOM MODEL',
-        desc: 'Specify any custom or newer Gemini model identifier'
+        desc: 'Specify any custom or preview model identifier'
       });
       return items;
     }
@@ -213,33 +253,48 @@ export const fetchAvailableGeminiModels = async (apiKey) => {
  * Validate API Key connectivity for any selected Gemini or OpenAI model.
  * Tests live connection without dummy data.
  */
-export const testAIConnection = async ({ apiKey, provider = 'gemini', model, customModel }) => {
+export const testAIConnection = async ({ apiKey, provider, model, customModel }) => {
   const key = (apiKey || '').trim().replace(/^["']|["']$/g, '');
   if (!key) throw new Error('API key cannot be empty.');
 
+  let effectiveProvider = provider;
+  if (key.startsWith('sk-')) {
+    effectiveProvider = 'openai';
+  } else if (key.startsWith('AIza')) {
+    effectiveProvider = 'gemini';
+  } else if (!effectiveProvider) {
+    effectiveProvider = 'gemini';
+  }
+
   let effectiveModel = (model === 'custom' && customModel?.trim())
     ? customModel.trim()
-    : (model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash');
+    : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'));
+
+  if (effectiveProvider === 'openai' && effectiveModel.startsWith('gemini')) {
+    effectiveModel = 'gpt-4o-mini';
+  } else if (effectiveProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
+    effectiveModel = 'gemini-2.0-flash';
+  }
 
   effectiveModel = effectiveModel.replace(/^models\//, '');
 
   // Instant syntax sanity check
-  if (provider === 'gemini') {
+  if (effectiveProvider === 'gemini') {
     if (!key.startsWith('AIza') && key.length < 20) {
       throw new Error('Invalid Google Gemini key format. Google API keys typically begin with "AIza..."');
     }
-  } else if (provider === 'openai') {
+  } else if (effectiveProvider === 'openai') {
     if (!key.startsWith('sk-') && key.length < 20) {
       throw new Error('Invalid OpenAI key format. OpenAI API keys typically begin with "sk-..."');
     }
   }
 
-  // 1. Direct Google API validation
+  // 1. Direct API validation
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 4000);
 
   try {
-    if (provider === 'gemini') {
+    if (effectiveProvider === 'gemini') {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
       const response = await fetch(endpoint, {
         method: 'GET',
@@ -257,11 +312,13 @@ export const testAIConnection = async ({ apiKey, provider = 'gemini', model, cus
 
       return {
         success: true,
-        message: `Google Gemini connected successfully! Active model: ${effectiveModel}`
+        message: `Google Gemini connected successfully! Active model: ${effectiveModel}`,
+        provider: 'gemini',
+        model: effectiveModel
       };
     }
 
-    if (provider === 'openai') {
+    if (effectiveProvider === 'openai') {
       const response = await fetch('https://api.openai.com/v1/models', {
         method: 'GET',
         headers: {
@@ -281,7 +338,9 @@ export const testAIConnection = async ({ apiKey, provider = 'gemini', model, cus
 
       return {
         success: true,
-        message: `OpenAI connected successfully! Active model: ${effectiveModel}`
+        message: `OpenAI connected successfully! Active model: ${effectiveModel}`,
+        provider: 'openai',
+        model: effectiveModel
       };
     }
   } catch (err) {
@@ -291,14 +350,16 @@ export const testAIConnection = async ({ apiKey, provider = 'gemini', model, cus
     try {
       const serverRes = await aiApi.verifyKey({
         api_key: key,
-        provider,
+        provider: effectiveProvider,
         model: effectiveModel
       });
 
       if (serverRes.data?.success) {
         return {
           success: true,
-          message: serverRes.data.message || `API key verified via secure proxy! (${effectiveModel})`
+          message: serverRes.data.message || `API key verified via secure proxy! (${effectiveModel})`,
+          provider: serverRes.data.provider || effectiveProvider,
+          model: serverRes.data.model || effectiveModel
         };
       } else {
         throw new Error(serverRes.data?.message || 'API key verification failed');
@@ -311,7 +372,9 @@ export const testAIConnection = async ({ apiKey, provider = 'gemini', model, cus
 
   return {
     success: true,
-    message: `Connected to ${provider} (${effectiveModel})`
+    message: `Connected to ${effectiveProvider} (${effectiveModel})`,
+    provider: effectiveProvider,
+    model: effectiveModel
   };
 };
 
@@ -334,19 +397,32 @@ export const askEquipFixCopilot = async ({
   // Strict enforcement: A valid API key is required. No dummy fallback answers!
   if (!apiKey) {
     throw new Error(
-      'Google Gemini API key required. Real-time AI response is enabled exclusively via a valid Gemini API key. Please configure your API key to proceed.'
+      'API key required. Real-time AI response is enabled exclusively via a valid Google Gemini or OpenAI API key. Please configure your API key to proceed.'
     );
   }
+
+  const effectiveProvider = apiKey.startsWith('sk-')
+    ? 'openai'
+    : (apiKey.startsWith('AIza') ? 'gemini' : (provider || 'gemini'));
 
   let effectiveModel = _overrideModel || (
     (model === 'custom' && customModel?.trim())
       ? customModel.trim()
-      : (model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash')
+      : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'))
   );
 
   effectiveModel = effectiveModel.replace(/^models\//, '');
-  if (effectiveModel === 'gemini-2.5-flash') {
-    effectiveModel = 'gemini-2.0-flash';
+  if (effectiveProvider === 'openai') {
+    if (effectiveModel.startsWith('gemini') || !effectiveModel) {
+      effectiveModel = 'gpt-4o-mini';
+    }
+  } else {
+    if (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3') || !effectiveModel) {
+      effectiveModel = 'gemini-2.0-flash';
+    }
+    if (effectiveModel === 'gemini-2.5-flash') {
+      effectiveModel = 'gemini-2.0-flash';
+    }
   }
 
   // System instruction for grounded industrial diagnostics
@@ -358,45 +434,154 @@ Provide direct, high-value technical advice for floor technicians.
 ${context.machineCode ? `Plant Equipment Context: Machine Code ${context.machineCode}` : ''}
 ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}` : ''}`;
 
-  // Build clean contents payload
-  const contents = [];
-  if (Array.isArray(history) && history.length > 0) {
-    for (const h of history) {
-      const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'model';
-      const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
-      if (text) {
-        if (contents.length > 0 && contents[contents.length - 1].role === role) {
-          contents[contents.length - 1].parts[0].text += `\n\n${text}`;
-        } else {
-          contents.push({ role, parts: [{ text }] });
+  // STRATEGY 1A: Direct Real-Time Streaming from OpenAI API (SSE)
+  if (effectiveProvider === 'openai') {
+    const openAiMessages = [
+      { role: 'system', content: systemPrompt }
+    ];
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h.id === 'welcome' || String(h.id || '').startsWith('sys-') || String(h.id || '').startsWith('ai-err-')) continue;
+        const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'assistant';
+        const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
+        if (text) openAiMessages.push({ role, content: text });
+      }
+    }
+
+    if (imageBase64) {
+      const dataUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:${imageMime || 'image/jpeg'};base64,${imageBase64}`;
+      openAiMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: dataUrl } }
+        ]
+      });
+    } else {
+      openAiMessages.push({ role: 'user', content: prompt });
+    }
+
+    const openAiModelsToTry = [effectiveModel];
+    if (!openAiModelsToTry.includes('gpt-4o-mini')) openAiModelsToTry.push('gpt-4o-mini');
+    if (!openAiModelsToTry.includes('gpt-4o')) openAiModelsToTry.push('gpt-4o');
+
+    for (const curModel of openAiModelsToTry) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: curModel,
+            messages: openAiMessages,
+            stream: true,
+            temperature: 0.2
+          })
+        });
+
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let accumulatedText = '';
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep partial line
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed === 'data: [DONE]') break;
+              if (trimmed.startsWith('data: ')) {
+                const jsonStr = trimmed.slice(6).trim();
+                if (jsonStr) {
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const chunk = parsed.choices?.[0]?.delta?.content || '';
+                    if (chunk) {
+                      accumulatedText += chunk;
+                      if (onChunk) {
+                        onChunk(chunk, accumulatedText);
+                      }
+                    }
+                  } catch (e) {
+                    // ignore partial json chunk
+                  }
+                }
+              }
+            }
+          }
+
+          if (accumulatedText.trim()) {
+            return {
+              text: accumulatedText,
+              provider: `OpenAI (${curModel})`,
+              model: curModel,
+              realtime: true,
+              hasVision: Boolean(imageBase64),
+              groundedSource: `OpenAI ${curModel} Live Stream`,
+              isStreamed: true
+            };
+          }
+        } else if (res.status === 401 || res.status === 403) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `HTTP ${res.status}`;
+          throw new Error(`OpenAI Authentication Failed: ${errMsg}. Please check your OpenAI API key.`);
         }
+      } catch (streamErr) {
+        if (streamErr.message && streamErr.message.includes('Authentication Failed')) {
+          throw streamErr;
+        }
+        console.warn(`[EquipFixAI] Direct OpenAI stream attempt on ${curModel} failed:`, streamErr.message);
       }
     }
   }
-  while (contents.length > 0 && contents[0].role !== 'user') {
-    contents.shift();
-  }
 
-  const currentParts = [];
-  if (imageBase64) {
-    const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+]+;base64,/, '');
-    currentParts.push({
-      inlineData: {
-        mimeType: imageMime || 'image/jpeg',
-        data: cleanBase64
+  // STRATEGY 1B: Direct Real-Time Streaming from Google Gemini API (SSE)
+  if (effectiveProvider === 'gemini') {
+    // Build clean contents payload
+    const contents = [];
+    if (Array.isArray(history) && history.length > 0) {
+      for (const h of history) {
+        const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'model';
+        const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
+        if (text) {
+          if (contents.length > 0 && contents[contents.length - 1].role === role) {
+            contents[contents.length - 1].parts[0].text += `\n\n${text}`;
+          } else {
+            contents.push({ role, parts: [{ text }] });
+          }
+        }
       }
-    });
-  }
-  currentParts.push({ text: prompt });
+    }
+    while (contents.length > 0 && contents[0].role !== 'user') {
+      contents.shift();
+    }
 
-  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-    contents[contents.length - 1].parts.push(...currentParts);
-  } else {
-    contents.push({ role: 'user', parts: currentParts });
-  }
+    const currentParts = [];
+    if (imageBase64) {
+      const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+]+;base64,/, '');
+      currentParts.push({
+        inlineData: {
+          mimeType: imageMime || 'image/jpeg',
+          data: cleanBase64
+        }
+      });
+    }
+    currentParts.push({ text: prompt });
 
-  // STRATEGY 1: Direct Real-Time Streaming from Google Gemini API (SSE)
-  if (provider === 'gemini') {
+    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+      contents[contents.length - 1].parts.push(...currentParts);
+    } else {
+      contents.push({ role: 'user', parts: currentParts });
+    }
+
     const cleanList = resolveGeminiCandidateModels(effectiveModel);
 
     for (const curModel of cleanList) {
@@ -498,7 +683,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
         prompt,
         history: formattedHistory,
         api_key: apiKey,
-        provider: provider || 'gemini',
+        provider: effectiveProvider,
         model: effectiveModel,
         image_base64: imageBase64,
         image_mime: imageMime,
@@ -552,11 +737,11 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       if (accumulatedText.trim()) {
         return {
           text: accumulatedText,
-          provider: `Google Gemini (${effectiveModel})`,
+          provider: effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`,
           model: effectiveModel,
           realtime: true,
           hasVision: Boolean(imageBase64),
-          groundedSource: `Gemini ${effectiveModel} + Plant Grounding (Real-Time)`,
+          groundedSource: `${effectiveProvider === 'openai' ? 'OpenAI' : 'Gemini'} ${effectiveModel} + Plant Grounding (Real-Time)`,
           isStreamed: true
         };
       }
@@ -581,7 +766,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       prompt,
       history: formattedHistory,
       api_key: apiKey,
-      provider: provider || 'gemini',
+      provider: effectiveProvider,
       model: effectiveModel,
       image_base64: imageBase64,
       image_mime: imageMime,
@@ -596,7 +781,7 @@ ${context.incidentSummary ? `Active Symptom / Alarm: ${context.incidentSummary}`
       }
       return {
         text: fullText,
-        provider: response.data.provider || `Google Gemini (${effectiveModel})`,
+        provider: response.data.provider || (effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`),
         model: response.data.model || effectiveModel,
         realtime: true,
         hasVision: Boolean(imageBase64),
@@ -620,6 +805,10 @@ export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) =
   const config = getAIConfig();
   const { apiKey, provider } = config;
 
+  const effectiveProvider = apiKey && apiKey.startsWith('sk-')
+    ? 'openai'
+    : (apiKey && apiKey.startsWith('AIza') ? 'gemini' : (provider || 'gemini'));
+
   let enhancedPrompt = prompt;
   if (style === 'schematic') {
     enhancedPrompt = `Detailed engineering schematic technical blueprint, industrial CAD drawing, precise line art, cross-section breakdown, high resolution industrial illustration: ${prompt}`;
@@ -631,38 +820,8 @@ export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) =
     enhancedPrompt = `OSHA compliant industrial safety warning sign, high contrast safety colors, standard warning icons, crisp vector sign for: ${prompt}`;
   }
 
-  // Option 1: Google Imagen 3 via Gemini API
-  if (apiKey && provider === 'gemini') {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            instances: [{ prompt: enhancedPrompt }],
-            parameters: { sampleCount: 1, aspectRatio: '4:3', outputMimeType: 'image/jpeg' }
-          })
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const base64Bytes = data.predictions?.[0]?.bytesBase64Encoded;
-        if (base64Bytes) {
-          return {
-            imageUrl: `data:image/jpeg;base64,${base64Bytes}`,
-            prompt: enhancedPrompt,
-            provider: 'Google Imagen 3 (imagen-3.0-generate-002)'
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Google Imagen 3 call failed, using high-res FLUX fallback', err);
-    }
-  }
-
-  // Option 2: OpenAI DALL-E 3
-  if (apiKey && provider === 'openai') {
+  // Option 1: OpenAI DALL-E 3 if OpenAI key is active
+  if (apiKey && effectiveProvider === 'openai') {
     try {
       const res = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
@@ -691,6 +850,36 @@ export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) =
       }
     } catch (err) {
       console.warn('DALL-E 3 call failed, falling back to Pollinations FLUX engine', err);
+    }
+  }
+
+  // Option 2: Google Imagen 3 via Gemini API if Gemini key is active
+  if (apiKey && effectiveProvider === 'gemini') {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt: enhancedPrompt }],
+            parameters: { sampleCount: 1, aspectRatio: '4:3', outputMimeType: 'image/jpeg' }
+          })
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const base64Bytes = data.predictions?.[0]?.bytesBase64Encoded;
+        if (base64Bytes) {
+          return {
+            imageUrl: `data:image/jpeg;base64,${base64Bytes}`,
+            prompt: enhancedPrompt,
+            provider: 'Google Imagen 3 (imagen-3.0-generate-002)'
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Google Imagen 3 call failed, using high-res FLUX fallback', err);
     }
   }
 

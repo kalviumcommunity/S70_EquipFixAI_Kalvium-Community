@@ -45,6 +45,23 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     }
   };
 
+  const handleKeyChange = (val) => {
+    setApiKey(val);
+    setTestResult(null);
+    const clean = val.trim();
+    if (clean.startsWith('sk-')) {
+      if (provider !== 'openai') {
+        setProvider('openai');
+        setModel('gpt-4o-mini');
+      }
+    } else if (clean.startsWith('AIza')) {
+      if (provider !== 'gemini') {
+        setProvider('gemini');
+        setModel('gemini-2.0-flash');
+      }
+    }
+  };
+
   const handleVerifyAndSave = async (e) => {
     if (e) e.preventDefault();
     const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
@@ -53,8 +70,16 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       return;
     }
 
-    if (model === 'custom' && !customModel.trim()) {
-      setTestResult({ success: false, message: 'Please enter your custom model ID (e.g. gemini-2.0-flash).' });
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : provider);
+    let effectiveModel = model;
+    if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
+      effectiveModel = 'gpt-4o-mini';
+    } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
+      effectiveModel = 'gemini-2.0-flash';
+    }
+
+    if (effectiveModel === 'custom' && !customModel.trim()) {
+      setTestResult({ success: false, message: 'Please enter your custom model ID.' });
       return;
     }
 
@@ -62,11 +87,13 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     setTestResult(null);
 
     try {
-      const res = await testAIConnection({ apiKey: cleanKey, provider, model, customModel });
-      saveAIConfig({ apiKey: cleanKey, provider, model, customModel });
+      const res = await testAIConnection({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
+      saveAIConfig({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
+      setProvider(detectedProvider);
+      setModel(effectiveModel);
       setTestResult({ success: true, message: `✅ ${res.message || 'Key verified successfully!'} Opening chat...` });
       if (onConfigSaved) {
-        onConfigSaved({ apiKey: cleanKey, provider, model, customModel });
+        onConfigSaved({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
       }
       // Auto-close modal and redirect straight to chat
       setTimeout(() => {
@@ -89,10 +116,21 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
       setTestResult({ success: false, message: 'Please enter a valid API key.' });
       return;
     }
-    saveAIConfig({ apiKey: cleanKey, provider, model, customModel });
+
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : provider);
+    let effectiveModel = model;
+    if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
+      effectiveModel = 'gpt-4o-mini';
+    } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
+      effectiveModel = 'gemini-2.0-flash';
+    }
+
+    saveAIConfig({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
+    setProvider(detectedProvider);
+    setModel(effectiveModel);
     setTestResult({ success: true, message: '⚡ Saved instantly! Redirecting to chat...' });
     if (onConfigSaved) {
-      onConfigSaved({ apiKey: cleanKey, provider, model, customModel });
+      onConfigSaved({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
     }
     setTimeout(() => {
       onClose();
@@ -410,7 +448,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
               <input
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => handleKeyChange(e.target.value)}
                 placeholder={provider === 'gemini' ? 'AIzaSy...' : 'sk-...'}
                 style={{
                   width: '100%',

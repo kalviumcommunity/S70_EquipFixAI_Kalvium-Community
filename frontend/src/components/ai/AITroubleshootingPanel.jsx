@@ -246,7 +246,7 @@ export const AITroubleshootingPanel = ({
       id: 'welcome',
       role: 'assistant',
       content: `### 🤖 EquipFix AI Diagnostics Copilot
-Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause analysis powered live by Google Gemini.
+Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause analysis powered live by Google Gemini & OpenAI.
 
 * 🔍 **Real-Time Fault Diagnostics**: Ask about machine error codes, vibration spikes, or hydraulic pressure anomalies.
 * 🛡️ **Safety & LOTO Compliance**: Zero-energy isolation steps compliant with OSHA 1910.147.
@@ -308,30 +308,54 @@ Real-time equipment diagnostics, OSHA 1910.147 LOTO compliance, and root-cause a
     'Mandatory OSHA Lockout/Tagout Danger Warning sign'
   ];
 
+  const handleInlineKeyChange = (val) => {
+    setInlineKey(val);
+    setInlineKeyError(null);
+    const clean = val.trim();
+    if (clean.startsWith('sk-')) {
+      if (inlineModel.startsWith('gemini')) {
+        setInlineModel('gpt-4o-mini');
+      }
+    } else if (clean.startsWith('AIza')) {
+      if (!inlineModel.startsWith('gemini')) {
+        setInlineModel('gemini-2.0-flash');
+      }
+    }
+  };
+
   const handleSaveInlineKey = async (e) => {
     if (e) e.preventDefault();
     const cleanKey = inlineKey.trim().replace(/^["']|["']$/g, '');
     if (!cleanKey) {
-      setInlineKeyError('Please paste your Google Gemini API key.');
+      setInlineKeyError('Please paste your Google Gemini or OpenAI API key.');
       return;
     }
+
+    const detectedProvider = cleanKey.startsWith('sk-') ? 'openai' : (cleanKey.startsWith('AIza') ? 'gemini' : 'gemini');
+    let effectiveModel = inlineModel;
+    if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || !effectiveModel)) {
+      effectiveModel = 'gpt-4o-mini';
+    } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
+      effectiveModel = 'gemini-2.0-flash';
+    }
+
     setSavingInlineKey(true);
     setInlineKeyError(null);
     try {
-      const res = await testAIConnection({ apiKey: cleanKey, provider: 'gemini', model: inlineModel });
-      const newCfg = { apiKey: cleanKey, provider: 'gemini', model: inlineModel, customModel: '' };
+      const res = await testAIConnection({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel });
+      const newCfg = { apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel: '' };
       saveAIConfig(newCfg);
       setAiConfig(newCfg);
-      setCopiedStatus(`Google Gemini connected! Model: ${inlineModel}`);
+      setCopiedStatus(`${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} connected! Model: ${effectiveModel}`);
       setTimeout(() => setCopiedStatus(null), 4000);
       setMessages((prev) => [
         ...prev,
         {
           id: `sys-${Date.now()}`,
           role: 'assistant',
-          content: `### ⚡ Google Gemini Connected in Real Time\nActive model: **${inlineModel}**\nReal-time streaming diagnostics is now active. Send any diagnostic query below!`,
+          content: `### ⚡ ${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} Connected in Real Time\nActive model: **${effectiveModel}**\nReal-time streaming diagnostics is now active. Send any diagnostic query below!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          provider: `Google Gemini (${inlineModel})`
+          provider: `${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} (${effectiveModel})`
         }
       ]);
     } catch (err) {
@@ -739,7 +763,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               textTransform: 'uppercase'
             }}>
               {aiConfig.apiKey
-                ? `${aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || 'Gemini 2.0 Flash')} ACTIVE`
+                ? `${aiConfig.provider === 'openai' ? 'OpenAI' : 'Gemini'} • ${aiConfig.model === 'custom' && aiConfig.customModel ? aiConfig.customModel : (aiConfig.model || (aiConfig.provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'))} ACTIVE`
                 : 'Internal RAG Mode'}
             </span>
           </div>
@@ -961,7 +985,7 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
               </div>
             )}
 
-            {/* Inline Google Gemini API Key Banner if not yet configured */}
+            {/* Inline Google Gemini or OpenAI API Key Banner if not yet configured */}
             {!aiConfig.apiKey && (
               <div style={{
                 backgroundColor: '#070c1a',
@@ -976,33 +1000,44 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Key size={18} color="#38bdf8" />
                     <strong style={{ fontSize: '0.95rem', color: '#f8fafc' }}>
-                      Google Gemini API Key Required for Real-Time AI
+                      Google Gemini or OpenAI API Key Required for Real-Time AI
                     </strong>
                     <span style={{ fontSize: '0.675rem', backgroundColor: '#0284c7', color: '#ffffff', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
                       REAL-TIME RESPONSE
                     </span>
                   </div>
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
-                  >
-                    Get free API key from Google AI Studio <ExternalLink size={12} />
-                  </a>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                    >
+                      Get Gemini Key <ExternalLink size={12} />
+                    </a>
+                    <span style={{ color: '#334155' }}>•</span>
+                    <a
+                      href="https://platform.openai.com/api-keys"
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '0.75rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                    >
+                      Get OpenAI Key <ExternalLink size={12} />
+                    </a>
+                  </div>
                 </div>
                 <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '0 0 12px 0' }}>
-                  EquipFix AI runs exclusively in real time using authenticated Gemini models (Gemini 2.0 Flash, Flash-Lite, 1.5 Pro, etc.). No dummy or random data is used.
+                  EquipFix AI runs exclusively in real time using authenticated models (Gemini 2.0 Flash, OpenAI GPT-4o, etc.). No dummy or random data is used.
                 </p>
                 <form onSubmit={handleSaveInlineKey} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <input
                     type="password"
                     value={inlineKey}
-                    onChange={(e) => { setInlineKey(e.target.value); setInlineKeyError(null); }}
-                    placeholder="Paste Google Gemini API Key (AIzaSy...)"
+                    onChange={(e) => handleInlineKeyChange(e.target.value)}
+                    placeholder="Paste Google Gemini (AIzaSy...) or OpenAI (sk-...) API Key"
                     style={{
                       flex: '1',
-                      minWidth: '240px',
+                      minWidth: '260px',
                       padding: '9px 12px',
                       backgroundColor: 'rgba(15, 23, 42, 0.8)',
                       border: inlineKeyError ? '1px solid #ef4444' : '1px solid #334155',
@@ -1025,12 +1060,23 @@ Direct multimodal streaming inference is now active. Send any diagnostic prompt 
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
-                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                    <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Latest)</option>
-                    <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Experimental</option>
-                    <option value="gemini-exp-1206">Gemini Experimental 1206</option>
+                    {inlineKey.trim().startsWith('sk-') ? (
+                      <>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Fast & Light)</option>
+                        <option value="gpt-4o">GPT-4o Flagship (Vision & Reasoning)</option>
+                        <option value="o1">o1 (Deep STEM Reasoning)</option>
+                        <option value="o3-mini">o3-mini (Reasoning Mini)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
+                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Latest)</option>
+                        <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Experimental</option>
+                        <option value="gemini-exp-1206">Gemini Experimental 1206</option>
+                      </>
+                    )}
                   </select>
                   <button
                     type="submit"

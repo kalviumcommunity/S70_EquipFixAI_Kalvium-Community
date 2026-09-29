@@ -325,6 +325,53 @@ STANDARD_GEMINI_MODELS = [
     }
 ]
 
+STANDARD_OPENAI_MODELS = [
+    {
+        "id": "gpt-4o-mini",
+        "name": "gpt-4o-mini",
+        "display_name": "GPT-4o Mini",
+        "description": "High-speed, cost-effective reasoning for operational diagnostics.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": True
+    },
+    {
+        "id": "gpt-4o",
+        "name": "gpt-4o",
+        "display_name": "GPT-4o Flagship",
+        "description": "Top-tier multimodal vision & deep engineering reasoning for plant schematics.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
+    },
+    {
+        "id": "o1",
+        "name": "o1",
+        "display_name": "o1 Deep Reasoning",
+        "description": "Complex algorithmic troubleshooting and deep STEM calculations.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
+    },
+    {
+        "id": "o3-mini",
+        "name": "o3-mini",
+        "display_name": "o3-mini",
+        "description": "Fast industrial STEM reasoning and mathematical analysis.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
+    }
+]
+
+
+def resolve_openai_models(model_name: Optional[str]) -> List[str]:
+    """Resolve user-selected OpenAI model identifier to ordered candidates."""
+    raw = (model_name or "gpt-4o-mini").strip()
+    if "gemini" in raw or not raw:
+        raw = "gpt-4o-mini"
+    candidates = [raw]
+    for m in ["gpt-4o-mini", "gpt-4o"]:
+        if m not in candidates:
+            candidates.append(m)
+    return candidates
+
 
 def resolve_gemini_models(model_name: Optional[str]) -> List[str]:
     """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
@@ -468,18 +515,46 @@ def list_available_models(
     api_key: Optional[str] = Query(None),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Retrieve all available Google Gemini models.
-    If an API key is provided, dynamically queries Google Gemini API to return all models
-    enabled on the user's Google account. Otherwise returns the standard Gemini catalog.
+    """Retrieve all available Gemini or OpenAI models.
+    If an API key is provided, dynamically queries the corresponding API to return all models
+    enabled on the user's account. Otherwise returns the standard model catalog.
     """
     key = (
         api_key
         or os.getenv("GEMINI_API_KEY")
         or os.getenv("GOOGLE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
         or ""
     ).strip().replace('"', '').replace("'", "")
 
     if key:
+        # 1. OpenAI Key Detection
+        if key.startswith("sk-"):
+            try:
+                with httpx.Client(timeout=8.0) as client:
+                    res = client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {key}"})
+                    if res.status_code == 200:
+                        raw = res.json().get("data", [])
+                        valid_ids = {"gpt-4o-mini", "gpt-4o", "o1", "o3-mini", "gpt-4-turbo", "gpt-3.5-turbo"}
+                        items = []
+                        for m in raw:
+                            m_id = m.get("id", "")
+                            if m_id in valid_ids or m_id.startswith("gpt-4") or m_id.startswith("o1") or m_id.startswith("o3"):
+                                items.append(AIModelItem(
+                                    id=m_id,
+                                    name=m_id,
+                                    display_name=m_id.upper(),
+                                    description=f"OpenAI {m_id} model for live diagnostics.",
+                                    supported_generation_methods=["generateContent"],
+                                    is_default=(m_id == "gpt-4o-mini")
+                                ))
+                        if items:
+                            return items
+            except Exception:
+                pass
+            return [AIModelItem(**m) for m in STANDARD_OPENAI_MODELS]
+
+        # 2. Google Gemini Models
         try:
             with httpx.Client(timeout=8.0) as client:
                 res = client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
@@ -527,8 +602,21 @@ def verify_api_key(
     if not key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key cannot be empty.")
 
-    provider = (req.provider or "gemini").lower()
-    model = (req.model or "gemini-2.0-flash").replace("models/", "").strip()
+    provider = (req.provider or "").strip().lower()
+    if key.startswith("sk-"):
+        provider = "openai"
+    elif key.startswith("AIza"):
+        provider = "gemini"
+    elif not provider:
+        provider = "gemini"
+
+    model = (req.model or "").replace("models/", "").strip()
+    if provider == "openai":
+        if not model or "gemini" in model:
+            model = "gpt-4o-mini"
+    else:
+        if not model or "gpt" in model or model.startswith("o"):
+            model = "gemini-2.0-flash"
 
     if provider == "gemini":
         try:
@@ -596,7 +684,7 @@ def execute_ai_chat_stream(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Real-time Server-Sent Events (SSE) streaming endpoint for EquipFix AI Copilot.
-    Streams live tokens directly from Google Gemini in real time as they are generated.
+    Streams live tokens directly from Google Gemini or OpenAI in real time as they are generated.
     """
     message = req.get_message()
     if not message:
@@ -614,15 +702,117 @@ def execute_ai_chat_stream(
     if not api_key:
         def key_required_generator():
             payload = json.dumps({
-                "error": "Google Gemini API key required. Real-time diagnostics runs exclusively with an authenticated Gemini API key. Please configure your API key.",
+                "error": "API key required. Real-time diagnostics runs exclusively with an authenticated Gemini or OpenAI API key. Please configure your API key.",
                 "done": True,
                 "needs_key": True
             })
             yield f"data: {payload}\n\n"
         return StreamingResponse(key_required_generator(), media_type="text/event-stream")
 
-    selected_model = (req.model or "gemini-2.0-flash").replace("models/", "").strip()
+    provider = (req.provider or "").strip().lower()
+    if api_key.startswith("sk-"):
+        provider = "openai"
+    elif api_key.startswith("AIza"):
+        provider = "gemini"
+    elif not provider:
+        provider = "gemini"
+
     system_instruction, machine, chunks = get_plant_grounding_context(db, message, req.machine_id, req.work_order_id)
+
+    # 1. LIVE OPENAI SSE STREAMING
+    if provider == "openai":
+        selected_model = (req.model or "gpt-4o-mini").strip()
+        if "gemini" in selected_model or not selected_model:
+            selected_model = "gpt-4o-mini"
+
+        messages = [{"role": "system", "content": system_instruction}]
+        for h in (req.history or []):
+            h_role = "user" if getattr(h, "role", "") == "user" else "assistant"
+            h_content = getattr(h, "content", "")
+            if h_content:
+                messages.append({"role": h_role, "content": h_content})
+
+        if req.image_base64:
+            data_url = req.image_base64 if req.image_base64.startswith("data:") else f"data:{req.image_mime or 'image/jpeg'};base64,{req.image_base64}"
+            user_content = [
+                {"type": "text", "text": message},
+                {"type": "image_url", "image_url": {"url": data_url}}
+            ]
+            messages.append({"role": "user", "content": user_content})
+        else:
+            messages.append({"role": "user", "content": message})
+
+        def openai_event_stream_generator():
+            clean_models = resolve_openai_models(selected_model)
+            streamed_any = False
+            last_error = None
+
+            for cur_model in clean_models:
+                payload = {
+                    "model": cur_model,
+                    "messages": messages,
+                    "stream": True,
+                    "temperature": 0.2
+                }
+
+                try:
+                    with httpx.Client(timeout=30.0) as client:
+                        with client.stream(
+                            "POST",
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                            json=payload
+                        ) as resp:
+                            if resp.status_code == 200:
+                                for line in resp.iter_lines():
+                                    line_str = line.strip()
+                                    if line_str == "data: [DONE]":
+                                        break
+                                    if line_str.startswith("data: "):
+                                        json_str = line_str[6:].strip()
+                                        if json_str:
+                                            try:
+                                                data = json.loads(json_str)
+                                                choices = data.get("choices", [])
+                                                if choices:
+                                                    delta = choices[0].get("delta", {})
+                                                    chunk_text = delta.get("content", "")
+                                                    if chunk_text:
+                                                        streamed_any = True
+                                                        yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                                            except Exception:
+                                                pass
+                                if streamed_any:
+                                    yield f"data: {json.dumps({'text': '', 'done': True, 'model': cur_model, 'provider': f'OpenAI ({cur_model})'})}\n\n"
+                                    return
+                            else:
+                                try:
+                                    resp.read()
+                                    err_data = resp.json()
+                                    last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                                except Exception:
+                                    last_error = f"HTTP {resp.status_code}"
+                except Exception as e:
+                    last_error = str(e)
+
+            err_msg = last_error or "OpenAI streaming inference failed. Please check your API key and model selection."
+            yield f"data: {json.dumps({'error': err_msg, 'done': True})}\n\n"
+
+        return StreamingResponse(
+            openai_event_stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    # 2. LIVE GOOGLE GEMINI SSE STREAMING
+    selected_model = (req.model or "gemini-2.0-flash").replace("models/", "").strip()
+    if "gpt" in selected_model or selected_model.startswith("o"):
+        selected_model = "gemini-2.0-flash"
+
     contents = build_gemini_contents_payload(message, req.history, req.image_base64, req.image_mime)
 
     def event_stream_generator():
@@ -742,8 +932,19 @@ def execute_ai_chat(
         or ""
     ).strip().replace('"', '').replace("'", "")
 
-    provider = (req.provider or "gemini").lower()
-    selected_model = (req.model or "gemini-2.0-flash").replace("models/", "").strip()
+    provider = (req.provider or "").strip().lower()
+    if api_key.startswith("sk-"):
+        provider = "openai"
+    elif api_key.startswith("AIza"):
+        provider = "gemini"
+    elif not provider:
+        provider = "gemini"
+
+    selected_model = (req.model or ("gpt-4o-mini" if provider == "openai" else "gemini-2.0-flash")).replace("models/", "").strip()
+    if provider == "openai" and ("gemini" in selected_model or not selected_model):
+        selected_model = "gpt-4o-mini"
+    elif provider == "gemini" and ("gpt" in selected_model or selected_model.startswith("o") or not selected_model):
+        selected_model = "gemini-2.0-flash"
 
     system_instruction, machine, chunks = get_plant_grounding_context(db, message, req.machine_id, req.work_order_id)
 
