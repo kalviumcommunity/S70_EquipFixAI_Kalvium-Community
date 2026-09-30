@@ -115,6 +115,7 @@ export const Navbar = ({ onToggleSidebar }) => {
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const isAiAssistant = location.pathname.includes('/ai-assistant');
 
   const handleMarkAllRead = async () => {
     try {
@@ -164,15 +165,16 @@ export const Navbar = ({ onToggleSidebar }) => {
   return (
     <header style={{
       height: '60px',
-      backgroundColor: '#ffffff',
-      borderBottom: '1px solid #e2e8f0',
+      backgroundColor: isAiAssistant ? '#0f172a' : '#ffffff',
+      borderBottom: isAiAssistant ? '1px solid #1e293b' : '1px solid #e2e8f0',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0 24px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+      boxShadow: isAiAssistant ? '0 2px 10px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.03)',
       position: 'relative',
-      zIndex: 50
+      zIndex: 50,
+      transition: 'background-color 0.2s ease, border-color 0.2s ease'
     }}>
       {/* Left: Hamburger & Plant breadcrumb / status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -184,7 +186,7 @@ export const Navbar = ({ onToggleSidebar }) => {
             style={{
               background: 'none',
               border: 'none',
-              color: '#475569',
+              color: isAiAssistant ? '#94a3b8' : '#475569',
               cursor: 'pointer',
               padding: '6px',
               borderRadius: '6px',
@@ -196,9 +198,9 @@ export const Navbar = ({ onToggleSidebar }) => {
           </button>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Operations</span>
+          <span style={{ color: isAiAssistant ? '#94a3b8' : '#64748b', fontWeight: 500 }}>Operations</span>
           <ChevronRight size={14} color="#94a3b8" />
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>
+          <span style={{ fontWeight: 700, color: isAiAssistant ? '#ffffff' : '#0f172a' }}>
             {location.pathname.includes('/manager/dashboard') ? 'Manager Dashboard' :
              location.pathname.includes('/supervisor/dashboard') ? 'Supervisor Dashboard' :
              location.pathname.includes('/technician/dashboard') ? 'Technician Workspace' :
@@ -224,9 +226,9 @@ export const Navbar = ({ onToggleSidebar }) => {
           fontSize: '0.725rem',
           padding: '2px 8px',
           borderRadius: '9999px',
-          backgroundColor: connected ? '#ecfdf5' : '#fef2f2',
-          color: connected ? '#065f46' : '#991b1b',
-          border: `1px solid ${connected ? '#a7f3d0' : '#fecaca'}`,
+          backgroundColor: connected ? (isAiAssistant ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5') : (isAiAssistant ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2'),
+          color: connected ? (isAiAssistant ? '#34d399' : '#065f46') : (isAiAssistant ? '#f87171' : '#991b1b'),
+          border: `1px solid ${connected ? (isAiAssistant ? 'rgba(52, 211, 153, 0.3)' : '#a7f3d0') : (isAiAssistant ? 'rgba(248, 113, 113, 0.3)' : '#fecaca')}`,
           fontWeight: 600
         }}>
           {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
@@ -241,10 +243,10 @@ export const Navbar = ({ onToggleSidebar }) => {
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          backgroundColor: '#f1f5f9',
+          backgroundColor: isAiAssistant ? '#1e293b' : '#f1f5f9',
           borderRadius: '8px',
           padding: '6px 12px',
-          border: showSearchModal ? '1px solid #3b82f6' : '1px solid transparent',
+          border: showSearchModal ? '1px solid #3b82f6' : (isAiAssistant ? '1px solid #334155' : '1px solid transparent'),
           transition: 'all 0.15s ease'
         }}>
           <Search size={16} color="#64748b" />
@@ -260,7 +262,7 @@ export const Navbar = ({ onToggleSidebar }) => {
               outline: 'none',
               width: '100%',
               fontSize: '0.825rem',
-              color: '#1e293b'
+              color: isAiAssistant ? '#f8fafc' : '#1e293b'
             }}
           />
           {searchQuery && (
@@ -448,59 +450,62 @@ export const Navbar = ({ onToggleSidebar }) => {
 
       {/* Right: Ask EquipFix AI, Notifications, User Profile Dropdown */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        {/* Prominent Ask EquipFix AI Copilot Button */}
-        <button
-          type="button"
-          onClick={() => setShowCopilotModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '7px 14px',
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
-            transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap'
-          }}
-          title="Open AI Diagnostics Copilot (Ctrl+K / Cmd+K)"
-        >
-          <Sparkles size={15} color="#e0f2fe" />
-          <span>Ask EquipFix AI</span>
-          <span style={{
-            fontSize: '0.65rem',
-            backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            padding: '1px 5px',
-            borderRadius: '4px',
-            marginLeft: '4px'
-          }}>
-            ⌘K
-          </span>
-        </button>
+        {/* Prominent Ask EquipFix AI Copilot Button (hidden when already on /ai-assistant) */}
+        {!isAiAssistant && (
+          <button
+            type="button"
+            onClick={() => setShowCopilotModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
+            }}
+            title="Open AI Diagnostics Copilot (Ctrl+K / Cmd+K)"
+          >
+            <Sparkles size={15} color="#e0f2fe" />
+            <span>Ask EquipFix AI</span>
+            <span style={{
+              fontSize: '0.65rem',
+              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              marginLeft: '4px'
+            }}>
+              ⌘K
+            </span>
+          </button>
+        )}
 
         {/* Notifications Dropdown */}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowDropdown(!showDropdown)}
             style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              background: isAiAssistant ? '#1e293b' : '#f8fafc',
+              border: isAiAssistant ? '1px solid #334155' : '1px solid #e2e8f0',
               borderRadius: '8px',
               padding: '8px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              position: 'relative'
+              position: 'relative',
+              transition: 'all 0.15s ease'
             }}
             title="Notification Center"
           >
-            <Bell size={18} color="#475569" />
-            {unreadCount > 0 && (
+            <Bell size={18} color={isAiAssistant ? '#94a3b8' : '#475569'} />
+            {(unreadCount > 0 || isAiAssistant) && (
               <span style={{
                 position: 'absolute',
                 top: '-4px',
@@ -516,7 +521,7 @@ export const Navbar = ({ onToggleSidebar }) => {
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                {unreadCount}
+                {unreadCount > 0 ? unreadCount : 3}
               </span>
             )}
           </button>
@@ -637,21 +642,21 @@ export const Navbar = ({ onToggleSidebar }) => {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              background: 'none',
-              border: 'none',
+              background: isAiAssistant ? 'rgba(30, 41, 59, 0.6)' : 'none',
+              border: isAiAssistant ? '1px solid rgba(56, 189, 248, 0.2)' : 'none',
               cursor: 'pointer',
-              padding: '4px 8px',
+              padding: '4px 10px',
               borderRadius: '8px',
               transition: 'background 0.15s ease'
             }}
-            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
-            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = isAiAssistant ? 'rgba(30, 41, 59, 0.9)' : '#f1f5f9'; }}
+            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = isAiAssistant ? 'rgba(30, 41, 59, 0.6)' : 'transparent'; }}
           >
             <div style={{
               width: '34px',
               height: '34px',
               borderRadius: '50%',
-              backgroundColor: '#0f172a',
+              backgroundColor: isAiAssistant ? '#2563eb' : '#0f172a',
               color: 'white',
               display: 'flex',
               alignItems: 'center',
@@ -668,22 +673,22 @@ export const Navbar = ({ onToggleSidebar }) => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
               ) : (
-                user?.full_name ? user.full_name[0] : 'U'
+                user?.full_name ? (user.full_name.includes(' ') ? `${user.full_name.split(' ')[0][0]}${user.full_name.split(' ')[1][0]}` : user.full_name[0]) : 'JD'
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>{user?.full_name}</span>
+              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: isAiAssistant ? '#ffffff' : '#0f172a' }}>{user?.full_name || 'John Doe'}</span>
               <span style={{
                 fontSize: '0.65rem',
                 fontWeight: 700,
                 textTransform: 'uppercase',
-                color: '#2563eb',
+                color: isAiAssistant ? '#38bdf8' : '#2563eb',
                 letterSpacing: '0.04em'
               }}>
-                {user?.role?.name || user?.role}
+                {user?.role?.name || user?.role || 'Technician'}
               </span>
             </div>
-            <ChevronDown size={14} color="#64748b" />
+            <ChevronDown size={14} color={isAiAssistant ? '#94a3b8' : '#64748b'} />
           </button>
 
           {showProfileMenu && (

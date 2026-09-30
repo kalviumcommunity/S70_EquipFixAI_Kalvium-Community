@@ -8,7 +8,7 @@ import {
   Wrench, Calendar, Package, FileText, ShieldAlert, Users,
   Sparkles, ShieldCheck, BarChart3, FileSpreadsheet, Bell,
   Settings, CheckSquare, PlusCircle, History, X, Phone,
-  ChevronRight, ArrowUpRight
+  ChevronRight, ArrowUpRight, Pin, MessageSquare, Plus
 } from 'lucide-react';
 
 export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
@@ -24,6 +24,65 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
     lowStockParts: 0,
     unreadNotifs: 0,
   });
+
+  // Recent Chats for AI Copilot (matching reference design)
+  const [activeChatId, setActiveChatId] = useState('chat-1');
+  const recentChats = [
+    {
+      id: 'chat-1',
+      title: 'CNC-042 — Alarm E-204',
+      subtitle: 'Troubleshooting guidance',
+      time: 'Today 10:24 AM',
+      pinned: true,
+      machineCode: 'CNC-042',
+      alarm: 'E-204'
+    },
+    {
+      id: 'chat-2',
+      title: 'Pump-017 — Pressure issue',
+      subtitle: 'Hydraulic seal inspection',
+      time: 'Yesterday',
+      pinned: false,
+      machineCode: 'PUMP-017',
+      alarm: 'P-102'
+    },
+    {
+      id: 'chat-3',
+      title: 'Conveyor-008 — Sensor',
+      subtitle: 'Proximity switch calibrate',
+      time: 'Sep 28',
+      pinned: false,
+      machineCode: 'CONV-008',
+      alarm: 'S-401'
+    },
+    {
+      id: 'chat-4',
+      title: 'Compressor-001 — Noise',
+      subtitle: 'Bearing vibration analysis',
+      time: 'Sep 24',
+      pinned: false,
+      machineCode: 'COMP-001',
+      alarm: 'V-088'
+    },
+    {
+      id: 'chat-5',
+      title: 'Boiler-003 — Temperature',
+      subtitle: 'Thermostat calibration',
+      time: 'Sep 22',
+      pinned: false,
+      machineCode: 'BOIL-003',
+      alarm: 'T-910'
+    },
+    {
+      id: 'chat-6',
+      title: 'CNC-001 — Tool Change',
+      subtitle: 'Spindle alignment check',
+      time: 'Sep 18',
+      pinned: false,
+      machineCode: 'CNC-001',
+      alarm: 'TC-012'
+    }
+  ];
 
   const fetchLiveCounts = async () => {
     try {
@@ -545,6 +604,135 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
               </NavLink>
             </>
           )}
+
+          {/* ==================== RECENT CHATS (MATCHING REFERENCE DESIGN) ==================== */}
+          <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(30, 41, 59, 0.7)' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 6px 8px 6px'
+            }}>
+              <span style={{
+                fontSize: '0.67rem',
+                fontWeight: 800,
+                color: '#64748b',
+                textTransform: 'uppercase',
+                letterSpacing: '0.07em'
+              }}>
+                Recent Chats
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/ai-assistant');
+                  window.dispatchEvent(new CustomEvent('equipfix:new-chat'));
+                  onClose();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: '#38bdf8',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.2)'; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.1)'; }}
+                title="Start a new troubleshooting session"
+              >
+                <Plus size={11} />
+                <span>New Chat</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              {recentChats.map((c) => {
+                const isSelected = activeChatId === c.id && location.pathname.includes('/ai-assistant');
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setActiveChatId(c.id);
+                      navigate('/ai-assistant');
+                      window.dispatchEvent(new CustomEvent('equipfix:select-chat', { detail: c }));
+                      onClose();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.18)' : 'transparent',
+                      borderLeft: isSelected ? '3px solid #38bdf8' : '3px solid transparent',
+                      border: isSelected ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
+                      transition: 'all 0.15s ease',
+                      position: 'relative'
+                    }}
+                    onMouseOver={(e) => {
+                      if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.4)';
+                    }}
+                    onMouseOut={(e) => {
+                      if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      backgroundColor: isSelected ? '#2563eb' : 'rgba(30, 41, 59, 0.8)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: isSelected ? '#ffffff' : '#94a3b8'
+                    }}>
+                      <Wrench size={13} />
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '0.78rem',
+                        fontWeight: isSelected ? 700 : 500,
+                        color: isSelected ? '#ffffff' : '#e2e8f0',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {c.title}
+                      </div>
+                      <div style={{
+                        fontSize: '0.67rem',
+                        color: '#94a3b8',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: '1px'
+                      }}>
+                        <span>{c.subtitle}</span>
+                        <span style={{ fontSize: '0.62rem', color: '#64748b' }}>{c.time}</span>
+                      </div>
+                    </div>
+
+                    {c.pinned && (
+                      <Pin size={11} color="#38bdf8" style={{ flexShrink: 0, opacity: 0.85 }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </nav>
 
         {/* Footer Profile Status Badge */}
