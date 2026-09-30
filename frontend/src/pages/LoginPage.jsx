@@ -441,17 +441,14 @@ export const LoginPage = () => {
   };
 
   return (
-    <div
-      className="login-page-container"
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        color: '#f8fafc',
-        fontFamily: 'var(--font-sans)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      color: '#f8fafc',
+      fontFamily: 'var(--font-sans)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
       {/* Full-page background — Deep Industrial Space Nebula Gradient */}
       <div style={{
         position: 'fixed',
@@ -471,20 +468,17 @@ export const LoginPage = () => {
       {/* --------------------------------------------------------------------
           Left Side: Enterprise Industrial AI Architecture & Real-Time Telemetry
           -------------------------------------------------------------------- */}
-      <div
-        className="login-hero-side"
-        style={{
-          flex: '1.15',
-          borderRight: '1px solid rgba(30, 41, 59, 0.6)',
-          padding: '48px 46px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          position: 'relative',
-          zIndex: 2,
-          overflow: 'hidden'
-        }}
-      >
+      <div style={{
+        flex: '1.15',
+        borderRight: '1px solid rgba(30, 41, 59, 0.6)',
+        padding: '48px 46px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        position: 'relative',
+        zIndex: 2,
+        overflow: 'hidden'
+      }}>
         {/* Decorative glow */}
         <div style={{
           position: 'absolute',
@@ -659,20 +653,17 @@ export const LoginPage = () => {
       {/* --------------------------------------------------------------------
           Right Side: Modern Real-Life Authentication Form
           -------------------------------------------------------------------- */}
-      <div
-        className="login-form-side"
-        style={{
-          flex: '0.95',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '36px 28px',
-          position: 'relative',
-          zIndex: 2,
-          overflowY: 'auto',
-          maxHeight: '100vh'
-        }}
-      >
+      <div style={{
+        flex: '0.95',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '36px 28px',
+        position: 'relative',
+        zIndex: 2,
+        overflowY: 'auto',
+        maxHeight: '100vh'
+      }}>
         <div style={{
           width: '100%',
           maxWidth: '470px',
@@ -685,36 +676,6 @@ export const LoginPage = () => {
           boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
           position: 'relative'
         }}>
-          {/* Mobile-Only Brand Header */}
-          <div className="login-mobile-brand" style={{ display: 'none', marginBottom: '20px', textAlign: 'center' }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '6px'
-            }}>
-              <div style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                boxShadow: '0 0 16px rgba(14, 165, 233, 0.45)'
-              }}>
-                <Wrench size={20} />
-              </div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff' }}>
-                EquipFix<span style={{ color: '#38bdf8' }}>AI</span>
-              </div>
-            </div>
-            <div style={{ fontSize: '0.675rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-              Autonomous Plant Maintenance & Reliability
-            </div>
-          </div>
-
           {/* Header */}
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>

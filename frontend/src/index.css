@@ -763,116 +763,18 @@ html, body {
   .page-body {
     padding: 20px 20px;
   }
-
-  /* Responsive Split Auth Page */
-  .login-hero-side {
-    display: none !important;
-  }
-
-  .login-page-container {
-    flex-direction: column !important;
-    overflow-y: auto !important;
-    min-height: 100vh !important;
-  }
-
-  .login-form-side {
-    flex: 1 1 100% !important;
-    padding: 24px 16px !important;
-    max-height: none !important;
-    min-height: 100vh !important;
-    align-items: center !important;
-  }
-
-  .login-mobile-brand {
-    display: block !important;
-  }
 }
 
 @media (max-width: 768px) {
-  /* Prevent horizontal page blowup on mobile viewports */
-  body, #root, .app-container, .main-content {
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-
   .page-body {
-    padding: 14px 12px;
-    max-width: 100vw;
-    box-sizing: border-box;
+    padding: 16px 14px;
   }
-
   .page-header {
     flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    align-items: flex-start;
   }
-
-  .page-title {
-    font-size: 1.25rem;
-  }
-
-  /* Tables: ensure they scroll horizontally without blowing up page width */
-  .table-container {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 16px;
-    border-radius: var(--radius-md);
-  }
-
-  .data-table {
-    min-width: 580px; /* enables horizontal scroll rather than text squishing */
-  }
-
   .data-table th, .data-table td {
-    padding: 8px 10px;
-    font-size: 0.8rem;
-  }
-
-  /* Card padding on mobile */
-  .card {
-    padding: 14px;
-    margin-bottom: 14px;
-    border-radius: var(--radius-md);
-  }
-
-  /* Inputs, selects, textareas: prevent iOS Safari auto-zoom (<16px triggers zoom) */
-  input, select, textarea, .form-input, .form-select, .form-textarea {
-    font-size: 16px !important;
-  }
-
-  /* Responsive modals */
-  .modal-backdrop, .fixed.inset-0 {
-    padding: 8px !important;
-  }
-
-  .modal-content, .modal-box {
-    max-width: calc(100vw - 16px) !important;
-    width: 100% !important;
-    max-height: 92vh !important;
-    overflow-y: auto !important;
-    padding: 16px 14px !important;
-  }
-
-  /* Action bars and filter rows */
-  .page-actions, .filter-bar, .action-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-  }
-
-  /* Touch target sizes */
-  button, .btn {
-    min-height: 38px;
-  }
-
-  /* Navbar mobile tweaks */
-  .navbar-menu-btn {
-    padding: 6px;
-    min-height: 36px;
-    min-width: 36px;
+    padding: 10px 12px;
   }
 
   /* Mobile Drawer Sidebar */
@@ -896,26 +798,6 @@ html, body {
   .demo-bar {
     overflow-x: auto;
     white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
   }
 }
-
-@media (max-width: 480px) {
-  .page-body {
-    padding: 10px 8px;
-  }
-
-  .card {
-    padding: 12px;
-  }
-
-  .stat-card {
-    padding: 12px;
-  }
-
-  .stat-value {
-    font-size: 1.35rem;
-  }
-}
-
 
