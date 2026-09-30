@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { partsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
-import { Package, Plus, RefreshCw, AlertTriangle, Search, History } from 'lucide-react';
+import { Package, Plus, RefreshCw, AlertTriangle, Search, History, Sparkles } from 'lucide-react';
 
 export const PartsPage = () => {
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { lastEvent, addToast } = useWebSocket();
   const [parts, setParts] = useState([]);
@@ -148,7 +150,7 @@ export const PartsPage = () => {
                 <th>Unit Cost</th>
                 <th>Warehouse Bin</th>
                 <th>Status</th>
-                {hasRole(['SUPERVISOR', 'MANAGER']) && <th>Action</th>}
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -191,16 +193,44 @@ export const PartsPage = () => {
                           </span>
                         )}
                       </td>
-                      {hasRole(['SUPERVISOR', 'MANAGER']) && (
-                        <td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button
-                            onClick={() => setRestockPart(p)}
-                            className="btn btn-secondary btn-sm"
+                            type="button"
+                            onClick={() => {
+                              const prompt = `What are the technical specifications, compatibility requirements, and replacement procedure for spare part ${p.name} (SKU: ${p.part_number}) in location ${p.location}?`;
+                              navigate(`/ai-copilot?prompt=${encodeURIComponent(prompt)}`);
+                            }}
+                            className="btn btn-primary btn-sm"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 9px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                              border: 'none',
+                              color: '#ffffff',
+                              borderRadius: '6px'
+                            }}
+                            title="Ask AI for part specifications and compatibility"
                           >
-                            <RefreshCw size={13} /> Restock
+                            <Sparkles size={12} />
+                            <span>Ask AI</span>
                           </button>
-                        </td>
-                      )}
+
+                          {hasRole(['SUPERVISOR', 'MANAGER']) && (
+                            <button
+                              onClick={() => setRestockPart(p)}
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '4px 9px', fontSize: '0.72rem' }}
+                            >
+                              <RefreshCw size={12} /> Restock
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })

@@ -613,7 +613,7 @@ def verify_api_key(
             model = "gpt-4o-mini"
     else:
         if not model or "gpt" in model or model.startswith("o"):
-            model = "gemini-2.0-flash"
+            model = "gemini-flash-lite-latest"
 
     if provider == "gemini":
         try:
@@ -806,9 +806,9 @@ def execute_ai_chat_stream(
         )
 
     # 2. LIVE GOOGLE GEMINI SSE STREAMING
-    selected_model = (req.model or "gemini-2.0-flash").replace("models/", "").strip()
+    selected_model = (req.model or "gemini-flash-lite-latest").replace("models/", "").strip()
     if "gpt" in selected_model or selected_model.startswith("o"):
-        selected_model = "gemini-2.0-flash"
+        selected_model = "gemini-flash-lite-latest"
 
     grounded_message = (
         f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"

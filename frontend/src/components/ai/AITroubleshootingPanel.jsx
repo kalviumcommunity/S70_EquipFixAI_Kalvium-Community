@@ -4,7 +4,8 @@ import {
   Sparkles, Wrench, AlertTriangle, Shield, Check, Copy, ThumbsUp, ThumbsDown,
   Paperclip, Mic, MicOff, Send, X, ExternalLink, Download, Layers, MoreVertical,
   BookOpen, Trash2, ChevronRight, FileText, ChevronDown, CheckCircle2,
-  Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings
+  Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings,
+  HelpCircle, MessageSquare
 } from 'lucide-react';
 import { aiApi, machinesApi, documentsApi, workOrdersApi, maintenanceApi, incidentsApi } from '../../services/api';
 import {
@@ -629,22 +630,11 @@ export const AITroubleshootingPanel = ({
 
   // Domestic Refs
   const chatScrollRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const activeChatIdRef = useRef(currentChatId);
   activeChatIdRef.current = currentChatId;
-
-  // Checklist steps in analyzing card
-  const CHECKLIST_STEPS = [
-    'Understanding equipment request',
-    'Identifying machinery telemetry & status',
-    'Extracting error codes and vibration symptoms',
-    'Scanning OEM engineering documentation',
-    'Locating Lockout/Tagout (LOTO) safety protocols',
-    'Analyzing failure tree & probability model',
-    'Verifying electrical bus & hydraulic parameters',
-    'Cross-referencing historical maintenance records',
-    'Synthesizing actionable diagnostic recommendation'
-  ];
 
   // Fetch Real Plant Data from Backend on Mount
   useEffect(() => {
@@ -801,13 +791,20 @@ export const AITroubleshootingPanel = ({
   }, [machines, incidents]);
 
   // Scoped smooth scroll inside chat feed only
+  const scrollToBottom = (behavior = 'smooth') => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+      if (chatScrollRef.current) {
+        chatScrollRef.current.scrollTo({
+          top: chatScrollRef.current.scrollHeight,
+          behavior
+        });
+      }
+    });
+  };
+
   useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTo({
-        top: chatScrollRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
+    scrollToBottom('smooth');
   }, [messages, loading]);
 
   // Voice Recognition
@@ -858,26 +855,28 @@ export const AITroubleshootingPanel = ({
     if (!p && !attachedImageBase64) return;
     if (loading) return;
 
+    // Immediately clear input box & attached image
     setQuestion('');
+    if (textareaRef.current) {
+      textareaRef.current.value = '';
+      textareaRef.current.style.height = 'auto';
+    }
+    const currentImg = attachedImageBase64;
+    setAttachedImage(null);
+    setAttachedImageBase64(null);
+
     const userMsg = {
       id: `usr-${Date.now()}`,
       role: 'user',
       content: p,
       author: 'JD',
-      image: attachedImageBase64 || null,
+      image: currentImg || null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setAttachedImage(null);
-    setAttachedImageBase64(null);
     setLoading(true);
-    setAnalyzingStep(1);
-
-    // Fast analyzing step progression while connecting
-    const stepInterval = setInterval(() => {
-      setAnalyzingStep((prev) => (prev < 8 ? prev + 1 : prev));
-    }, 200);
+    scrollToBottom('smooth');
 
     const asstId = `asst-${Date.now()}`;
     let hasReceivedFirstToken = false;
@@ -902,7 +901,6 @@ export const AITroubleshootingPanel = ({
           department: activeMachineData.department
         },
         onChunk: (chunk, totalText) => {
-          clearInterval(stepInterval);
           if (!hasReceivedFirstToken) {
             hasReceivedFirstToken = true;
             setLoading(false);
@@ -920,11 +918,12 @@ export const AITroubleshootingPanel = ({
               prev.map((m) => (m.id === asstId ? { ...m, content: totalText } : m))
             );
           }
+          scrollToBottom('smooth');
         }
       });
 
-      clearInterval(stepInterval);
       setLoading(false);
+      scrollToBottom('smooth');
 
       const finalAnswer = res?.text || res?.answer || res?.content || 'Diagnostic analysis complete.';
       setMessages((prev) => {
@@ -942,6 +941,7 @@ export const AITroubleshootingPanel = ({
         }
         return prev.map((m) => (m.id === asstId ? { ...m, content: finalAnswer } : m));
       });
+      scrollToBottom('smooth');
 
       // Update recent chats title and subtitle in sidebar
       const shortTitle = `${activeMachineCode} — ${p.length > 26 ? p.slice(0, 26) + '...' : p}`;
@@ -956,7 +956,6 @@ export const AITroubleshootingPanel = ({
         })
       );
     } catch (err) {
-      clearInterval(stepInterval);
       setLoading(false);
       setMessages((prev) => [
         ...prev,
@@ -1643,169 +1642,141 @@ export const AITroubleshootingPanel = ({
                     <span>{copiedId === m.id ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
+
+                {/* Ask a Doubt / Clarification Bar */}
+                <div style={{
+                  marginTop: '10px',
+                  padding: '10px 14px',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <HelpCircle size={13} color="#2563eb" /> Didn't understand something? Ask a doubt:
+                    </span>
+                    <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>Direct Gemini Response</span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSendPrompt('Can you explain the previous diagnostic response in simpler, beginner-friendly terms with clearer practical guidance?')}
+                      disabled={loading}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        color: '#1e293b',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                    >
+                      <span>💡 Explain Simpler</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSendPrompt('Could you clarify the exact step-by-step procedure and specify which tools and torque limits to use?')}
+                      disabled={loading}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        color: '#1e293b',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                    >
+                      <span>🔧 Clarify Steps & Tools</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuestion('Regarding the previous answer, I have a doubt: ');
+                        textareaRef.current?.focus();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: '#2563eb',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dbeafe'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
+                    >
+                      <MessageSquare size={11} />
+                      <span>Type Custom Doubt</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
 
-          {/* Assistant Live Analyzing / Checklist Card */}
+          {/* Assistant Live Analyzing: Clean, Modern, Simple */}
           {loading && (
             <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 18px',
               backgroundColor: '#ffffff',
               border: '1px solid #e2e8f0',
-              borderRadius: '14px',
-              padding: '18px 20px',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
+              borderRadius: '12px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+              maxWidth: 'fit-content'
             }}>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={18} color="#2563eb" />
-                  <span style={{ fontSize: '0.885rem', fontWeight: 700, color: '#0f172a' }}>
-                    EquipFixAI Copilot <span style={{ fontWeight: 500, color: '#64748b' }}>is analyzing your request...</span>
-                  </span>
-                </div>
-
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: '20px',
-                  padding: '2px 10px',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  color: '#2563eb'
-                }}>
-                  <RotateCw size={11} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
-                  <span>Analyzing...</span>
-                </div>
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#2563eb'
+              }}>
+                <Sparkles size={15} style={{ animation: 'spin 2s linear infinite' }} />
               </div>
-
-              {/* 2 Columns: Checklist & Graphic */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', alignItems: 'center' }}>
-                {/* Left Column: 9 Checklist Steps */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {CHECKLIST_STEPS.map((step, idx) => {
-                    const isDone = idx < analyzingStep;
-                    const isCurrent = idx === analyzingStep;
-
-                    return (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem' }}>
-                        {isDone ? (
-                          <div style={{
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '50%',
-                            backgroundColor: '#22c55e',
-                            color: '#ffffff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.65rem',
-                            fontWeight: 900
-                          }}>
-                            ✓
-                          </div>
-                        ) : isCurrent ? (
-                          <div style={{
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '50%',
-                            border: '2px solid #2563eb',
-                            borderTopColor: 'transparent',
-                            animation: 'spin 1s linear infinite'
-                          }} />
-                        ) : (
-                          <div style={{
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '50%',
-                            border: '1.5px solid #cbd5e1',
-                            backgroundColor: '#f8fafc'
-                          }} />
-                        )}
-
-                        <span style={{
-                          color: isDone ? '#0f172a' : isCurrent ? '#2563eb' : '#94a3b8',
-                          fontWeight: isDone ? 600 : isCurrent ? 700 : 400
-                        }}>
-                          {step}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Right Column: Search Illustration Graphic */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '100%',
-                  padding: '16px'
-                }}>
-                  <div style={{
-                    width: '130px',
-                    height: '150px',
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <svg width="110" height="135" viewBox="0 0 110 135" fill="none">
-                      <rect x="22" y="4" width="66" height="16" rx="4" fill="#94a3b8" />
-                      <rect x="10" y="14" width="90" height="116" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="2" />
-                      <line x1="24" y1="36" x2="86" y2="36" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
-                      <line x1="24" y1="48" x2="76" y2="48" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
-                      <line x1="24" y1="60" x2="86" y2="60" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
-                      <line x1="24" y1="72" x2="68" y2="72" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
-                      <line x1="24" y1="84" x2="82" y2="84" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
-                      <circle cx="58" cy="74" r="28" fill="#eff6ff" fillOpacity="0.8" stroke="#3b82f6" strokeWidth="3" />
-                      <line x1="78" y1="94" x2="98" y2="114" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" />
-                      <circle cx="58" cy="74" r="14" fill="#ffffff" fillOpacity="0.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom: Searching in Filters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Searching in:</span>
-                {[
-                  { label: 'Equipment Manuals', icon: BookOpen },
-                  { label: 'Maintenance Procedures', icon: Wrench },
-                  { label: 'Safety Documents', icon: Shield },
-                  { label: 'Maintenance History', icon: Clock }
-                ].map((item, idx) => {
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        padding: '4px 10px',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        color: '#334155'
-                      }}
-                    >
-                      <Icon size={12} color="#64748b" />
-                      <span>{item.label}</span>
-                    </div>
-                  );
-                })}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
+                  EquipFixAI is thinking...
+                </span>
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} style={{ height: '1px', flexShrink: 0 }} />
         </div>
 
         {/* 3. Action Pills Bar + Floating Prompt Input */}
@@ -1863,6 +1834,7 @@ export const AITroubleshootingPanel = ({
             gap: '8px'
           }}>
             <textarea
+              ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {

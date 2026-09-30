@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { machinesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/ToastContainer';
@@ -14,6 +14,7 @@ import { PlantMachineHealthGrid } from '../components/machines/PlantMachineHealt
 import { AICopilotModal } from '../components/ai/AICopilotModal';
 
 export const MachinesPage = () => {
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { addToast } = useToast();
   const { lastEvent } = useWebSocket();
@@ -81,8 +82,7 @@ export const MachinesPage = () => {
   };
 
   const handleLaunchAI = (machine) => {
-    setCopilotMachine(machine);
-    setCopilotOpen(true);
+    navigate(`/ai-copilot?machine=${encodeURIComponent(machine.machine_code)}&prompt=${encodeURIComponent(`Provide comprehensive diagnostic health check and immediate troubleshooting assessment for machine ${machine.machine_code} (${machine.name}) located in ${machine.location || 'Plant Floor'}.`)}`);
   };
 
   const handleCreateMachine = async (e) => {
@@ -689,7 +689,7 @@ export const MachinesPage = () => {
                       boxShadow: '0 2px 8px rgba(2, 132, 199, 0.35)'
                     }}
                   >
-                    <Sparkles size={13} /> AI Copilot
+                    <Sparkles size={13} /> Ask AI
                   </button>
                 </div>
               </div>
