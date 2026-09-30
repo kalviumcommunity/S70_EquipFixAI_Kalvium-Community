@@ -21,16 +21,22 @@ export const AI_PROVIDERS = {
 
 export const GEMINI_MODELS = [
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    badge: 'FLAGSHIP • FAST',
-    desc: 'Google flagship real-time multimodal model with lowest latency and state-of-the-art diagnostics.'
+    id: 'gemini-flash-lite-latest',
+    name: 'Gemini Flash-Lite (Latest High-Speed)',
+    badge: 'LIGHTNING FAST • ACTIVE',
+    desc: 'Google ultra-fast production model with sub-second latency for real-time equipment troubleshooting.'
   },
   {
-    id: 'gemini-flash-lite-latest',
-    name: 'Gemini Flash-Lite (Latest)',
-    badge: 'RECOMMENDED • UNIVERSAL',
-    desc: 'Universal high-speed production model active on all Google AI Studio & Vertex tiers.'
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    badge: 'INTELLIGENT • FAST',
+    desc: 'Next-generation Gemini 3.5 speed and multimodal intelligence for deep industrial failure analysis.'
+  },
+  {
+    id: 'gemini-flash-latest',
+    name: 'Gemini Flash (Latest)',
+    badge: 'FLAGSHIP SPEED',
+    desc: 'Balanced high-speed inference for comprehensive machinery manuals and wiring schematics.'
   },
   {
     id: 'gemini-3.1-flash-lite',
@@ -39,71 +45,42 @@ export const GEMINI_MODELS = [
     desc: 'Next-generation Gemini 3 speed benchmark for rapid plant diagnostics and vision.'
   },
   {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash-Lite',
-    badge: 'ULTRA FAST',
-    desc: 'High-speed, cost-effective inference for rapid plant checks and live metrics.'
-  },
-  {
-    id: 'gemini-2.0-pro-exp-02-05',
-    name: 'Gemini 2.0 Pro Experimental',
-    badge: 'DEEP REASONING PRO',
-    desc: 'Google flagship reasoning model for intricate schematics & MTTR failure tree calculations.'
-  },
-  {
     id: 'custom',
     name: 'Custom Gemini Model ID',
     badge: 'CUSTOM MODEL',
-    desc: 'Specify any Gemini model identifier (e.g. gemini-flash-lite-latest, gemini-3.8-flash, or Vertex model)'
+    desc: 'Specify any Gemini model identifier (e.g. gemini-flash-lite-latest, gemini-3.5-flash, or Vertex model)'
   }
 ];
 
 export const OPENAI_MODELS = [
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', badge: 'FAST & LIGHT', desc: 'Efficient standard diagnostic queries' },
-  { id: 'gpt-4o', name: 'GPT-4o', badge: 'OMNI FLAGSHIP', desc: 'Top tier multimodal vision & reasoning' },
+  { id: 'gpt-4o', name: 'gpt-4o', badge: 'OMNI FLAGSHIP', desc: 'Top tier multimodal vision & reasoning' },
   { id: 'o1', name: 'o1', badge: 'DEEP THINKING', desc: 'Complex algorithmic troubleshooting' },
   { id: 'o3-mini', name: 'o3-mini', badge: 'REASONING MINI', desc: 'Fast STEM & industrial reasoning' },
   { id: 'custom', name: 'Custom OpenAI Model ID', badge: 'CUSTOM', desc: 'Specify custom model name or fine-tuned checkpoint' }
 ];
 
 export const DEFAULT_MODELS = {
-  gemini: 'gemini-2.0-flash',
+  gemini: 'gemini-flash-lite-latest',
   openai: 'gpt-4o-mini',
 };
 
 /**
  * Resolve user-selected model identifier to an ordered list of verified working models.
- * Ensures free tier Google Gemini keys work 100% reliably.
- * Permanently eliminates nonexistent or deprecated aliases like gemini-1.5-flash, gemini-2.5-flash, etc.
+ * Ensures free tier Google Gemini keys work 100% reliably and reply instantly.
  */
 export const resolveGeminiCandidateModels = (modelName) => {
-  let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
-  if (
-    raw.startsWith('gemini-1.5') ||
-    raw.includes('flash-8b') ||
-    raw.includes('2.5') ||
-    raw === 'gemini-pro' ||
-    raw === '1.5-flash' ||
-    raw === '1.5-pro'
-  ) {
-    raw = 'gemini-2.0-flash';
-  } else if (raw === '2.0-flash' || raw === '2.0' || raw === 'flash') {
-    raw = 'gemini-2.0-flash';
-  } else if (raw === '2.0-flash-lite' || raw === 'flash-lite') {
-    raw = 'gemini-2.0-flash-lite';
-  } else if (raw === '2.0-pro' || raw === '2.0-pro-exp') {
-    raw = 'gemini-2.0-pro-exp-02-05';
+  let raw = (modelName || 'gemini-flash-lite-latest').replace(/^models\//, '').trim();
+  const list = [];
+  if (raw && !['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].includes(raw)) {
+    list.push(raw);
   }
-
-  const list = [raw];
   for (const fallback of [
-    'gemini-2.0-flash',
     'gemini-flash-lite-latest',
+    'gemini-3.5-flash',
+    'gemini-flash-latest',
     'gemini-3.1-flash-lite',
-    'gemini-3.5-flash-lite',
-    'gemini-2.0-flash-lite',
-    'gemini-3-flash-preview',
-    'gemini-2.0-pro-exp-02-05'
+    'gemini-2.0-flash-lite'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
   }
@@ -112,8 +89,16 @@ export const resolveGeminiCandidateModels = (modelName) => {
 
 export const getAIConfig = () => {
   let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
-  if (!apiKey && typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
-    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '';
+  
+  // Clean up any stale or placeholder keys from previous development
+  if (!apiKey || apiKey.includes('AQ.Ab8RN6JQDh8K')) {
+    apiKey = envKey;
+    if (apiKey) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
+      } catch (_) {}
+    }
   }
   apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
 
@@ -134,23 +119,16 @@ export const getAIConfig = () => {
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
   } else {
-    if (!model || model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) {
-      model = 'gemini-2.0-flash';
-      localStorage.setItem(STORAGE_KEYS.MODEL, model);
-    }
-    // Sanitize any stale or deprecated model names to prevent 404s/deprecation errors
     if (
+      !model ||
+      model.startsWith('gpt') ||
+      model.startsWith('o1') ||
+      model.startsWith('o3') ||
+      model === 'gemini-2.0-flash' ||
       model.startsWith('gemini-1.5') ||
-      model.includes('flash-8b') ||
-      model.includes('flash-latest') ||
-      model.includes('pro-latest') ||
-      model.includes('2.5') ||
-      model === 'gemini-pro' ||
-      model === 'gemini-1.5-flash' ||
-      model === 'gemini-1.5-pro' ||
-      model === 'gemini-2.5-flash'
+      model.startsWith('gemini-2.5')
     ) {
-      model = 'gemini-2.0-flash';
+      model = 'gemini-flash-lite-latest';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
     }
   }

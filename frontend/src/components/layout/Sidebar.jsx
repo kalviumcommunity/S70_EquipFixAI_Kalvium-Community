@@ -8,7 +8,7 @@ import {
   Wrench, Calendar, Package, FileText, ShieldAlert, Users,
   Sparkles, ShieldCheck, BarChart3, FileSpreadsheet, Bell,
   Settings, CheckSquare, PlusCircle, History, X, Phone,
-  ChevronRight, ArrowUpRight, Pin, MessageSquare, Plus
+  ChevronRight, ArrowUpRight, Pin, MessageSquare, Plus, Trash2
 } from 'lucide-react';
 
 export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
@@ -25,64 +25,160 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
     unreadNotifs: 0,
   });
 
-  // Recent Chats for AI Copilot (matching reference design)
-  const [activeChatId, setActiveChatId] = useState('chat-1');
-  const recentChats = [
+  // Recent Chats for AI Copilot (Persisted in localStorage with real plant machines)
+  const INITIAL_CHATS = [
     {
-      id: 'chat-1',
-      title: 'CNC-042 — Alarm E-204',
-      subtitle: 'Troubleshooting guidance',
+      id: 'chat-cnc04',
+      title: 'CNC-04 — Spindle Vibration',
+      subtitle: 'Excessive 7mm/s vibration check',
       time: 'Today 10:24 AM',
       pinned: true,
-      machineCode: 'CNC-042',
-      alarm: 'E-204'
+      machineCode: 'CNC-04'
     },
     {
-      id: 'chat-2',
-      title: 'Pump-017 — Pressure issue',
-      subtitle: 'Hydraulic seal inspection',
+      id: 'chat-cnc03',
+      title: 'CNC-03 — Coolant Pressure Spikes',
+      subtitle: 'Flow drops below 15 LPM threshold',
       time: 'Yesterday',
       pinned: false,
-      machineCode: 'PUMP-017',
-      alarm: 'P-102'
+      machineCode: 'CNC-03'
     },
     {
-      id: 'chat-3',
-      title: 'Conveyor-008 — Sensor',
-      subtitle: 'Proximity switch calibrate',
+      id: 'chat-press01',
+      title: 'PRESS-01 — Hydraulic Press Diagnostic',
+      subtitle: 'Stamping cylinder pressure relief',
       time: 'Sep 28',
       pinned: false,
-      machineCode: 'CONV-008',
-      alarm: 'S-401'
+      machineCode: 'PRESS-01'
     },
     {
-      id: 'chat-4',
-      title: 'Compressor-001 — Noise',
-      subtitle: 'Bearing vibration analysis',
+      id: 'chat-mill01',
+      title: 'MILL-01 — Drive Belt Slippage',
+      subtitle: 'Quill feed tension check',
       time: 'Sep 24',
       pinned: false,
-      machineCode: 'COMP-001',
-      alarm: 'V-088'
+      machineCode: 'MILL-01'
     },
     {
-      id: 'chat-5',
-      title: 'Boiler-003 — Temperature',
-      subtitle: 'Thermostat calibration',
+      id: 'chat-robot01',
+      title: 'ROBOT-01 — Welder Arm Calibration',
+      subtitle: 'Articulated arm joint tolerance',
       time: 'Sep 22',
       pinned: false,
-      machineCode: 'BOIL-003',
-      alarm: 'T-910'
-    },
-    {
-      id: 'chat-6',
-      title: 'CNC-001 — Tool Change',
-      subtitle: 'Spindle alignment check',
-      time: 'Sep 18',
-      pinned: false,
-      machineCode: 'CNC-001',
-      alarm: 'TC-012'
+      machineCode: 'ROBOT-01'
     }
   ];
+
+  const [recentChats, setRecentChats] = useState(() => {
+    try {
+      const saved = localStorage.getItem('equipfix_recent_chats');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return INITIAL_CHATS;
+  });
+
+  const [activeChatId, setActiveChatId] = useState(() => {
+    return localStorage.getItem('equipfix_active_chat_id') || 'chat-cnc04';
+  });
+
+  // Sync recent chats to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('equipfix_recent_chats', JSON.stringify(recentChats));
+    } catch (_) {}
+  }, [recentChats]);
+
+  // Listen to external chat events
+  useEffect(() => {
+    const handleExternalSelect = (e) => {
+      if (e.detail?.id) {
+        setActiveChatId(e.detail.id);
+        localStorage.setItem('equipfix_active_chat_id', e.detail.id);
+      }
+    };
+
+    const handleExternalNew = (e) => {
+      if (e.detail?.id) {
+        setActiveChatId(e.detail.id);
+        localStorage.setItem('equipfix_active_chat_id', e.detail.id);
+        setRecentChats((prev) => {
+          if (prev.some((c) => c.id === e.detail.id)) return prev;
+          return [e.detail, ...prev];
+        });
+      }
+    };
+
+    const handleExternalUpdate = (e) => {
+      if (e.detail?.id) {
+        setRecentChats((prev) =>
+          prev.map((c) => (c.id === e.detail.id ? { ...c, ...e.detail } : c))
+        );
+      }
+    };
+
+    window.addEventListener('equipfix:select-chat', handleExternalSelect);
+    window.addEventListener('equipfix:new-chat', handleExternalNew);
+    window.addEventListener('equipfix:update-chats', handleExternalUpdate);
+    return () => {
+      window.removeEventListener('equipfix:select-chat', handleExternalSelect);
+      window.removeEventListener('equipfix:new-chat', handleExternalNew);
+      window.removeEventListener('equipfix:update-chats', handleExternalUpdate);
+    };
+  }, []);
+
+  const handleCreateNewChat = () => {
+    const newId = `chat-${Date.now()}`;
+    const newChat = {
+      id: newId,
+      title: 'New AI Troubleshooting',
+      subtitle: 'Ready for equipment query',
+      time: 'Just now',
+      pinned: false,
+      machineCode: 'CNC-04'
+    };
+    const updated = [newChat, ...recentChats];
+    setRecentChats(updated);
+    setActiveChatId(newId);
+    localStorage.setItem('equipfix_recent_chats', JSON.stringify(updated));
+    localStorage.setItem('equipfix_active_chat_id', newId);
+    navigate('/ai-assistant');
+    window.dispatchEvent(new CustomEvent('equipfix:new-chat', { detail: newChat }));
+    onClose();
+  };
+
+  const handleTogglePin = (id, e) => {
+    e.stopPropagation();
+    setRecentChats((prev) => {
+      const updated = prev.map((c) =>
+        c.id === id ? { ...c, pinned: !c.pinned } : c
+      );
+      localStorage.setItem('equipfix_recent_chats', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteChat = (id, e) => {
+    e.stopPropagation();
+    setRecentChats((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      localStorage.setItem('equipfix_recent_chats', JSON.stringify(updated));
+      localStorage.removeItem(`equipfix_chat_messages_${id}`);
+      if (activeChatId === id) {
+        if (updated.length > 0) {
+          const nextChat = updated[0];
+          setActiveChatId(nextChat.id);
+          localStorage.setItem('equipfix_active_chat_id', nextChat.id);
+          window.dispatchEvent(new CustomEvent('equipfix:select-chat', { detail: nextChat }));
+        } else {
+          setTimeout(() => handleCreateNewChat(), 50);
+        }
+      }
+      return updated;
+    });
+  };
 
   const fetchLiveCounts = async () => {
     try {
@@ -624,11 +720,7 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  navigate('/ai-assistant');
-                  window.dispatchEvent(new CustomEvent('equipfix:new-chat'));
-                  onClose();
-                }}
+                onClick={handleCreateNewChat}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -653,84 +745,133 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              {recentChats.map((c) => {
-                const isSelected = activeChatId === c.id && location.pathname.includes('/ai-assistant');
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => {
-                      setActiveChatId(c.id);
-                      navigate('/ai-assistant');
-                      window.dispatchEvent(new CustomEvent('equipfix:select-chat', { detail: c }));
-                      onClose();
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.18)' : 'transparent',
-                      borderLeft: isSelected ? '3px solid #38bdf8' : '3px solid transparent',
-                      border: isSelected ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
-                      transition: 'all 0.15s ease',
-                      position: 'relative'
-                    }}
-                    onMouseOver={(e) => {
-                      if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.4)';
-                    }}
-                    onMouseOut={(e) => {
-                      if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      backgroundColor: isSelected ? '#2563eb' : 'rgba(30, 41, 59, 0.8)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      color: isSelected ? '#ffffff' : '#94a3b8'
-                    }}>
-                      <Wrench size={13} />
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: '0.78rem',
-                        fontWeight: isSelected ? 700 : 500,
-                        color: isSelected ? '#ffffff' : '#e2e8f0',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {c.title}
-                      </div>
-                      <div style={{
-                        fontSize: '0.67rem',
-                        color: '#94a3b8',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+              {[...recentChats]
+                .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+                .map((c) => {
+                  const isSelected = activeChatId === c.id && location.pathname.includes('/ai-assistant');
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => {
+                        setActiveChatId(c.id);
+                        localStorage.setItem('equipfix_active_chat_id', c.id);
+                        navigate('/ai-assistant');
+                        window.dispatchEvent(new CustomEvent('equipfix:select-chat', { detail: c }));
+                        onClose();
+                      }}
+                      style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginTop: '1px'
+                        gap: '8px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.18)' : 'transparent',
+                        borderLeft: isSelected ? '3px solid #38bdf8' : '3px solid transparent',
+                        border: isSelected ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
+                        transition: 'all 0.15s ease',
+                        position: 'relative'
+                      }}
+                      onMouseOver={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.4)';
+                      }}
+                      onMouseOut={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        backgroundColor: isSelected ? '#2563eb' : 'rgba(30, 41, 59, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: isSelected ? '#ffffff' : '#94a3b8'
                       }}>
-                        <span>{c.subtitle}</span>
-                        <span style={{ fontSize: '0.62rem', color: '#64748b' }}>{c.time}</span>
+                        <Wrench size={13} />
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '0.78rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? '#ffffff' : '#e2e8f0',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {c.title}
+                        </div>
+                        <div style={{
+                          fontSize: '0.67rem',
+                          color: '#94a3b8',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginTop: '1px'
+                        }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '6px' }}>
+                            {c.subtitle}
+                          </span>
+                          <span style={{ fontSize: '0.62rem', color: '#64748b', flexShrink: 0 }}>{c.time}</span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons: Pin & Delete */}
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => handleTogglePin(c.id, e)}
+                          title={c.pinned ? "Unpin chat" : "Pin chat to top"}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '3px',
+                            color: c.pinned ? '#38bdf8' : '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: c.pinned ? 1 : 0.6,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.color = '#38bdf8'; e.currentTarget.style.opacity = '1'; }}
+                          onMouseOut={(e) => { if (!c.pinned) { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.opacity = '0.6'; } }}
+                        >
+                          <Pin size={12} style={{ transform: c.pinned ? 'rotate(-25deg)' : 'none' }} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteChat(c.id, e)}
+                          title="Delete chat thread"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '3px',
+                            color: '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: 0.6,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.opacity = '1'; }}
+                          onMouseOut={(e) => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.opacity = '0.6'; }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     </div>
-
-                    {c.pinned && (
-                      <Pin size={11} color="#38bdf8" style={{ flexShrink: 0, opacity: 0.85 }} />
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         </nav>
