@@ -17,80 +17,84 @@ import AIThinkingEffect from './AIThinkingEffect';
 /* ─── Injected once — styles for all AI response HTML elements ─── */
 const AI_RESPONSE_STYLES = `
   /* ── Root container ── */
-  .ai-response-root { font-family: inherit; color: #e2e8f0; font-size: 0.875rem; line-height: 1.7; word-break: break-word; }
+  .ai-response-root { font-family: inherit; color: #ffffff; font-size: 0.875rem; line-height: 1.7; word-break: break-word; }
 
   /* ── Section headers ── */
   .ai-section {
     font-size: 0.96rem; font-weight: 800; color: #38bdf8;
-    margin: 18px 0 10px 0; padding: 8px 14px 8px 16px;
-    border-left: 4px solid #0284c7;
-    background: linear-gradient(90deg, rgba(14,165,233,0.12), rgba(14,165,233,0.03));
-    border-radius: 0 10px 10px 0;
+    margin: 16px 0 10px 0; padding: 8px 14px 8px 16px;
+    border-left: 4px solid #38bdf8;
+    background: #000000;
+    border-top: 1px solid #1e293b;
+    border-right: 1px solid #1e293b;
+    border-bottom: 1px solid #1e293b;
+    border-radius: 0 8px 8px 0;
     display: flex; align-items: center; gap: 8px;
     letter-spacing: -0.01em;
-    box-shadow: inset 0 0 0 1px rgba(14,165,233,0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   }
-  .ai-section:first-child { margin-top: 4px; }
+  .ai-section:first-child { margin-top: 2px; }
 
   /* ── Key-Value rows ── */
   .ai-kv {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 7px 12px; margin: 4px 0;
-    background: rgba(255,255,255,0.03);
-    border-radius: 7px;
-    border: 1px solid rgba(30,58,138,0.45);
+    background: #050505;
+    border-radius: 6px;
+    border: 1px solid #1e293b;
     flex-wrap: wrap;
     transition: background 0.15s;
   }
-  .ai-kv:hover { background: rgba(255,255,255,0.055); }
+  .ai-kv:hover { background: #0a0a0a; border-color: #334155; }
   .ai-key {
-    font-weight: 700; color: #64748b; font-size: 0.775rem;
+    font-weight: 700; color: #94a3b8; font-size: 0.775rem;
     min-width: 130px; flex-shrink: 0;
     text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px;
   }
-  .ai-val { color: #f1f5f9; font-size: 0.875rem; flex: 1; line-height: 1.55; }
+  .ai-val { color: #ffffff; font-size: 0.875rem; flex: 1; line-height: 1.55; font-weight: 500; }
 
   /* ── Numbered step list ── */
   .ai-steps { margin: 10px 0; padding: 0; list-style: none; counter-reset: step-counter; }
   .ai-steps li {
     counter-increment: step-counter;
     display: flex; align-items: flex-start; gap: 12px;
-    margin: 8px 0; font-size: 0.875rem; color: #e2e8f0; line-height: 1.6;
-    padding: 8px 10px; background: rgba(255,255,255,0.02);
-    border-radius: 8px; border: 1px solid rgba(30,58,138,0.3);
+    margin: 8px 0; font-size: 0.875rem; color: #f8fafc; line-height: 1.6;
+    padding: 8px 12px; background: #050505;
+    border-radius: 8px; border: 1px solid #1e293b;
   }
   .ai-steps li::before {
     content: counter(step-counter);
-    background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
-    color: #93c5fd; font-weight: 900; font-size: 0.72rem;
+    background: #000000;
+    border: 1px solid #0284c7;
+    color: #38bdf8; font-weight: 900; font-size: 0.72rem;
     min-width: 24px; height: 24px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0; margin-top: 1px;
-    box-shadow: 0 0 8px rgba(37,99,235,0.4);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
   }
 
   /* ── Bullet fact list ── */
   .ai-facts { margin: 10px 0; padding: 0; list-style: none; }
   .ai-facts li {
     display: flex; align-items: flex-start; gap: 10px;
-    margin: 6px 0; font-size: 0.875rem; color: #e2e8f0; line-height: 1.6;
+    margin: 6px 0; font-size: 0.875rem; color: #f8fafc; line-height: 1.6;
     padding: 4px 0;
-    border-bottom: 1px solid rgba(30,58,138,0.18);
+    border-bottom: 1px solid #18181b;
   }
   .ai-facts li:last-child { border-bottom: none; }
   .ai-facts li::before {
-    content: "▸"; color: #0ea5e9; font-weight: 900; font-size: 0.85rem;
+    content: "▸"; color: #38bdf8; font-weight: 900; font-size: 0.85rem;
     flex-shrink: 0; margin-top: 1px;
   }
 
   /* ── Warning / Safety block ── */
   .ai-warn {
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.4);
-    border-left: 5px solid #f59e0b;
+    background: #0a0600;
+    border: 1px solid #78350f;
+    border-left: 4px solid #f59e0b;
     border-radius: 8px; padding: 12px 16px; margin: 12px 0;
-    color: #fde68a; font-size: 0.865rem; font-weight: 600; line-height: 1.6;
-    box-shadow: 0 2px 12px rgba(245,158,11,0.08);
+    color: #fef08a; font-size: 0.865rem; font-weight: 600; line-height: 1.6;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
   }
 
   /* ── Severity badges ── */
@@ -100,14 +104,14 @@ const AI_RESPONSE_STYLES = `
     display: inline-flex; align-items: center; gap: 4px;
     margin: 0 4px 2px 0; vertical-align: middle;
   }
-  .ai-severity.high  { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-  .ai-severity.medium{ background: rgba(245,158,11,0.14); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
-  .ai-severity.low   { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
+  .ai-severity.high  { background: #120303; color: #fca5a5; border: 1px solid #b91c1c; }
+  .ai-severity.medium{ background: #140b02; color: #fde68a; border: 1px solid #b45309; }
+  .ai-severity.low   { background: #021206; color: #86efac; border: 1px solid #15803d; }
 
-  /* ── Info badges (CRITICAL, OEM SPEC, LOTO REQUIRED, etc.) ── */
+  /* ── Info badges ── */
   .ai-badge {
-    background: rgba(14,165,233,0.14); color: #7dd3fc;
-    border: 1px solid rgba(14,165,233,0.35); border-radius: 6px;
+    background: #000000; color: #38bdf8;
+    border: 1px solid #0284c7; border-radius: 6px;
     font-size: 0.7rem; font-weight: 900; padding: 2px 9px;
     letter-spacing: 0.06em; text-transform: uppercase;
     display: inline-flex; align-items: center; margin: 0 3px 2px 0; vertical-align: middle;
@@ -115,38 +119,38 @@ const AI_RESPONSE_STYLES = `
 
   /* ── Inline code / values ── */
   .ai-code, code {
-    background: #040d1f; color: #67e8f9;
+    background: #050505; color: #38bdf8;
     padding: 2px 8px; border-radius: 5px;
     font-family: 'Courier New', monospace; font-size: 0.84rem;
-    border: 1px solid rgba(14,165,233,0.3);
+    border: 1px solid #1e293b;
   }
 
   /* ── Data table ── */
   .ai-table {
     width: 100%; border-collapse: collapse; margin: 12px 0;
     font-size: 0.84rem; border-radius: 8px; overflow: hidden;
-    border: 1px solid rgba(30,58,138,0.5);
+    border: 1px solid #1e293b; background: #000000;
     display: block; overflow-x: auto;
   }
-  .ai-table thead { background: linear-gradient(90deg, #0c1c4a, #0f2460); }
+  .ai-table thead { background: #050505; }
   .ai-table th {
-    color: #93c5fd; font-weight: 800; padding: 9px 12px;
-    text-align: left; border-bottom: 2px solid #1e40af;
+    color: #38bdf8; font-weight: 800; padding: 9px 12px;
+    text-align: left; border-bottom: 2px solid #0284c7; border-right: 1px solid #1e293b;
     font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em;
-    white-space: nowrap;
+    white-space: nowrap; background: #050505;
   }
   .ai-table td {
-    padding: 7px 12px; border-bottom: 1px solid rgba(30,58,138,0.3);
-    color: #e2e8f0; vertical-align: top; line-height: 1.5;
+    padding: 7px 12px; border-bottom: 1px solid #18181b; border-right: 1px solid #18181b;
+    color: #ffffff; vertical-align: top; line-height: 1.5; background: #000000;
   }
-  .ai-table tbody tr:hover td { background: rgba(14,165,233,0.06); }
-  .ai-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.025); }
+  .ai-table tbody tr:hover td { background: #081120; }
+  .ai-table tbody tr:nth-child(even) td { background: #040404; }
   .ai-table tbody tr:last-child td { border-bottom: none; }
 
   /* ── Generic inline elements ── */
-  strong, b { color: #f1f5f9; font-weight: 700; }
+  strong, b { color: #ffffff; font-weight: 700; }
   em { color: #94a3b8; font-style: italic; }
-  p { margin: 6px 0; color: #cbd5e1; font-size: 0.875rem; line-height: 1.65; }
+  p { margin: 6px 0; color: #f1f5f9; font-size: 0.875rem; line-height: 1.65; }
 `;
 
 
@@ -285,9 +289,13 @@ export const AITroubleshootingPanel = ({
   const [error, setError] = useState(null);
   const [copiedStatus, setCopiedStatus] = useState(null);
 
-  // Scroll Anchors
+  // Reply Context State
+  const [replyingTo, setReplyingTo] = useState(null);
+
+  // Scroll & Input Anchors
   const chatBottomRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const questionInputRef = useRef(null);
 
   // Multimodal Vision State
   const [selectedImageBase64, setSelectedImageBase64] = useState(null);
@@ -497,6 +505,27 @@ export const AITroubleshootingPanel = ({
     }
   };
 
+  // Start reply to a specific AI message
+  const handleStartReply = (msg) => {
+    const rawContent = msg.content || '';
+    const cleanSnippet = rawContent
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 110);
+
+    setReplyingTo({
+      id: msg.id,
+      textSnippet: cleanSnippet || 'Previous response',
+      fullContent: rawContent
+    });
+
+    setTimeout(() => {
+      questionInputRef.current?.focus();
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 60);
+  };
+
   // --- TAB 1: DIAGNOSTICS & Q&A WITH REAL-TIME STREAMING ---
   const handleSearch = async (queryText = null) => {
     const q = (queryText || question).trim();
@@ -511,12 +540,20 @@ export const AITroubleshootingPanel = ({
       return;
     }
 
+    const activeReply = replyingTo;
+    setReplyingTo(null);
+
+    const userPromptForAI = activeReply
+      ? `[Follow-up question regarding your previous answer: "${activeReply.textSnippet}"]\n\n${q}`
+      : q;
+
     setQuestion('');
 
     const userMsg = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: q,
+      replyToSnippet: activeReply ? activeReply.textSnippet : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -544,7 +581,7 @@ export const AITroubleshootingPanel = ({
     try {
       const conversationHistory = messages
         .filter(m => m.id !== 'welcome' && !m.id.startsWith('sys-') && !m.id.startsWith('ai-err-') && m.content)
-        .slice(-8)
+        .slice(-14)
         .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           content: m.content
@@ -568,7 +605,7 @@ export const AITroubleshootingPanel = ({
       };
 
       const result = await askEquipFixCopilot({
-        prompt: q,
+        prompt: userPromptForAI,
         history: conversationHistory,
         context: { machineCode, incidentSummary, machineId, workOrderId },
         onChunk: (_chunk, accumulatedText) => {
@@ -1297,15 +1334,37 @@ export const AITroubleshootingPanel = ({
                       maxWidth: msg.role === 'user' ? '82%' : '92%',
                       padding: msg.role === 'user' ? '12px 16px' : '16px 20px',
                       borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                      background: msg.role === 'user' ? 'linear-gradient(135deg, #0284c7 0%, #1e40af 100%)' : '#0b1329',
-                      color: '#f8fafc',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg, #0284c7 0%, #1e40af 100%)' : '#000000',
+                      color: '#ffffff',
                       border: msg.role === 'user' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid #1e293b',
-                      boxShadow: msg.role === 'user' ? '0 4px 14px rgba(2, 132, 199, 0.25)' : '0 4px 14px rgba(0, 0, 0, 0.4)',
+                      boxShadow: msg.role === 'user' ? '0 4px 14px rgba(2, 132, 199, 0.25)' : '0 8px 30px rgba(0, 0, 0, 0.95), 0 0 1px rgba(56, 189, 248, 0.25)',
                       fontSize: '0.875rem'
                     }}
                   >
                     {msg.role === 'user' ? (
-                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{msg.content}</div>
+                      <div>
+                        {msg.replyToSnippet && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 8px',
+                            marginBottom: '6px',
+                            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                            borderRadius: '6px',
+                            borderLeft: '3px solid #38bdf8',
+                            fontSize: '0.72rem',
+                            color: '#e0f2fe'
+                          }}>
+                            <CornerDownLeft size={11} color="#38bdf8" />
+                            <span style={{ opacity: 0.85, fontWeight: 700 }}>In reply to:</span>
+                            <span style={{ fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' }}>
+                              "{msg.replyToSnippet}"
+                            </span>
+                          </div>
+                        )}
+                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{msg.content}</div>
+                      </div>
                     ) : (
                       <>
                         {/* Live Streaming or Thinking State */}
@@ -1472,6 +1531,33 @@ export const AITroubleshootingPanel = ({
                             </button>
                           )}
 
+                          {msg.content && !msg.isStreaming && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartReply(msg)}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '4px 10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                color: '#38bdf8',
+                                backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(14, 165, 233, 0.2)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(14, 165, 233, 0.1)'; }}
+                              title="Ask a follow-up question or request more details about this AI answer"
+                            >
+                              <CornerDownLeft size={12} color="#38bdf8" />
+                              <span>💬 Reply &amp; Ask Follow-Up</span>
+                            </button>
+                          )}
+
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
                             {onCopyToLog && msg.content && (
                               <button
@@ -1526,6 +1612,52 @@ export const AITroubleshootingPanel = ({
               <div ref={chatBottomRef} style={{ height: '1px' }} />
             </div>
 
+            {/* Active Reply Banner */}
+            {replyingTo && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                padding: '9px 14px',
+                marginBottom: '10px',
+                backgroundColor: '#000000',
+                border: '1px solid #1e293b',
+                borderLeft: '4px solid #38bdf8',
+                borderRadius: '8px',
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.7)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                  <CornerDownLeft size={14} color="#38bdf8" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                    Replying to AI:
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    "{replyingTo.textSnippet}"
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyingTo(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '2px',
+                    borderRadius: '4px'
+                  }}
+                  title="Cancel reply"
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Prompt Input Form */}
             <form
               onSubmit={(e) => {
@@ -1535,23 +1667,28 @@ export const AITroubleshootingPanel = ({
               style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}
             >
               <input
+                ref={questionInputRef}
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask EquipFix AI: e.g. Why is CNC-04 spindle vibrating? What are mandatory LOTO steps?"
+                placeholder={
+                  replyingTo
+                    ? `Ask follow-up about: "${replyingTo.textSnippet.slice(0, 48)}..."`
+                    : "Ask EquipFix AI: e.g. Why is CNC-04 spindle vibrating? What are mandatory LOTO steps?"
+                }
                 style={{
                   fontSize: '0.875rem',
                   flex: 1,
                   padding: '12px 18px',
                   borderRadius: '10px',
-                  backgroundColor: '#040814',
+                  backgroundColor: '#000000',
                   color: '#ffffff',
-                  border: '1px solid #334155',
+                  border: replyingTo ? '1px solid #38bdf8' : '1px solid #27272a',
                   outline: 'none',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)'
+                  boxShadow: replyingTo ? '0 0 12px rgba(56, 189, 248, 0.2)' : 'inset 0 2px 4px rgba(0,0,0,0.7)'
                 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#38bdf8'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#334155'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = replyingTo ? '#38bdf8' : '#27272a'; }}
               />
               <button
                 type="submit"
@@ -1810,11 +1947,11 @@ export const AITroubleshootingPanel = ({
             {/* Vision Response Card */}
             {visionResponse && (
               <div style={{
-                backgroundColor: '#040814',
-                border: '1px solid #1e3a8a',
+                backgroundColor: '#000000',
+                border: '1px solid #1e293b',
                 borderRadius: '12px',
                 padding: '20px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)'
+                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.95), 0 0 1px rgba(56, 189, 248, 0.25)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #1e293b', paddingBottom: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
