@@ -417,7 +417,8 @@ export const askEquipFixCopilot = async ({
   imageMime = 'image/jpeg',
   context = {},
   _overrideModel = null,
-  onChunk = null
+  onChunk = null,
+  onStageChange = null
 }) => {
   const config = getAIConfig();
   const { apiKey, provider, model, customModel } = config;
@@ -453,39 +454,157 @@ export const askEquipFixCopilot = async ({
     }
   }
 
-  // Expert-level, adaptive, conversational industrial AI system prompt
-  const systemPrompt = `You are EquipFix AI Copilot — a senior industrial maintenance engineer, reliability specialist, and plant automation expert with 25+ years of hands-on plant experience.
+  // --- STAGE 0 to 3: RAG RETRIEVAL & QUERY CLASSIFICATION PRE-FLIGHT ---
+  let ragData = null;
+  try {
+    if (onStageChange) onStageChange(0, 'Understanding your request...');
+    if (onStageChange) onStageChange(1, context.machineCode ? `Identifying equipment context: ${context.machineCode}...` : 'Identifying equipment context...');
+    if (onStageChange) onStageChange(2, 'Extracting symptoms & error codes...');
+    if (onStageChange) onStageChange(3, 'Searching equipment documentation & RAG vector store...');
 
-CORE CONVERSATIONAL PRINCIPLES:
-1. MULTI-TURN MEMORY & FOLLOW-UP CAPABILITY:
-   - You have complete memory of previous messages in this conversation.
-   - When the user asks a follow-up, asks to elaborate, or asks to explain/give more information about the text message you generated previously (e.g. "explain step 3", "tell me more about this", "why is that?", "what did you mean by X?"), you MUST directly reply to that specific point from your previous response and give clear, comprehensive, highly informative details.
+    const ragPromise = aiApi.query({
+      question: prompt,
+      machine_id: context.machineId || undefined,
+      work_order_id: context.workOrderId || undefined
+    });
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2200));
+    const ragRes = await Promise.race([ragPromise, timeoutPromise]);
+    if (ragRes?.data) {
+      ragData = ragRes.data;
+    }
+  } catch (e) {
+    // Non-blocking: gracefully proceed with local machine context if RAG query times out
+  }
 
-2. ADAPTIVE, CONTEXT-APPROPRIATE RESPONSES:
-   - Answer DIRECTLY and ACCURATELY what the user asks for. Do NOT force a rigid multi-section template when a normal, focused answer is requested.
-   - If the user asks a specific or normal question (e.g. "what is normal vibration for a 1500 RPM motor?", "explain cavitation in centrifugal pumps", "what tool do I need to measure backlash?", "give information about step 2"):
-     Provide a direct, normal, highly informative response focused on that specific question with relevant details, engineering parameters, and clean HTML formatting.
-   - If the user requests a comprehensive equipment fault diagnosis or machine troubleshooting breakdown (e.g. "motor overheating and vibrating", "hydraulic pressure dropping"):
-     Provide a thorough industrial diagnostic report covering diagnosis summary, root causes, specifications, actionable steps, and safety precautions.
+  if (onStageChange) onStageChange(4, 'Finding relevant maintenance procedures & SOPs...');
+  if (onStageChange) onStageChange(5, 'Comparing possible causes & failure mechanisms...');
+  if (onStageChange) onStageChange(6, 'Checking safety requirements (OSHA 1910.147 LOTO)...');
+  if (onStageChange) onStageChange(7, 'Reviewing maintenance history & past work orders...');
+  if (onStageChange) onStageChange(8, 'Validating retrieved evidence...');
+  if (onStageChange) onStageChange(9, 'Preparing recommendation...');
 
-3. PURE STRUCTURED HTML OUTPUT (Black Background Theme):
-   - ALWAYS output clean structured HTML using these elements (never output markdown like ##, **, or - bullets outside HTML):
-     • Section header: <h3 class="ai-section">ICON Title</h3>
-     • Key-Value pair: <div class="ai-kv"><span class="ai-key">Parameter</span><span class="ai-val">Value</span></div>
-     • Action steps: <ol class="ai-steps"><li>Step description with tools &amp; thresholds</li></ol>
-     • Technical facts: <ul class="ai-facts"><li>Fact or failure mechanism</li></ul>
-     • Safety/Warning callout: <div class="ai-warn">⚠️ Safety caution (OSHA 1910.147 / PPE / Energy isolation)</div>
-     • Parameter table: <table class="ai-table"><thead><tr><th>Param</th><th>Normal</th><th>Fault</th><th>Unit</th></tr></thead><tbody>...</tbody></table>
-     • Badges: <span class="ai-badge">CRITICAL</span>, <span class="ai-badge">OEM SPEC</span>, <span class="ai-badge">LOTO REQUIRED</span>
-     • Severity indicator: <span class="ai-severity high">HIGH</span> (or medium / low)
-     • Numeric values / code: <code class="ai-code">VALUE</code>
+  const retrievedSources = ragData?.sources || [];
+  const previousRepairs = ragData?.relevant_previous_repairs || [];
 
-4. NO GREETINGS OR FLUFF:
-   - Start directly with the first HTML tag. Never say "Sure", "Certainly", "Great question", or repeat the question back.
-   - If the query is completely unrelated to machinery, industrial equipment, or maintenance, reply only with:
-     <div class="ai-warn">⚠️ EquipFix AI is dedicated to industrial equipment diagnostics, plant maintenance, and engineering safety.</div>
-${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACHINE: ${context.machineCode}</span>` : ''}${context.incidentSummary ? `\nActive Fault Context: <div class="ai-warn">⚠️ ${context.incidentSummary}</div>` : ''}`;
+  let ragSnippets = '';
+  if (retrievedSources.length > 0) {
+    ragSnippets += '\n\n[VERIFIED RETRIEVED EQUIPMENT DOCUMENTATION - PRIMARY TRUTH]:\n' +
+      retrievedSources.map((s, idx) =>
+        `[Document ${idx + 1}: ${s.document_title || 'Plant Manual'} - Section: ${s.section_title || 'Operating Specs'} (Page ${s.page_number || 1}) | Match: ${Math.round((s.relevance_score || 0.8) * 100)}%]:\n"${s.snippet || ''}"`
+      ).join('\n\n');
+  }
+  if (previousRepairs.length > 0) {
+    ragSnippets += '\n\n[VERIFIED HISTORICAL MAINTENANCE RECORDS FOR THIS EQUIPMENT]:\n' +
+      previousRepairs.map((r, idx) =>
+        `[Historical Record ${idx + 1} (${r.date || 'Past'})]: Problem: ${r.summary} | Cause: ${r.root_cause} | Action: ${r.repair_action}`
+      ).join('\n');
+  }
 
+  // Industrial AI Maintenance Copilot System Instructions
+  const systemPrompt = `You are EquipFixAI Copilot — an expert industrial equipment maintenance assistant.
+Your primary purpose is to help operators, technicians, supervisors, and maintenance managers diagnose equipment problems, understand maintenance procedures, and safely resolve equipment issues.
+
+==================================================
+CORE RULE: USE VERIFIED KNOWLEDGE
+==================================================
+1. Base your technical answers primarily on the provided equipment documentation and maintenance history below.
+2. NEVER invent:
+   - Equipment specifications, dimensions, tolerances
+   - Error codes or alarm definitions
+   - Component names or part numbers
+   - Maintenance intervals or torque values
+   - Voltage/current/hydraulic pressure ratings
+   - Safety procedures or operating limits
+   - Document names, page numbers, or citations
+   - Maintenance history
+3. Clearly distinguish:
+   DOCUMENTED INFORMATION (facts found in retrieved manuals)
+   from
+   AI INFERENCE (technical deductions).
+
+==================================================
+SAFETY FIRST (HIGHEST PRIORITY)
+==================================================
+- Mandatory Lockout/Tagout (LOTO - OSHA 29 CFR 1910.147): Always highlight zero-energy state, electrical disconnect, and stored energy dissipation (hydraulic/pneumatic/spring/gravity).
+- Require appropriate PPE supported by documentation (safety glasses, arc flash shields, cut-resistant gloves).
+- NEVER recommend bypassing safety interlocks, optical guards, alarms, E-stops, or manufacturer safety limits.
+- If a situation appears dangerous or requires certified authorization, recommend stopping the operation immediately and escalating to qualified personnel.
+
+==================================================
+STRUCTURED TROUBLESHOOTING FORMAT
+==================================================
+When diagnosing an issue, structure your response using pure HTML elements:
+
+<h3 class="ai-section">🔍 Diagnosis</h3>
+Concise explanation of the likely issue. State clearly whether it is directly documented, strongly supported, or requires on-site verification.
+
+<h3 class="ai-section">📋 Evidence</h3>
+Show the important evidence found in the retrieved documentation or telemetry (alarm numbers, subsystem linkages, previous repair records).
+
+<h3 class="ai-section">🛠 Recommended Checks</h3>
+<ol class="ai-steps">
+  <li>Step description with specific tools, inspection points, and measurement thresholds (safest & least invasive first).</li>
+</ol>
+
+<div class="ai-warn">⚠️ <strong>Safety:</strong> Explicit OSHA 1910.147 LOTO, PPE requirements, zero-energy state verification.</div>
+
+<h3 class="ai-section">➡️ Next Action</h3>
+Immediate, concrete next step for the technician or operator.
+
+<h3 class="ai-section">📚 Sources</h3>
+Cite the actual retrieved documents:
+<ul class="ai-facts">
+  <li>[Source: Document Name — Section/Page]</li>
+</ul>
+
+If the available documentation does not contain enough information:
+<div class="ai-warn">⚠️ <strong>More Information Needed:</strong> Explain exactly what equipment model, alarm code, or symptom is missing to complete the diagnosis.</div>
+
+OUTPUT RULES:
+- Output clean structured HTML matching the dark industrial theme.
+- No greetings, no filler text, no "Sure! Here is the information...".
+- Use <div class="ai-kv"><span class="ai-key">KEY</span><span class="ai-val">VAL</span></div> for technical specs.
+- Use <span class="ai-badge">...</span> and <span class="ai-severity high|medium|low">...</span> for status.
+${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACHINE: ${context.machineCode}</span>` : ''}${context.incidentSummary ? `\nActive Fault Context: <div class="ai-warn">⚠️ ${context.incidentSummary}</div>` : ''}${ragSnippets}`;
+
+  const buildCopilotResult = ({
+    text,
+    provider,
+    model,
+    realtime = true,
+    hasVision = false,
+    groundedSource = '',
+    isStreamed = false
+  }) => {
+    const missingInfo = /insufficient information|more information needed|need the equipment|please specify|missing information/i.test(text);
+    const confidence = retrievedSources.length >= 2
+      ? 'STRONG'
+      : (retrievedSources.length === 1 ? 'PARTIAL' : (missingInfo ? 'INSUFFICIENT' : 'PARTIAL'));
+
+    return {
+      text,
+      provider,
+      model,
+      realtime,
+      hasVision,
+      groundedSource: groundedSource || `${provider} Grounded on Plant Knowledge Base`,
+      isStreamed,
+      sources: retrievedSources,
+      previousRepairs: previousRepairs,
+      groundingStatus: ragData?.grounding_status || (retrievedSources.length > 0 ? 'GROUNDED' : 'PARTIALLY_GROUNDED'),
+      confidence,
+      queryId: ragData?.query_id || null,
+      whyAnswer: {
+        docCount: retrievedSources.length,
+        sourcesMatched: retrievedSources.map(s => s.document_title).filter(Boolean),
+        equipmentMatched: Boolean(context.machineCode),
+        errorCodeMatched: /E-\d+|ALARM|FAULT|ERR/i.test(prompt),
+        historyMatched: previousRepairs.length > 0,
+        safetyMatched: retrievedSources.some(s => s.doc_type === 'SAFETY' || /safety|loto|lockout/i.test(s.document_title || ''))
+      },
+      missingInfo
+    };
+  };
 
   // STRATEGY 1A: Direct Real-Time Streaming from OpenAI API (SSE)
   if (effectiveProvider === 'openai') {
@@ -572,7 +691,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
         }
 
         if (accumulatedText.trim()) {
-          return {
+          return buildCopilotResult({
             text: accumulatedText,
             provider: `OpenAI (${effectiveModel})`,
             model: effectiveModel,
@@ -580,7 +699,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
             hasVision: Boolean(imageBase64),
             groundedSource: `OpenAI ${effectiveModel} Live Stream`,
             isStreamed: true
-          };
+          });
         }
       } else if (res.status === 401 || res.status === 403) {
         const errData = await res.json().catch(() => ({}));
@@ -716,7 +835,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
           }
 
           if (accumulatedText.trim()) {
-            return {
+            return buildCopilotResult({
               text: accumulatedText,
               provider: `Google Gemini (${curModel})`,
               model: curModel,
@@ -724,7 +843,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
               hasVision: Boolean(imageBase64),
               groundedSource: `Gemini ${curModel} Live Stream`,
               isStreamed: true
-            };
+            });
           }
         }
 
@@ -771,7 +890,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
           const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
           if (text.trim()) {
             if (onChunk) onChunk(text, text);
-            return {
+            return buildCopilotResult({
               text,
               provider: `Google Gemini (${curModel})`,
               model: curModel,
@@ -779,7 +898,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
               hasVision: Boolean(imageBase64),
               groundedSource: `Gemini ${curModel} Direct High-Speed`,
               isStreamed: false
-            };
+            });
           }
         } else if (directRes.status === 400 || directRes.status === 401 || directRes.status === 403 || directRes.status === 429) {
           const errData = await directRes.json().catch(() => ({}));
@@ -900,7 +1019,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
       }
 
       if (accumulatedText.trim()) {
-        return {
+        return buildCopilotResult({
           text: accumulatedText,
           provider: effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`,
           model: effectiveModel,
@@ -908,7 +1027,7 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
           hasVision: Boolean(imageBase64),
           groundedSource: `${effectiveProvider === 'openai' ? 'OpenAI' : 'Gemini'} ${effectiveModel} + Plant Grounding (Real-Time)`,
           isStreamed: true
-        };
+        });
       }
     }
   } catch (backendStreamErr) {
@@ -944,15 +1063,15 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
       if (onChunk) {
         onChunk(fullText, fullText);
       }
-      return {
+      return buildCopilotResult({
         text: fullText,
         provider: response.data.provider || (effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`),
         model: response.data.model || effectiveModel,
         realtime: true,
         hasVision: Boolean(imageBase64),
         groundedSource: response.data.grounded_source || 'Plant Manuals & Vector Store',
-        raw: response.data
-      };
+        isStreamed: false
+      });
     }
   } catch (err) {
     const msg = err.response?.data?.detail || err.message;
