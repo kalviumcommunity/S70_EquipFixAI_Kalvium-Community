@@ -341,42 +341,28 @@ export const OperatorDashboard = () => {
         )
       );
     } catch (err) {
-      console.warn('Real-time copilot stream fallback to backend query:', err);
-      try {
-        const res = await aiApi.query({
-          query: textToSend.trim(),
-          machine_id: targetMachineId,
-          include_sources: true,
-        });
-
-        const respData = res.data?.response || res.data || {};
-        setAiResponses((prev) =>
-          prev.map((item) =>
-            item.id === entryId
-              ? {
-                  ...item,
-                  isStreaming: false,
-                  response: respData
+      console.warn('Real-time copilot error:', err);
+      setAiResponses((prev) =>
+        prev.map((item) =>
+          item.id === entryId
+            ? {
+                ...item,
+                isStreaming: false,
+                response: {
+                  possible_causes: `AI Copilot Inference: ${err.message || 'Unable to connect to Google Gemini API. Please check your API key.'}`,
+                  recommended_actions: [
+                    'Verify that your Google Gemini API key is configured with active quotas',
+                    'Inspect physical equipment status lamps on the control panel',
+                    'Report unverified alarms to shift supervisor'
+                  ],
+                  citations: targetMachineCode
+                    ? [{ title: `${targetMachineCode} Telemetry`, section: 'Live Sensor Review' }]
+                    : []
                 }
-              : item
-          )
-        );
-      } catch (backupErr) {
-        setAiResponses((prev) =>
-          prev.map((item) =>
-            item.id === entryId
-              ? {
-                  ...item,
-                  isStreaming: false,
-                  response: {
-                    possible_causes: backupErr.response?.data?.detail || backupErr.message || 'AI service could not process query.',
-                    safety_warnings: ['Please verify your Google Gemini API key or contact plant engineering.']
-                  }
-                }
-              : item
-          )
-        );
-      }
+              }
+            : item
+        )
+      );
     } finally {
       setAiLoading(false);
     }

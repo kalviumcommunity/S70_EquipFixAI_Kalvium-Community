@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { maintenanceApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
-import { Wrench, CheckCircle, Clock, ShieldCheck, Eye, Check, X } from 'lucide-react';
+import { Wrench, CheckCircle, Clock, ShieldCheck, Eye, Check, X, Sparkles } from 'lucide-react';
 
 export const MaintenancePage = () => {
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { lastEvent, addToast } = useWebSocket();
   const [records, setRecords] = useState([]);
@@ -144,12 +146,44 @@ export const MaintenancePage = () => {
                       {rec.approver ? rec.approver.full_name : <span style={{ color: '#ea580c' }}>Pending</span>}
                     </td>
                     <td>
-                      <button
-                        onClick={() => setSelectedRecord(rec)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        <Eye size={14} /> Review
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setSelectedRecord(rec)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          <Eye size={14} /> Review
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/ai-assistant', {
+                              state: {
+                                machineCode: rec.machine?.machine_code,
+                                prompt: `Analyze Maintenance Record MR-${rec.id.toString().padStart(4, '0')} for machine ${rec.machine?.machine_code} (${rec.machine?.name}). Reported problem: "${rec.problem_summary}", identified root cause: "${rec.root_cause}", recorded downtime: ${rec.downtime_minutes}m. How can recurrence be prevented, what predictive maintenance routine should be added, and are there component failure risks?`
+                              }
+                            });
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Ask AI to analyze root cause and recurrence prevention"
+                        >
+                          <Sparkles size={13} color="#e0f2fe" />
+                          <span>Ask AI</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

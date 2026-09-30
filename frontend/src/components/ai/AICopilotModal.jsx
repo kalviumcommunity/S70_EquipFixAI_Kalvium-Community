@@ -88,6 +88,7 @@ export const AICopilotModal = ({
           machineId={initialMachineId}
           machineCode={initialMachineCode}
           incidentSummary={initialQuestion}
+          initialQuestion={initialQuestion}
           isFullPage={true}
         />
       </div>

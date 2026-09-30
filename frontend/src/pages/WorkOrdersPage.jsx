@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { workOrdersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
-import { ClipboardList, Eye, Clock, Wrench, Package } from 'lucide-react';
+import { ClipboardList, Eye, Clock, Wrench, Package, Sparkles } from 'lucide-react';
 
 export const WorkOrdersPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { lastEvent } = useWebSocket();
   const [workOrders, setWorkOrders] = useState([]);
@@ -129,9 +131,41 @@ export const WorkOrdersPage = () => {
                       {wo.started_at ? new Date(wo.started_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending Start'}
                     </td>
                     <td>
-                      <button onClick={() => viewDetail(wo.id)} className="btn btn-secondary btn-sm">
-                        <Eye size={14} /> View Details
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button onClick={() => viewDetail(wo.id)} className="btn btn-secondary btn-sm">
+                          <Eye size={14} /> View Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/ai-assistant', {
+                              state: {
+                                machineCode: wo.machine?.machine_code,
+                                prompt: `Provide diagnostic troubleshooting and resolution procedure for Work Order ${wo.work_order_number} on machine ${wo.machine?.machine_code} (${wo.machine?.name}). Priority: ${wo.priority}. Issue: ${wo.incident?.description || wo.notes || 'Routine maintenance and troubleshooting'}. Detail required steps, safety LOTO, and spare parts.`
+                              }
+                            });
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Ask AI Copilot for direct troubleshooting guidance"
+                        >
+                          <Sparkles size={13} color="#e0f2fe" />
+                          <span>Ask AI</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -163,11 +197,45 @@ export const WorkOrdersPage = () => {
             </div>
             <div className="modal-body">
               {/* Problem notes */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Issue Summary</div>
-                <div style={{ fontSize: '0.85rem', color: '#1e293b', marginTop: '4px' }}>
-                  {selectedWO.incident?.description || selectedWO.notes || 'No description recorded.'}
+              <div style={{ backgroundColor: '#f8fafc', padding: '12px 14px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Issue Summary</div>
+                  <div style={{ fontSize: '0.875rem', color: '#1e293b', marginTop: '4px', lineHeight: 1.5 }}>
+                    {selectedWO.incident?.description || selectedWO.notes || 'No description recorded.'}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const wo = selectedWO;
+                    setSelectedWO(null);
+                    navigate('/ai-assistant', {
+                      state: {
+                        machineCode: wo.machine?.machine_code,
+                        prompt: `Diagnostic Procedure for Work Order ${wo.work_order_number} on machine ${wo.machine?.machine_code} (${wo.machine?.name}). Issue: ${wo.incident?.description || wo.notes || 'General repair'}. Provide detailed mechanical checklist, LOTO safety disconnects, and post-repair tests.`
+                      }
+                    });
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '6px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
+                    flexShrink: 0
+                  }}
+                  title="Ask AI for step-by-step resolution procedure"
+                >
+                  <Sparkles size={14} color="#e0f2fe" />
+                  <span>Ask AI Guidance</span>
+                </button>
               </div>
 
               {/* Work logs */}

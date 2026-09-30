@@ -432,118 +432,56 @@ export const askEquipFixCopilot = async ({
     }
   }
 
-  // --- STAGE 0 to 3: RAG RETRIEVAL & QUERY CLASSIFICATION PRE-FLIGHT ---
-  let ragData = null;
-  try {
-    if (onStageChange) onStageChange(0, 'Understanding your request...');
-    if (onStageChange) onStageChange(1, context.machineCode ? `Identifying equipment context: ${context.machineCode}...` : 'Identifying equipment context...');
-    if (onStageChange) onStageChange(2, 'Extracting symptoms & error codes...');
-    if (onStageChange) onStageChange(3, 'Searching equipment documentation & RAG vector store...');
+  // Direct, unbiased plant and machine context
+  const machineInfo = context.machineCode
+    ? `Active Machine Context: ${context.name || context.machineCode} (Code: ${context.machineCode}, Model: ${context.model || 'Industrial Machine'}, Location: ${context.location || 'Plant Floor'}, Status: ${context.status || 'Active'}${context.alarm ? `, Active Alarm: ${context.alarm}` : ''})`
+    : 'Active Context: Plant Machinery Diagnostics';
 
-    const ragPromise = aiApi.query({
-      question: prompt,
-      machine_id: context.machineId || undefined,
-      work_order_id: context.workOrderId || undefined
-    });
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2200));
-    const ragRes = await Promise.race([ragPromise, timeoutPromise]);
-    if (ragRes?.data) {
-      ragData = ragRes.data;
-    }
-  } catch (e) {
-    // Non-blocking: gracefully proceed with local machine context if RAG query times out
-  }
+  // Industrial AI Maintenance Copilot System Instructions (Unbiased, Direct, ChatGPT Style)
+  const systemPrompt = `You are EquipFixAI Copilot — an expert industrial equipment diagnostic AI.
+You assist industrial technicians, operators, and maintenance supervisors with equipment troubleshooting, root cause analysis, repair procedures, safety protocols, and standard operating procedures.
 
-  if (onStageChange) onStageChange(4, 'Finding relevant maintenance procedures & SOPs...');
-  if (onStageChange) onStageChange(5, 'Comparing possible causes & failure mechanisms...');
-  if (onStageChange) onStageChange(6, 'Checking safety requirements (OSHA 1910.147 LOTO)...');
-  if (onStageChange) onStageChange(7, 'Reviewing maintenance history & past work orders...');
-  if (onStageChange) onStageChange(8, 'Validating retrieved evidence...');
-  if (onStageChange) onStageChange(9, 'Preparing recommendation...');
+${machineInfo}
+${context.incidentSummary ? `Active Fault / Incident Context: ${context.incidentSummary}` : ''}
 
-  const retrievedSources = ragData?.sources || [];
-  const previousRepairs = ragData?.relevant_previous_repairs || [];
+CORE INSTRUCTIONS:
+- Directly answer the technician's question with authoritative technical knowledge.
+- Provide comprehensive, step-by-step diagnostic and maintenance actions with exact tool recommendations, inspection thresholds, torque specs, and electrical/mechanical checks.
+- Do NOT refuse to answer, do NOT claim lack of documentation, and do NOT give biased or canned responses. Apply expert industrial engineering best practices (CNC machining, pneumatic/hydraulic systems, PLC drives, bearing analysis, spindle telemetry, motor diagnostics).
+- Enforce OSHA 1910.147 Lockout/Tagout (LOTO) and personal protective equipment (PPE) requirements prominently.
 
-  let ragSnippets = '';
-  if (retrievedSources.length > 0) {
-    ragSnippets += '\n\n[VERIFIED RETRIEVED EQUIPMENT DOCUMENTATION - PRIMARY TRUTH]:\n' +
-      retrievedSources.map((s, idx) =>
-        `[Document ${idx + 1}: ${s.document_title || 'Plant Manual'} - Section: ${s.section_title || 'Operating Specs'} (Page ${s.page_number || 1}) | Match: ${Math.round((s.relevance_score || 0.8) * 100)}%]:\n"${s.snippet || ''}"`
-      ).join('\n\n');
-  }
-  if (previousRepairs.length > 0) {
-    ragSnippets += '\n\n[VERIFIED HISTORICAL MAINTENANCE RECORDS FOR THIS EQUIPMENT]:\n' +
-      previousRepairs.map((r, idx) =>
-        `[Historical Record ${idx + 1} (${r.date || 'Past'})]: Problem: ${r.summary} | Cause: ${r.root_cause} | Action: ${r.repair_action}`
-      ).join('\n');
-  }
+STRUCTURED CHATGPT-STYLE INDUSTRIAL REPORT FORMAT:
+Format your response using clean Markdown with headers, tables, callout blocks, and numbered lists:
 
-  // Industrial AI Maintenance Copilot System Instructions
-  const systemPrompt = `You are EquipFixAI Copilot — an expert industrial equipment maintenance assistant.
-Your primary purpose is to help operators, technicians, supervisors, and maintenance managers diagnose equipment problems, understand maintenance procedures, and safely resolve equipment issues.
-
-==================================================
-CORE RULE: USE VERIFIED KNOWLEDGE
-==================================================
-1. Base your technical answers primarily on the provided equipment documentation and maintenance history below.
-2. NEVER invent:
-   - Equipment specifications, dimensions, tolerances
-   - Error codes or alarm definitions
-   - Component names or part numbers
-   - Maintenance intervals or torque values
-   - Voltage/current/hydraulic pressure ratings
-   - Safety procedures or operating limits
-   - Document names, page numbers, or citations
-   - Maintenance history
-3. Clearly distinguish:
-   DOCUMENTED INFORMATION (facts found in retrieved manuals)
-   from
-   AI INFERENCE (technical deductions).
-
-==================================================
-SAFETY FIRST (HIGHEST PRIORITY)
-==================================================
-- Mandatory Lockout/Tagout (LOTO - OSHA 29 CFR 1910.147): Always highlight zero-energy state, electrical disconnect, and stored energy dissipation (hydraulic/pneumatic/spring/gravity).
-- Require appropriate PPE supported by documentation (safety glasses, arc flash shields, cut-resistant gloves).
-- NEVER recommend bypassing safety interlocks, optical guards, alarms, E-stops, or manufacturer safety limits.
-- If a situation appears dangerous or requires certified authorization, recommend stopping the operation immediately and escalating to qualified personnel.
-
-==================================================
-STRUCTURED CHATGPT-STYLE INDUSTRIAL REPORT FORMAT
-==================================================
-Format your response using clear, professional Markdown and HTML elements:
-
-# [MACHINE CODE OR INCIDENT] — DIAGNOSTIC & ACTION REPORT
-**Equipment:** ${context.machineCode || 'Industrial Asset'} | **Status:** ${context.status || 'Active'} | **Priority:** High / Urgent
+# [EQUIPMENT OR TOPIC] — DIAGNOSTIC & ACTION REPORT
+**Asset:** ${context.machineCode || 'Industrial Asset'} | **Status:** ${context.status || 'Active'} | **Priority:** High / Operational
 
 ## 1. 🔍 Executive Diagnostic Assessment
-Authoritative, clear explanation of the probable failure mechanism. State whether it is directly confirmed by OEM documentation, indicated by telemetry, or requires manual verification.
+Clear, authoritative explanation of the issue, symptoms, and probable root causes.
 
 > [!DANGER]
 > **SAFETY & LOCKOUT/TAGOUT (LOTO) MANDATE (OSHA 1910.147)**
-> State explicit zero-energy state verification, main breaker disconnect, stored energy release (hydraulic/pneumatic), and required PPE (safety glasses, arc shield, cut-resistant gloves) prior to touch.
+> Explicit zero-energy state verification, main breaker disconnect, and PPE required before work.
 
 ## 2. 📋 Symptom & Root Cause Matrix
-Provide a structured comparison table:
 | Parameter / Symptom | Observed Telemetry | Nominal Limit | Likely Root Cause |
 | :--- | :--- | :--- | :--- |
 | ... | ... | ... | ... |
 
-## 3. 🛠️ Step-by-Step Resolution Plan
-1. **[Step 1 Name]:** Specific inspection task, tools required (e.g. dial indicator, torque wrench, multimeter), and exact tolerances.
-2. **[Step 2 Name]:** Next mechanical or electrical action.
-3. **[Step 3 Name]:** Re-assembly and validation check.
+## 3. 🛠️ Step-by-Step Resolution Action Plan
+1. **[Step 1 Title]:** Concrete action with specific tools and measurement tolerances.
+2. **[Step 2 Title]:** Next mechanical or electrical action.
+3. **[Step 3 Title]:** Re-assembly and validation check.
 
 ## 4. ⚙️ Technical Specifications & Torque Ratings
-List exact numbers, torque limits (Nm or ft-lbs), operating temperatures, or lubrication specs.
+List relevant torque limits (Nm or ft-lbs), operating temperatures, clearances, or lubrication specs.
 
 ## 5. ➡️ Immediate Next Action
 Direct, single-sentence command for the technician or shift supervisor right now.
 
 OUTPUT RULES:
 - Output formal, clean, engineering-grade Markdown with table, callout blocks, and numbered lists.
-- Strictly no conversational filler or apologies ("Sure!", "I hope this helps"). Begin directly with the report.
-${context.machineCode ? `\nActive Equipment Context: MACHINE: ${context.machineCode}` : ''}${context.incidentSummary ? `\nActive Fault Context: FAULT: ${context.incidentSummary}` : ''}${ragSnippets}`;
+- Avoid conversational filler (no "Certainly! Here is..."). Jump straight into the report.`;
 
   const buildCopilotResult = ({
     text,

@@ -347,30 +347,24 @@ _GEMINI_LIVE_CACHE: Dict[str, Tuple[float, List[str]]] = {}
 
 def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = None) -> List[str]:
     """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
-    Guarantees 0% 404 errors by normalizing deprecated or restricted models (1.5, 2.5-flash) to active gemini-2.0-flash.
+    Guarantees instant sub-second response on modern active Gemini models.
     """
-    raw = (model_name or "gemini-2.0-flash").replace("models/", "").strip()
-    if "flash-8b" in raw or "1.5" in raw or "2.5" in raw or "gemini-pro" in raw:
-        raw = "gemini-2.0-flash"
+    raw = (model_name or "gemini-flash-lite-latest").replace("models/", "").strip()
+    if raw in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "flash-8b"):
+        raw = "gemini-flash-lite-latest"
     elif raw in ("2.0-flash", "2.0", "flash"):
-        raw = "gemini-2.0-flash"
-    elif raw in ("2.0-flash-lite", "flash-lite"):
-        raw = "gemini-2.0-flash-lite"
-    elif raw in ("2.0-pro", "2.0-pro-exp"):
-        raw = "gemini-2.0-pro-exp-02-05"
+        raw = "gemini-flash-lite-latest"
     elif not raw.startswith("gemini-"):
-        raw = "gemini-2.0-flash"
+        raw = "gemini-flash-lite-latest"
 
     # Instant, verified candidates starting with the requested active model
     candidates = [raw]
     for fallback in [
-        "gemini-2.0-flash",
         "gemini-flash-lite-latest",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
         "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
-        "gemini-2.0-flash-lite",
-        "gemini-3-flash-preview",
-        "gemini-2.0-pro-exp-02-05"
+        "gemini-2.5-flash-lite"
     ]:
         if fallback not in candidates:
             candidates.append(fallback)

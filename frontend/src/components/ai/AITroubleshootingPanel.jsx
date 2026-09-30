@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   Sparkles, Wrench, AlertTriangle, Shield, Check, Copy, ThumbsUp, ThumbsDown,
   Paperclip, Mic, MicOff, Send, X, ExternalLink, Download, Layers, MoreVertical,
@@ -557,8 +558,12 @@ export const AITroubleshootingPanel = ({
   workOrderId = null,
   machineCode = null,
   incidentSummary = '',
+  initialQuestion = '',
   isFullPage = false
 }) => {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
   // Current active chat session ID
   const [currentChatId, setCurrentChatId] = useState(() => {
     return localStorage.getItem('equipfix_active_chat_id') || 'chat-cnc04';
@@ -964,6 +969,32 @@ export const AITroubleshootingPanel = ({
       ]);
     }
   };
+
+  // Handle URL query parameters and router navigation state (?machine=...&prompt=...)
+  useEffect(() => {
+    const qMachine = searchParams?.get('machine') || location?.state?.machineCode || machineCode;
+    const qPrompt = searchParams?.get('prompt') || location?.state?.prompt || initialQuestion || incidentSummary;
+
+    if (qMachine && qMachine !== activeMachineCode) {
+      setActiveMachineCode(qMachine);
+      if (machines.length > 0) {
+        const found = machines.find((m) => m.machine_code === qMachine);
+        if (found) handleSelectMachine(found);
+      }
+    }
+
+    if (qPrompt && qPrompt.trim()) {
+      const trimmedPrompt = qPrompt.trim();
+      setQuestion(trimmedPrompt);
+      const sentKey = `equipfix_sent_${trimmedPrompt.slice(0, 32)}`;
+      if (!sessionStorage.getItem(sentKey)) {
+        sessionStorage.setItem(sentKey, '1');
+        setTimeout(() => {
+          handleSendPrompt(trimmedPrompt);
+        }, 400);
+      }
+    }
+  }, [location.search, location.state, searchParams, machines.length]);
 
   // Copy handler
   const handleCopy = (text, id) => {

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { maintenanceApi, machinesApi, usersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
-import { Calendar, Plus, Play, CheckCircle, Clock } from 'lucide-react';
+import { Calendar, Plus, Play, CheckCircle, Clock, Sparkles } from 'lucide-react';
 
 export const SchedulesPage = () => {
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { addToast, lastEvent } = useWebSocket();
   const [schedules, setSchedules] = useState([]);
@@ -123,7 +125,7 @@ export const SchedulesPage = () => {
                 <th>Next Due Date</th>
                 <th>Last Performed</th>
                 <th>Status</th>
-                {hasRole(['SUPERVISOR', 'MANAGER']) && <th>Action</th>}
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -154,16 +156,49 @@ export const SchedulesPage = () => {
                   <td>
                     <span className="badge badge-running">{s.status}</span>
                   </td>
-                  {hasRole(['SUPERVISOR', 'MANAGER']) && (
-                    <td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                       <button
-                        onClick={() => setSelectedSchedule(s)}
-                        className="btn btn-secondary btn-sm"
+                        type="button"
+                        onClick={() => {
+                          navigate('/ai-assistant', {
+                            state: {
+                              machineCode: s.machine?.machine_code,
+                              prompt: `Provide the Standard Operating Procedure (SOP), safety requirements (OSHA 1910.147 LOTO), tooling list, and execution checklist for scheduled maintenance task "${s.task_name}" on machine ${s.machine?.machine_code} (${s.machine?.name}). Task notes: ${s.description || 'Standard preventive maintenance'}.`
+                            }
+                          });
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title="Ask AI Copilot for maintenance SOP and checklist"
                       >
-                        <Play size={14} /> Dispatch WO
+                        <Sparkles size={13} color="#e0f2fe" />
+                        <span>Ask AI</span>
                       </button>
-                    </td>
-                  )}
+
+                      {hasRole(['SUPERVISOR', 'MANAGER']) && (
+                        <button
+                          onClick={() => setSelectedSchedule(s)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          <Play size={14} /> Dispatch
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

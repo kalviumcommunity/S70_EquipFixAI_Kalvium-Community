@@ -72,46 +72,6 @@ class GroundedGenerator:
                 created_at=datetime.utcnow()
             )
 
-        # Operator Safety Intercept: Detect Restricted Actions (OSHA 29 CFR 1910.147 LOTO)
-        is_operator = (user_role or "").upper() == "OPERATOR"
-        if is_operator:
-            q_lower = query.lower()
-            is_restricted_action = any(kw in q_lower for kw in [
-                "replace", "disassemble", "take apart", "open panel", "electrical", "rewire", "solder",
-                "motor", "belt change", "modify setting", "bypass", "remove bearing", "repair myself",
-                "open cabinet", "fix myself", "change component", "disassembly"
-            ])
-            if is_restricted_action:
-                return AIQueryResponse(
-                    query_id=query_id,
-                    question=query,
-                    machine_code=machine_code,
-                    possible_cause="⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147).",
-                    recommended_checks=[
-                        "Stop the machine immediately using the standard shutdown procedure.",
-                        "Record displayed HMI error codes and note operating symptoms.",
-                        "Do NOT open machine enclosures, electrical cabinets, or access moving mechanisms.",
-                        "Dispatch a certified technician via the Report Equipment Issue button to notify your supervisor."
-                    ],
-                    safety_warnings=[
-                        "⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147)."
-                    ],
-                    relevant_previous_repairs=[],
-                    sources=[
-                        AICitation(
-                            document_title="OSHA Standard 29 CFR 1910.147 — Control of Hazardous Energy (Lockout/Tagout)",
-                            section_title="Section (c)(4): Energy Control Procedures & Authorized Personnel Only",
-                            snippet="Prohibits non-authorized personnel from executing component servicing, cabinet access, or mechanical disassembly on industrial machinery.",
-                            source_type="SAFETY",
-                            relevance_score=1.0,
-                            page_number=1
-                        )
-                    ],
-                    grounding_status=GroundingStatus.GROUNDED,
-                    is_structured_fact=False,
-                    created_at=datetime.utcnow()
-                )
-
         chunks = retrieval_data.get("chunks", [])
         safety_chunks = retrieval_data.get("safety_chunks", [])
         previous_repairs_data = retrieval_data.get("previous_repairs", [])

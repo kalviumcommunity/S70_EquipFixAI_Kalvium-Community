@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { incidentsApi, machinesApi, usersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
-import { AlertTriangle, Plus, Filter, UserCheck, Clock } from 'lucide-react';
+import { AlertTriangle, Plus, Filter, UserCheck, Clock, Sparkles } from 'lucide-react';
 
 export const IncidentsPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { lastEvent, addToast } = useWebSocket();
   const [incidents, setIncidents] = useState([]);
@@ -152,7 +154,7 @@ export const IncidentsPage = () => {
                 <th>Reported By</th>
                 <th>Assigned Tech</th>
                 <th>Reported Time</th>
-                {hasRole(['SUPERVISOR', 'MANAGER']) && <th>Action</th>}
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -202,9 +204,40 @@ export const IncidentsPage = () => {
                     <td style={{ fontSize: '0.75rem', color: '#64748b' }}>
                       {new Date(inc.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    {hasRole(['SUPERVISOR', 'MANAGER']) && (
-                      <td>
-                        {!['RESOLVED', 'CLOSED'].includes(inc.status) && (
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/ai-assistant', {
+                              state: {
+                                machineCode: inc.machine?.machine_code,
+                                prompt: `Diagnose and resolve plant incident ${inc.incident_number} for machine ${inc.machine?.machine_code} (${inc.machine?.name}). Reported symptom: "${inc.description}". Severity: ${inc.severity}. Detail the containment protocol, LOTO safety disconnects, root cause analysis, and corrective action checklist.`
+                              }
+                            });
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Ask AI Copilot to analyze and resolve this incident"
+                        >
+                          <Sparkles size={13} color="#e0f2fe" />
+                          <span>Ask AI</span>
+                        </button>
+
+                        {hasRole(['SUPERVISOR', 'MANAGER']) && !['RESOLVED', 'CLOSED'].includes(inc.status) && (
                           <button
                             onClick={() => {
                               setAssignIncident(inc);
@@ -215,8 +248,8 @@ export const IncidentsPage = () => {
                             {inc.assigned_technician ? 'Reassign' : 'Assign'}
                           </button>
                         )}
-                      </td>
-                    )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
