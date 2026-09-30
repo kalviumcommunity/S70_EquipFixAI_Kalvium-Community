@@ -16,31 +16,139 @@ import AIThinkingEffect from './AIThinkingEffect';
 // --- RICH HTML-STYLE FORMATTED MESSAGE RENDERER ---
 /* ─── Injected once — styles for all AI response HTML elements ─── */
 const AI_RESPONSE_STYLES = `
-  .ai-response-root { font-family: inherit; color: #e2e8f0; font-size: 0.875rem; line-height: 1.65; word-break: break-word; }
-  .ai-section { font-size: 0.97rem; font-weight: 800; color: #38bdf8; margin: 14px 0 8px 0; padding: 6px 12px 6px 14px; border-left: 4px solid #0284c7; background: rgba(14,165,233,0.08); border-radius: 0 8px 8px 0; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
-  .ai-kv { display: flex; align-items: flex-start; gap: 10px; padding: 5px 10px; margin: 3px 0; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(30,58,138,0.4); flex-wrap: wrap; }
-  .ai-key { font-weight: 700; color: #94a3b8; font-size: 0.8rem; min-width: 110px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 1px; }
-  .ai-val { color: #f1f5f9; font-size: 0.86rem; flex: 1; }
-  .ai-steps { margin: 8px 0 8px 0; padding: 0; list-style: none; counter-reset: step-counter; }
-  .ai-steps li { counter-increment: step-counter; display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; font-size: 0.865rem; color: #e2e8f0; line-height: 1.55; }
-  .ai-steps li::before { content: counter(step-counter); background: #1e3a8a; color: #38bdf8; font-weight: 800; font-size: 0.72rem; min-width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
-  .ai-facts { margin: 8px 0; padding: 0; list-style: none; }
-  .ai-facts li { display: flex; align-items: flex-start; gap: 8px; margin: 5px 0; font-size: 0.865rem; color: #e2e8f0; line-height: 1.55; }
-  .ai-facts li::before { content: "•"; color: #38bdf8; font-weight: 900; font-size: 1rem; flex-shrink: 0; margin-top: -1px; }
-  .ai-warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-left: 4px solid #f59e0b; border-radius: 6px; padding: 10px 14px; margin: 10px 0; color: #fef3c7; font-size: 0.855rem; font-weight: 600; line-height: 1.5; }
-  .ai-severity { font-size: 0.72rem; font-weight: 800; padding: 2px 9px; border-radius: 6px; letter-spacing: 0.06em; text-transform: uppercase; display: inline-block; margin: 0 4px 2px 0; }
-  .ai-severity.high, .ai-severity.HIGH { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
-  .ai-severity.medium, .ai-severity.MEDIUM { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
-  .ai-severity.low, .ai-severity.LOW { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
-  .ai-badge { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.35); border-radius: 5px; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; letter-spacing: 0.05em; text-transform: uppercase; display: inline-block; margin: 0 4px 2px 0; }
-  .ai-code { background: #020617; color: #38bdf8; padding: 2px 7px; border-radius: 4px; font-family: monospace; font-size: 0.83rem; border: 1px solid #1e3a8a; }
-  .ai-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.835rem; }
-  .ai-table th { background: rgba(30,58,138,0.45); color: #93c5fd; font-weight: 700; padding: 7px 10px; text-align: left; border: 1px solid #1e3a8a; font-size: 0.77rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .ai-table td { padding: 6px 10px; border: 1px solid rgba(30,58,138,0.4); color: #e2e8f0; vertical-align: top; }
-  .ai-table tr:nth-child(even) td { background: rgba(255,255,255,0.025); }
-  code { background: #020617; color: #38bdf8; padding: 2px 7px; border-radius: 4px; font-family: monospace; font-size: 0.83rem; border: 1px solid #1e3a8a; }
-  strong { color: #ffffff; font-weight: 700; }
+  /* ── Root container ── */
+  .ai-response-root { font-family: inherit; color: #e2e8f0; font-size: 0.875rem; line-height: 1.7; word-break: break-word; }
+
+  /* ── Section headers ── */
+  .ai-section {
+    font-size: 0.96rem; font-weight: 800; color: #38bdf8;
+    margin: 18px 0 10px 0; padding: 8px 14px 8px 16px;
+    border-left: 4px solid #0284c7;
+    background: linear-gradient(90deg, rgba(14,165,233,0.12), rgba(14,165,233,0.03));
+    border-radius: 0 10px 10px 0;
+    display: flex; align-items: center; gap: 8px;
+    letter-spacing: -0.01em;
+    box-shadow: inset 0 0 0 1px rgba(14,165,233,0.1);
+  }
+  .ai-section:first-child { margin-top: 4px; }
+
+  /* ── Key-Value rows ── */
+  .ai-kv {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 7px 12px; margin: 4px 0;
+    background: rgba(255,255,255,0.03);
+    border-radius: 7px;
+    border: 1px solid rgba(30,58,138,0.45);
+    flex-wrap: wrap;
+    transition: background 0.15s;
+  }
+  .ai-kv:hover { background: rgba(255,255,255,0.055); }
+  .ai-key {
+    font-weight: 700; color: #64748b; font-size: 0.775rem;
+    min-width: 130px; flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px;
+  }
+  .ai-val { color: #f1f5f9; font-size: 0.875rem; flex: 1; line-height: 1.55; }
+
+  /* ── Numbered step list ── */
+  .ai-steps { margin: 10px 0; padding: 0; list-style: none; counter-reset: step-counter; }
+  .ai-steps li {
+    counter-increment: step-counter;
+    display: flex; align-items: flex-start; gap: 12px;
+    margin: 8px 0; font-size: 0.875rem; color: #e2e8f0; line-height: 1.6;
+    padding: 8px 10px; background: rgba(255,255,255,0.02);
+    border-radius: 8px; border: 1px solid rgba(30,58,138,0.3);
+  }
+  .ai-steps li::before {
+    content: counter(step-counter);
+    background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
+    color: #93c5fd; font-weight: 900; font-size: 0.72rem;
+    min-width: 24px; height: 24px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+    box-shadow: 0 0 8px rgba(37,99,235,0.4);
+  }
+
+  /* ── Bullet fact list ── */
+  .ai-facts { margin: 10px 0; padding: 0; list-style: none; }
+  .ai-facts li {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin: 6px 0; font-size: 0.875rem; color: #e2e8f0; line-height: 1.6;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(30,58,138,0.18);
+  }
+  .ai-facts li:last-child { border-bottom: none; }
+  .ai-facts li::before {
+    content: "▸"; color: #0ea5e9; font-weight: 900; font-size: 0.85rem;
+    flex-shrink: 0; margin-top: 1px;
+  }
+
+  /* ── Warning / Safety block ── */
+  .ai-warn {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.4);
+    border-left: 5px solid #f59e0b;
+    border-radius: 8px; padding: 12px 16px; margin: 12px 0;
+    color: #fde68a; font-size: 0.865rem; font-weight: 600; line-height: 1.6;
+    box-shadow: 0 2px 12px rgba(245,158,11,0.08);
+  }
+
+  /* ── Severity badges ── */
+  .ai-severity {
+    font-size: 0.7rem; font-weight: 900; padding: 3px 10px;
+    border-radius: 6px; letter-spacing: 0.08em; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 4px;
+    margin: 0 4px 2px 0; vertical-align: middle;
+  }
+  .ai-severity.high  { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+  .ai-severity.medium{ background: rgba(245,158,11,0.14); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
+  .ai-severity.low   { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
+
+  /* ── Info badges (CRITICAL, OEM SPEC, LOTO REQUIRED, etc.) ── */
+  .ai-badge {
+    background: rgba(14,165,233,0.14); color: #7dd3fc;
+    border: 1px solid rgba(14,165,233,0.35); border-radius: 6px;
+    font-size: 0.7rem; font-weight: 900; padding: 2px 9px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    display: inline-flex; align-items: center; margin: 0 3px 2px 0; vertical-align: middle;
+  }
+
+  /* ── Inline code / values ── */
+  .ai-code, code {
+    background: #040d1f; color: #67e8f9;
+    padding: 2px 8px; border-radius: 5px;
+    font-family: 'Courier New', monospace; font-size: 0.84rem;
+    border: 1px solid rgba(14,165,233,0.3);
+  }
+
+  /* ── Data table ── */
+  .ai-table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: 0.84rem; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(30,58,138,0.5);
+    display: block; overflow-x: auto;
+  }
+  .ai-table thead { background: linear-gradient(90deg, #0c1c4a, #0f2460); }
+  .ai-table th {
+    color: #93c5fd; font-weight: 800; padding: 9px 12px;
+    text-align: left; border-bottom: 2px solid #1e40af;
+    font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .ai-table td {
+    padding: 7px 12px; border-bottom: 1px solid rgba(30,58,138,0.3);
+    color: #e2e8f0; vertical-align: top; line-height: 1.5;
+  }
+  .ai-table tbody tr:hover td { background: rgba(14,165,233,0.06); }
+  .ai-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.025); }
+  .ai-table tbody tr:last-child td { border-bottom: none; }
+
+  /* ── Generic inline elements ── */
+  strong, b { color: #f1f5f9; font-weight: 700; }
+  em { color: #94a3b8; font-style: italic; }
+  p { margin: 6px 0; color: #cbd5e1; font-size: 0.875rem; line-height: 1.65; }
 `;
+
 
 let _styleInjected = false;
 function injectAIStyles() {
@@ -153,13 +261,16 @@ export const AITroubleshootingPanel = ({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `### 🤖 EquipFix AI Engineering Diagnostics Copilot
-Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-cause analysis powered live by your Google Gemini or OpenAI API key.
-
-* 🔍 **Real-Time Fault Diagnostics**: Ask about machine error codes, abnormal vibration, or hydraulic anomalies.
-* 🛡️ **OSHA LOTO Compliance**: Zero-energy isolation steps compliant with OSHA 1910.147.
-* 👁️ **Multimodal Vision**: Switch to **Multimodal Inspection** to analyze photos of broken components or gauge dials.
-* 📐 **Industrial Schematics**: Generate isometric exploded assembly diagrams and CAD blueprints on demand.`,
+      content: `<h3 class="ai-section">🤖 EquipFix AI Engineering Diagnostics Copilot</h3>
+<div class="ai-kv"><span class="ai-key">Operational Mode</span><span class="ai-val">Real-time Precision Diagnostics &amp; Reliability Engineering</span></div>
+<div class="ai-kv"><span class="ai-key">Active Standards</span><span class="ai-val"><span class="ai-badge">OSHA 1910.147 LOTO</span><span class="ai-badge">ISO 10816 VIBRATION</span><span class="ai-badge">NFPA 70E</span></span></div>
+<ul class="ai-facts">
+  <li><strong>Real-Time Fault Diagnostics:</strong> Ask about machinery error codes, abnormal vibration signatures, motor heat, or hydraulic pressure anomalies.</li>
+  <li><strong>OSHA LOTO Compliance:</strong> Zero-energy isolation steps, stored energy dissipation, and tagout verification.</li>
+  <li><strong>Multimodal Vision:</strong> Switch to <em>Multimodal Inspection</em> to upload broken component photos, gauge dials, or thermal scans.</li>
+  <li><strong>Industrial Schematics:</strong> Request isometric exploded assembly diagrams or technical blueprints on demand.</li>
+</ul>
+<div class="ai-warn">⚠️ Enter equipment symptom, machine code, or alarm below to generate a comprehensive root-cause analysis and action plan.</div>`,
       timestamp: 'Now',
       provider: 'EquipFix AI'
     }
@@ -271,7 +382,10 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
         {
           id: `sys-${Date.now()}`,
           role: 'assistant',
-          content: `### ⚡ ${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} Connected in Real Time\nActive model: **${effectiveModel}**\nReal-time streaming diagnostics is now active. Send any diagnostic query below!`,
+          content: `<h3 class="ai-section">⚡ ${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} Connected</h3>
+<div class="ai-kv"><span class="ai-key">Active Model</span><span class="ai-val"><strong>${effectiveModel}</strong></span></div>
+<div class="ai-kv"><span class="ai-key">Status</span><span class="ai-val"><span class="ai-badge">STREAMING ACTIVE</span></span></div>
+<p>Real-time industrial diagnostics engine is ready. Send any machinery query or error code below.</p>`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           provider: `${detectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} (${effectiveModel})`
         }
@@ -327,7 +441,10 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
       {
         id: `sys-${Date.now()}`,
         role: 'assistant',
-        content: `### ⚡ Real-Time AI Connected\nActive model updated to **${newCfg.model || 'Gemini 2.0 Flash'}** (${newCfg.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}).\nDirect multimodal streaming inference is now active. Send any diagnostic prompt below!`,
+        content: `<h3 class="ai-section">⚡ Real-Time AI Connected</h3>
+<div class="ai-kv"><span class="ai-key">Active Model</span><span class="ai-val"><strong>${newCfg.model || 'Gemini 2.0 Flash'}</strong></span></div>
+<div class="ai-kv"><span class="ai-key">Provider</span><span class="ai-val"><span class="ai-badge">${newCfg.provider === 'gemini' ? 'GOOGLE GEMINI' : 'OPENAI'}</span></span></div>
+<p>Direct multimodal streaming inference is active. Send any diagnostic prompt below.</p>`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         provider: `${newCfg.provider.toUpperCase()} ENGINE`
       }
@@ -616,7 +733,10 @@ Real-time equipment fault diagnostics, OSHA 1910.147 LOTO compliance, and root-c
       {
         id: 'welcome',
         role: 'assistant',
-        content: `### 🤖 EquipFix AI Engineering Diagnostics Copilot\nChat thread cleared. Ready for equipment diagnostics on ${machineCode || 'all plant machinery'}.`,
+        content: `<h3 class="ai-section">🤖 EquipFix AI Engineering Diagnostics Copilot</h3>
+<div class="ai-kv"><span class="ai-key">Thread Status</span><span class="ai-val">Cleared &amp; Ready</span></div>
+<div class="ai-kv"><span class="ai-key">Machine Context</span><span class="ai-val">${machineCode || 'All Plant Machinery'}</span></div>
+<div class="ai-warn">⚠️ Ready for equipment diagnostics. Ask about any fault symptom, error code, or component inspection.</div>`,
         timestamp: 'Now',
         provider: 'EquipFix AI'
       }
