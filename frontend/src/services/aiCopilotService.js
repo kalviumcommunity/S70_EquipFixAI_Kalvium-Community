@@ -72,7 +72,7 @@ export const DEFAULT_MODELS = {
 export const resolveGeminiCandidateModels = (modelName) => {
   let raw = (modelName || 'gemini-flash-lite-latest').replace(/^models\//, '').trim();
   const list = [];
-  if (raw && !['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].includes(raw)) {
+  if (raw && !['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'].includes(raw)) {
     list.push(raw);
   }
   for (const fallback of [
@@ -80,7 +80,7 @@ export const resolveGeminiCandidateModels = (modelName) => {
     'gemini-3.5-flash',
     'gemini-flash-latest',
     'gemini-3.1-flash-lite',
-    'gemini-2.0-flash-lite'
+    'gemini-2.5-flash-lite'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
   }
@@ -88,11 +88,11 @@ export const resolveGeminiCandidateModels = (modelName) => {
 };
 
 export const getAIConfig = () => {
-  let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '';
+  let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
   
-  // Clean up any stale or placeholder keys from previous development
-  if (!apiKey || apiKey.includes('AQ.Ab8RN6JQDh8K')) {
+  // Clean up any stale or placeholder keys from previous development or sync env key
+  if (!apiKey || apiKey.includes('AQ.Ab8RN6JQDh8K') || (envKey && !apiKey.startsWith('AQ.') && !apiKey.startsWith('AIza') && !apiKey.startsWith('sk-'))) {
     apiKey = envKey;
     if (apiKey) {
       try {
@@ -100,7 +100,7 @@ export const getAIConfig = () => {
       } catch (_) {}
     }
   }
-  apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
+  apiKey = (apiKey || envKey || '').trim().replace(/^["']|["']$/g, '');
 
   let provider = localStorage.getItem(STORAGE_KEYS.PROVIDER);
   // Auto-detect provider if key prefix is unmistakable
@@ -125,8 +125,8 @@ export const getAIConfig = () => {
       model.startsWith('o1') ||
       model.startsWith('o3') ||
       model === 'gemini-2.0-flash' ||
-      model.startsWith('gemini-1.5') ||
-      model.startsWith('gemini-2.5')
+      model === 'gemini-2.5-flash' ||
+      model.startsWith('gemini-1.5')
     ) {
       model = 'gemini-flash-lite-latest';
       localStorage.setItem(STORAGE_KEYS.MODEL, model);
@@ -415,7 +415,7 @@ export const askEquipFixCopilot = async ({
   let effectiveModel = _overrideModel || (
     (model === 'custom' && customModel?.trim())
       ? customModel.trim()
-      : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash'))
+      : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-flash-lite-latest'))
   );
 
   effectiveModel = effectiveModel.replace(/^models\//, '');
@@ -425,10 +425,10 @@ export const askEquipFixCopilot = async ({
     }
   } else {
     if (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3') || !effectiveModel) {
-      effectiveModel = 'gemini-2.0-flash';
+      effectiveModel = 'gemini-flash-lite-latest';
     }
-    if (effectiveModel.includes('2.5') || effectiveModel.includes('flash-8b') || effectiveModel.includes('flash-latest') || effectiveModel.startsWith('gemini-1.5')) {
-      effectiveModel = 'gemini-2.0-flash';
+    if (effectiveModel === 'gemini-2.0-flash' || effectiveModel === 'gemini-2.5-flash' || effectiveModel.startsWith('gemini-1.5') || effectiveModel.includes('flash-8b')) {
+      effectiveModel = 'gemini-flash-lite-latest';
     }
   }
 
@@ -509,41 +509,41 @@ SAFETY FIRST (HIGHEST PRIORITY)
 - If a situation appears dangerous or requires certified authorization, recommend stopping the operation immediately and escalating to qualified personnel.
 
 ==================================================
-STRUCTURED TROUBLESHOOTING FORMAT
+STRUCTURED CHATGPT-STYLE INDUSTRIAL REPORT FORMAT
 ==================================================
-When diagnosing an issue, structure your response using pure HTML elements:
+Format your response using clear, professional Markdown and HTML elements:
 
-<h3 class="ai-section">🔍 Diagnosis</h3>
-Concise explanation of the likely issue. State clearly whether it is directly documented, strongly supported, or requires on-site verification.
+# [MACHINE CODE OR INCIDENT] — DIAGNOSTIC & ACTION REPORT
+**Equipment:** ${context.machineCode || 'Industrial Asset'} | **Status:** ${context.status || 'Active'} | **Priority:** High / Urgent
 
-<h3 class="ai-section">📋 Evidence</h3>
-Show the important evidence found in the retrieved documentation or telemetry (alarm numbers, subsystem linkages, previous repair records).
+## 1. 🔍 Executive Diagnostic Assessment
+Authoritative, clear explanation of the probable failure mechanism. State whether it is directly confirmed by OEM documentation, indicated by telemetry, or requires manual verification.
 
-<h3 class="ai-section">🛠 Recommended Checks</h3>
-<ol class="ai-steps">
-  <li>Step description with specific tools, inspection points, and measurement thresholds (safest & least invasive first).</li>
-</ol>
+> [!DANGER]
+> **SAFETY & LOCKOUT/TAGOUT (LOTO) MANDATE (OSHA 1910.147)**
+> State explicit zero-energy state verification, main breaker disconnect, stored energy release (hydraulic/pneumatic), and required PPE (safety glasses, arc shield, cut-resistant gloves) prior to touch.
 
-<div class="ai-warn">⚠️ <strong>Safety:</strong> Explicit OSHA 1910.147 LOTO, PPE requirements, zero-energy state verification.</div>
+## 2. 📋 Symptom & Root Cause Matrix
+Provide a structured comparison table:
+| Parameter / Symptom | Observed Telemetry | Nominal Limit | Likely Root Cause |
+| :--- | :--- | :--- | :--- |
+| ... | ... | ... | ... |
 
-<h3 class="ai-section">➡️ Next Action</h3>
-Immediate, concrete next step for the technician or operator.
+## 3. 🛠️ Step-by-Step Resolution Plan
+1. **[Step 1 Name]:** Specific inspection task, tools required (e.g. dial indicator, torque wrench, multimeter), and exact tolerances.
+2. **[Step 2 Name]:** Next mechanical or electrical action.
+3. **[Step 3 Name]:** Re-assembly and validation check.
 
-<h3 class="ai-section">📚 Sources</h3>
-Cite the actual retrieved documents:
-<ul class="ai-facts">
-  <li>[Source: Document Name — Section/Page]</li>
-</ul>
+## 4. ⚙️ Technical Specifications & Torque Ratings
+List exact numbers, torque limits (Nm or ft-lbs), operating temperatures, or lubrication specs.
 
-If the available documentation does not contain enough information:
-<div class="ai-warn">⚠️ <strong>More Information Needed:</strong> Explain exactly what equipment model, alarm code, or symptom is missing to complete the diagnosis.</div>
+## 5. ➡️ Immediate Next Action
+Direct, single-sentence command for the technician or shift supervisor right now.
 
 OUTPUT RULES:
-- Output clean structured HTML matching the dark industrial theme.
-- No greetings, no filler text, no "Sure! Here is the information...".
-- Use <div class="ai-kv"><span class="ai-key">KEY</span><span class="ai-val">VAL</span></div> for technical specs.
-- Use <span class="ai-badge">...</span> and <span class="ai-severity high|medium|low">...</span> for status.
-${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACHINE: ${context.machineCode}</span>` : ''}${context.incidentSummary ? `\nActive Fault Context: <div class="ai-warn">⚠️ ${context.incidentSummary}</div>` : ''}${ragSnippets}`;
+- Output formal, clean, engineering-grade Markdown with table, callout blocks, and numbered lists.
+- Strictly no conversational filler or apologies ("Sure!", "I hope this helps"). Begin directly with the report.
+${context.machineCode ? `\nActive Equipment Context: MACHINE: ${context.machineCode}` : ''}${context.incidentSummary ? `\nActive Fault Context: FAULT: ${context.incidentSummary}` : ''}${ragSnippets}`;
 
   const buildCopilotResult = ({
     text,
@@ -561,6 +561,8 @@ ${context.machineCode ? `\nActive Equipment Context: <span class="ai-badge">MACH
 
     return {
       text,
+      answer: text,
+      content: text,
       provider,
       model,
       realtime,
