@@ -37,8 +37,27 @@ export const Navbar = ({ onToggleSidebar }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef(null);
 
+  // Mobile responsive states
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  const [isSmallMobile, setIsSmallMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 480 : false
+  );
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
-
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+      setIsSmallMobile(w < 480);
+      if (w >= 768) {
+        setShowMobileSearch(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -157,8 +176,184 @@ export const Navbar = ({ onToggleSidebar }) => {
 
   const handleSearchResultClick = (url) => {
     setShowSearchModal(false);
+    setShowMobileSearch(false);
     setSearchQuery('');
     navigate(url);
+  };
+
+  const renderSearchResults = () => {
+    if (!showSearchModal || !searchResults) return null;
+
+    return (
+      <div style={{
+        position: isMobile ? 'fixed' : 'absolute',
+        top: isMobile ? '62px' : '42px',
+        left: isMobile ? '10px' : 0,
+        right: isMobile ? '10px' : 0,
+        maxHeight: isMobile ? 'calc(100vh - 80px)' : '420px',
+        overflowY: 'auto',
+        backgroundColor: '#ffffff',
+        borderRadius: '10px',
+        boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+        border: '1px solid #e2e8f0',
+        padding: '12px',
+        zIndex: 120
+      }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>
+          Matches for "{searchResults.query}" ({searchResults.total_matches} found)
+        </div>
+
+        {searchResults.total_matches === 0 ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.825rem' }}>
+            No records found matching "{searchResults.query}".
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Machines */}
+            {searchResults.results.machines?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Machines & Equipment
+                </div>
+                {searchResults.results.machines.map((m) => (
+                  <div
+                    key={`m-${m.id}`}
+                    onClick={() => handleSearchResultClick(m.url)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: '#f8fafc',
+                      marginBottom: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Cpu size={14} color="#2563eb" />
+                      <div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{m.title}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{m.subtitle}</div>
+                      </div>
+                    </div>
+                    <span className={`badge badge-${m.status.toLowerCase()}`} style={{ fontSize: '0.65rem' }}>
+                      {m.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Incidents */}
+            {searchResults.results.incidents?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Incidents
+                </div>
+                {searchResults.results.incidents.map((inc) => (
+                  <div
+                    key={`inc-${inc.id}`}
+                    onClick={() => handleSearchResultClick(inc.url)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: '#f8fafc',
+                      marginBottom: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle size={14} color="#dc2626" />
+                      <div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{inc.title}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inc.subtitle}</div>
+                      </div>
+                    </div>
+                    <span className={`badge badge-${inc.status.toLowerCase()}`} style={{ fontSize: '0.65rem' }}>
+                      {inc.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Spare Parts */}
+            {searchResults.results.parts?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Spare Parts Inventory
+                </div>
+                {searchResults.results.parts.map((p) => (
+                  <div
+                    key={`part-${p.id}`}
+                    onClick={() => handleSearchResultClick(p.url)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: '#f8fafc',
+                      marginBottom: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Package size={14} color="#16a34a" />
+                      <div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{p.title}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{p.subtitle}</div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: p.status === 'LOW STOCK' ? '#dc2626' : '#16a34a' }}>
+                      {p.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Documents & Manuals */}
+            {searchResults.results.documents?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Manuals & SOPs
+                </div>
+                {searchResults.results.documents.map((d) => (
+                  <div
+                    key={`doc-${d.id}`}
+                    onClick={() => handleSearchResultClick(d.url)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: '#f8fafc',
+                      marginBottom: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={14} color="#7c3aed" />
+                      <div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{d.title}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{d.subtitle}</div>
+                      </div>
+                    </div>
+                    <ArrowRight size={14} color="#94a3b8" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -169,13 +364,84 @@ export const Navbar = ({ onToggleSidebar }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 24px',
+      padding: isMobile ? '0 12px' : '0 24px',
       boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
       position: 'relative',
       zIndex: 50
     }}>
+      {/* Mobile Backdrop for Dropdowns */}
+      {isMobile && (showDropdown || showProfileMenu) && (
+        <div
+          onClick={() => { setShowDropdown(false); setShowProfileMenu(false); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(7, 12, 24, 0.45)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 90
+          }}
+        />
+      )}
+
+      {/* Mobile Full-Width Search Overlay Bar */}
+      {isMobile && showMobileSearch && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: '#ffffff',
+          zIndex: 95,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          gap: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+        }}>
+          <Search size={18} color="#64748b" style={{ flexShrink: 0 }} />
+          <input
+            type="text"
+            autoFocus
+            placeholder="Search fleet, incidents, parts, SOPs..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              flex: 1,
+              fontSize: '16px',
+              color: '#1e293b'
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); setSearchResults(null); }}
+              style={{ background: 'none', border: 'none', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            >
+              <X size={16} color="#64748b" />
+            </button>
+          )}
+          <button
+            onClick={() => { setShowMobileSearch(false); setShowSearchModal(false); }}
+            style={{
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#475569',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+          >
+            Cancel
+          </button>
+          {renderSearchResults()}
+        </div>
+      )}
+
       {/* Left: Hamburger & Plant breadcrumb / status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? '6px' : '10px', minWidth: 0, flexShrink: 1 }}>
         {onToggleSidebar && (
           <button
             type="button"
@@ -189,16 +455,28 @@ export const Navbar = ({ onToggleSidebar }) => {
               padding: '6px',
               borderRadius: '6px',
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexShrink: 0
             }}
           >
             <Menu size={20} />
           </button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Operations</span>
-          <ChevronRight size={14} color="#94a3b8" />
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: isSmallMobile ? '0.78rem' : '0.85rem', minWidth: 0, overflow: 'hidden' }}>
+          {!isMobile && (
+            <>
+              <span style={{ color: '#64748b', fontWeight: 500 }}>Operations</span>
+              <ChevronRight size={14} color="#94a3b8" />
+            </>
+          )}
+          <span style={{
+            fontWeight: 700,
+            color: '#0f172a',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: isSmallMobile ? '120px' : isMobile ? '170px' : 'none'
+          }}>
             {location.pathname.includes('/manager/dashboard') ? 'Manager Dashboard' :
              location.pathname.includes('/supervisor/dashboard') ? 'Supervisor Dashboard' :
              location.pathname.includes('/technician/dashboard') ? 'Technician Workspace' :
@@ -217,237 +495,92 @@ export const Navbar = ({ onToggleSidebar }) => {
              location.pathname.includes('/settings') ? 'Settings' : 'Overview'}
           </span>
         </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontSize: '0.725rem',
-          padding: '2px 8px',
-          borderRadius: '9999px',
-          backgroundColor: connected ? '#ecfdf5' : '#fef2f2',
-          color: connected ? '#065f46' : '#991b1b',
-          border: `1px solid ${connected ? '#a7f3d0' : '#fecaca'}`,
-          fontWeight: 600
-        }}>
-          {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-          <span>{connected ? 'LIVE' : 'RECONNECTING'}</span>
-        </div>
-      </div>
-
-
-      {/* Center: Global Search Bar */}
-      <div ref={searchContainerRef} style={{ position: 'relative', width: '380px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          backgroundColor: '#f1f5f9',
-          borderRadius: '8px',
-          padding: '6px 12px',
-          border: showSearchModal ? '1px solid #3b82f6' : '1px solid transparent',
-          transition: 'all 0.15s ease'
-        }}>
-          <Search size={16} color="#64748b" />
-          <input
-            type="text"
-            placeholder="Global search machines, incidents, parts, SOPs..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onFocus={() => { if (searchQuery.trim()) setShowSearchModal(true); }}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              width: '100%',
-              fontSize: '0.825rem',
-              color: '#1e293b'
-            }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => { setSearchQuery(''); setSearchResults(null); setShowSearchModal(false); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-            >
-              <X size={14} color="#94a3b8" />
-            </button>
-          )}
-        </div>
-
-        {/* Search Results Popover */}
-        {showSearchModal && searchResults && (
+        {!isSmallMobile && (
           <div style={{
-            position: 'absolute',
-            top: '42px',
-            left: 0,
-            right: 0,
-            maxHeight: '420px',
-            overflowY: 'auto',
-            backgroundColor: '#ffffff',
-            borderRadius: '10px',
-            boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
-            border: '1px solid #e2e8f0',
-            padding: '12px',
-            zIndex: 110
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '0.7rem',
+            padding: '2px 7px',
+            borderRadius: '9999px',
+            backgroundColor: connected ? '#ecfdf5' : '#fef2f2',
+            color: connected ? '#065f46' : '#991b1b',
+            border: `1px solid ${connected ? '#a7f3d0' : '#fecaca'}`,
+            fontWeight: 600,
+            flexShrink: 0
           }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>
-              Matches for "{searchResults.query}" ({searchResults.total_matches} found)
-            </div>
-
-            {searchResults.total_matches === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.825rem' }}>
-                No records found matching "{searchResults.query}".
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {/* Machines */}
-                {searchResults.results.machines?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      Machines & Equipment
-                    </div>
-                    {searchResults.results.machines.map((m) => (
-                      <div
-                        key={`m-${m.id}`}
-                        onClick={() => handleSearchResultClick(m.url)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8fafc',
-                          marginBottom: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Cpu size={14} color="#2563eb" />
-                          <div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{m.title}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{m.subtitle}</div>
-                          </div>
-                        </div>
-                        <span className={`badge badge-${m.status.toLowerCase()}`} style={{ fontSize: '0.65rem' }}>
-                          {m.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Incidents */}
-                {searchResults.results.incidents?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      Incidents
-                    </div>
-                    {searchResults.results.incidents.map((inc) => (
-                      <div
-                        key={`inc-${inc.id}`}
-                        onClick={() => handleSearchResultClick(inc.url)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8fafc',
-                          marginBottom: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <AlertTriangle size={14} color="#dc2626" />
-                          <div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{inc.title}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inc.subtitle}</div>
-                          </div>
-                        </div>
-                        <span className={`badge badge-${inc.status.toLowerCase()}`} style={{ fontSize: '0.65rem' }}>
-                          {inc.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Spare Parts */}
-                {searchResults.results.parts?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      Spare Parts Inventory
-                    </div>
-                    {searchResults.results.parts.map((p) => (
-                      <div
-                        key={`part-${p.id}`}
-                        onClick={() => handleSearchResultClick(p.url)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8fafc',
-                          marginBottom: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Package size={14} color="#16a34a" />
-                          <div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{p.title}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{p.subtitle}</div>
-                          </div>
-                        </div>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: p.status === 'LOW STOCK' ? '#dc2626' : '#16a34a' }}>
-                          {p.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Documents & Manuals */}
-                {searchResults.results.documents?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      Manuals & SOPs
-                    </div>
-                    {searchResults.results.documents.map((d) => (
-                      <div
-                        key={`doc-${d.id}`}
-                        onClick={() => handleSearchResultClick(d.url)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8fafc',
-                          marginBottom: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <FileText size={14} color="#7c3aed" />
-                          <div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{d.title}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{d.subtitle}</div>
-                          </div>
-                        </div>
-                        <ArrowRight size={14} color="#94a3b8" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {connected ? <Wifi size={11} /> : <WifiOff size={11} />}
+            {!isMobile && <span>{connected ? 'LIVE' : 'RECONNECTING'}</span>}
           </div>
         )}
       </div>
 
+      {/* Center: Global Search Bar (desktop only) */}
+      {!isMobile && (
+        <div ref={searchContainerRef} style={{ position: 'relative', width: '380px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#f1f5f9',
+            borderRadius: '8px',
+            padding: '6px 12px',
+            border: showSearchModal ? '1px solid #3b82f6' : '1px solid transparent',
+            transition: 'all 0.15s ease'
+          }}>
+            <Search size={16} color="#64748b" />
+            <input
+              type="text"
+              placeholder="Global search machines, incidents, parts, SOPs..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onFocus={() => { if (searchQuery.trim()) setShowSearchModal(true); }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                width: '100%',
+                fontSize: '0.825rem',
+                color: '#1e293b'
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(''); setSearchResults(null); setShowSearchModal(false); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+              >
+                <X size={14} color="#94a3b8" />
+              </button>
+            )}
+          </div>
+          {renderSearchResults()}
+        </div>
+      )}
+
       {/* Right: Ask EquipFix AI, Notifications, User Profile Dropdown */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? '6px' : '10px', flexShrink: 0 }}>
+        {/* Mobile Search Button */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setShowMobileSearch(true)}
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              padding: '7px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#475569'
+            }}
+            title="Search"
+          >
+            <Search size={17} />
+          </button>
+        )}
+
         {/* Prominent Ask EquipFix AI Copilot Button */}
         <button
           type="button"
@@ -455,12 +588,12 @@ export const Navbar = ({ onToggleSidebar }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
-            padding: '7px 14px',
+            padding: isSmallMobile ? '6px 8px' : '7px 12px',
             fontSize: '0.8rem',
             fontWeight: 700,
             cursor: 'pointer',
@@ -470,17 +603,19 @@ export const Navbar = ({ onToggleSidebar }) => {
           }}
           title="Open AI Diagnostics Copilot (Ctrl+K / Cmd+K)"
         >
-          <Sparkles size={15} color="#e0f2fe" />
-          <span>Ask EquipFix AI</span>
-          <span style={{
-            fontSize: '0.65rem',
-            backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            padding: '1px 5px',
-            borderRadius: '4px',
-            marginLeft: '4px'
-          }}>
-            ⌘K
-          </span>
+          <Sparkles size={14} color="#e0f2fe" />
+          <span>{isSmallMobile ? 'AI' : isMobile ? 'Copilot' : 'Ask EquipFix AI'}</span>
+          {!isMobile && (
+            <span style={{
+              fontSize: '0.65rem',
+              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              marginLeft: '4px'
+            }}>
+              ⌘K
+            </span>
+          )}
         </button>
 
         {/* Notifications Dropdown */}
@@ -523,11 +658,13 @@ export const Navbar = ({ onToggleSidebar }) => {
 
           {showDropdown && (
             <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '46px',
-              width: '380px',
-              maxHeight: '460px',
+              position: isMobile ? 'fixed' : 'absolute',
+              right: isMobile ? '10px' : 0,
+              left: isMobile ? '10px' : 'auto',
+              top: isMobile ? '64px' : '46px',
+              width: isMobile ? 'auto' : '380px',
+              maxWidth: isMobile ? 'calc(100vw - 20px)' : '380px',
+              maxHeight: isMobile ? 'calc(100vh - 80px)' : '460px',
               backgroundColor: '#ffffff',
               borderRadius: '10px',
               boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
@@ -671,34 +808,43 @@ export const Navbar = ({ onToggleSidebar }) => {
                 user?.full_name ? user.full_name[0] : 'U'
               )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>{user?.full_name}</span>
-              <span style={{
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                color: '#2563eb',
-                letterSpacing: '0.04em'
-              }}>
-                {user?.role?.name || user?.role}
-              </span>
-            </div>
-            <ChevronDown size={14} color="#64748b" />
+            {!isMobile && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>{user?.full_name}</span>
+                  <span style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: '#2563eb',
+                    letterSpacing: '0.04em'
+                  }}>
+                    {user?.role?.name || user?.role}
+                  </span>
+                </div>
+                <ChevronDown size={14} color="#64748b" />
+              </>
+            )}
           </button>
 
           {showProfileMenu && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '46px',
-              width: '320px',
-              backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              boxShadow: '0 16px 36px rgba(15, 23, 42, 0.18)',
-              border: '1px solid #e2e8f0',
-              padding: '16px',
-              zIndex: 100
-            }}>
+            <div
+              ref={profileMenuRef}
+              style={{
+                position: isMobile ? 'fixed' : 'absolute',
+                right: isMobile ? '10px' : 0,
+                left: isMobile ? '10px' : 'auto',
+                top: isMobile ? '64px' : '46px',
+                width: isMobile ? 'auto' : '320px',
+                maxWidth: isMobile ? 'calc(100vw - 20px)' : '320px',
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                boxShadow: '0 16px 36px rgba(15, 23, 42, 0.18)',
+                border: '1px solid #e2e8f0',
+                padding: '16px',
+                zIndex: 100
+              }}
+            >
               {/* User Identity Header */}
               <div style={{
                 display: 'flex',

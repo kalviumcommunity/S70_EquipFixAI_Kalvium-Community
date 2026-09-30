@@ -241,13 +241,31 @@ export const AITroubleshootingPanel = ({
   machineCode = '',
   incidentSummary = '',
   onCopyToLog = null,
-  onCopyToCompletion = null
+  onCopyToCompletion = null,
+  hideTopHeader = false,
+  customHeight = null,
+  onMachineChange = null,
+  externalTab = null,
+  onTabChange = null
 }) => {
   // Panel Modes: 'DIAGNOSTICS' | 'VISION' | 'IMAGE_GEN'
-  const [activeTab, setActiveTab] = useState('DIAGNOSTICS');
+  const [internalActiveTab, setInternalActiveTab] = useState('DIAGNOSTICS');
+  const activeTab = externalTab || internalActiveTab;
+  const setActiveTab = (tab) => {
+    setInternalActiveTab(tab);
+    if (onTabChange) onTabChange(tab);
+  };
 
-  // 3-Panel Workspace Layout State
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  // Mobile breakpoint detection
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 3-Panel Workspace Layout State (on mobile default left panel closed so chat is full-width)
+  const [showLeftPanel, setShowLeftPanel] = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true);
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState('SOURCES'); // 'SOURCES' | 'HISTORY'
 
@@ -378,9 +396,21 @@ export const AITroubleshootingPanel = ({
 
   // Update machine data when prop changes
   useEffect(() => {
-    if (machineId) setActiveMachineId(machineId);
-    if (machineCode) setActiveMachineCode(machineCode);
-  }, [machineId, machineCode]);
+    if (machineId && String(machineId) !== String(activeMachineId)) {
+      setActiveMachineId(machineId);
+      const match = allMachines.find(m => String(m.id) === String(machineId));
+      if (match) {
+        setActiveMachineCode(match.machine_code);
+        setActiveMachineData(match);
+      }
+    }
+  }, [machineId, allMachines]);
+
+  useEffect(() => {
+    if (machineCode && machineCode !== activeMachineCode) {
+      setActiveMachineCode(machineCode);
+    }
+  }, [machineCode]);
 
   // Load machine history when activeMachineId changes
   useEffect(() => {
@@ -397,12 +427,32 @@ export const AITroubleshootingPanel = ({
     }
   }, [activeMachineId]);
 
-  // Auto-scroll chat downwards on new message or loading
-  useEffect(() => {
-    if (activeTab === 'DIAGNOSTICS') {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Safe inner-container-only scroll helper: NEVER calls scrollIntoView to avoid window scroll jumping
+  const isFirstRender = useRef(true);
+  const prevMsgLength = useRef(messages.length);
+
+  const scrollToChatBottom = (smooth = true) => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     }
-  }, [messages, loading, isAnalyzing, activeTab]);
+  };
+
+  // Auto-scroll inside chat box only on actual new message or when analysis starts
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (activeTab === 'DIAGNOSTICS') {
+      if (messages.length > prevMsgLength.current || isAnalyzing) {
+        scrollToChatBottom(true);
+      }
+    }
+    prevMsgLength.current = messages.length;
+  }, [messages.length, isAnalyzing, activeTab]);
 
   // Pre-fill question if incidentSummary provided
   useEffect(() => {
@@ -567,7 +617,7 @@ export const AITroubleshootingPanel = ({
     }));
 
     setTimeout(() => {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToChatBottom(true);
     }, 50);
 
     try {
@@ -600,7 +650,7 @@ export const AITroubleshootingPanel = ({
       }));
     } finally {
       setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        scrollToChatBottom(true);
       }, 100);
     }
   };
@@ -622,7 +672,7 @@ export const AITroubleshootingPanel = ({
 
     setTimeout(() => {
       questionInputRef.current?.focus();
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToChatBottom(true);
     }, 60);
   };
 
@@ -744,7 +794,7 @@ export const AITroubleshootingPanel = ({
     setError(null);
 
     setTimeout(() => {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToChatBottom(true);
     }, 50);
 
     try {
@@ -870,7 +920,7 @@ export const AITroubleshootingPanel = ({
       setLoading(false);
       setIsAnalyzing(false);
       setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        scrollToChatBottom(true);
       }, 100);
     }
   };
@@ -984,273 +1034,403 @@ export const AITroubleshootingPanel = ({
   return (
     <div style={{
       backgroundColor: '#070d1e',
-      borderRadius: '16px',
+      borderRadius: hideTopHeader ? '12px' : '16px',
       border: '1px solid #1e3a8a',
       boxShadow: '0 16px 40px -10px rgba(0, 0, 0, 0.6), 0 0 24px rgba(14, 165, 233, 0.1)',
       overflow: 'hidden',
-      marginBottom: '24px',
+      marginBottom: hideTopHeader ? '0' : '24px',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      height: customHeight || (hideTopHeader ? '100%' : 'auto'),
+      minHeight: hideTopHeader ? '600px' : 'auto'
     }}>
-      {/* 1. TOP HEADER BAR */}
-      <div style={{
-        backgroundColor: '#050a17',
-        color: '#ffffff',
-        padding: '12px 18px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '12px',
-        borderBottom: '1px solid #1e293b'
-      }}>
-        {/* Left: Branding & Machine Context */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={() => setShowLeftPanel(!showLeftPanel)}
-            style={{
-              background: showLeftPanel ? 'rgba(56, 189, 248, 0.15)' : '#0b1329',
-              border: '1px solid #1e3a8a',
-              borderRadius: '8px',
-              padding: '6px',
-              color: showLeftPanel ? '#38bdf8' : '#94a3b8',
-              cursor: 'pointer',
+      {/* 1. TOP HEADER BAR (rendered when not embedded/hideTopHeader) */}
+      {!hideTopHeader && (
+        <div style={{
+          backgroundColor: '#050a17',
+          color: '#ffffff',
+          padding: '12px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          borderBottom: '1px solid #1e293b'
+        }}>
+          {/* Left: Branding & Machine Context */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setShowLeftPanel(!showLeftPanel)}
+              style={{
+                background: showLeftPanel ? 'rgba(56, 189, 248, 0.15)' : '#0b1329',
+                border: '1px solid #1e3a8a',
+                borderRadius: '8px',
+                padding: '6px',
+                color: showLeftPanel ? '#38bdf8' : '#94a3b8',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title={showLeftPanel ? 'Hide Asset & Navigation Sidebar' : 'Show Asset & Navigation Sidebar'}
+            >
+              <Sidebar size={17} />
+            </button>
+
+            <div style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '9px',
+              background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title={showLeftPanel ? 'Hide Asset & Navigation Sidebar' : 'Show Asset & Navigation Sidebar'}
-          >
-            <Sidebar size={17} />
-          </button>
-
-          <div style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '9px',
-            background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 14px rgba(14, 165, 233, 0.45)'
-          }}>
-            <Sparkles size={18} color="#ffffff" />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '0.98rem', letterSpacing: '-0.01em', color: '#f8fafc' }}>
-                EquipFixAI Copilot
-              </strong>
-              {activeMachineCode && (
-                <span style={{
-                  backgroundColor: '#0f172a',
-                  color: '#38bdf8',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155'
-                }}>
-                  {activeMachineCode}
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-              Grounded RAG Maintenance Assistant • OEM Documentation • OSHA LOTO Protocols
-            </span>
-          </div>
-        </div>
-
-        {/* Right: Key Status Badge, Sources Drawer Toggle & Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {/* Evidence Drawer Toggle Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (activeSources.length > 0 && !activeSourcesMessage) {
-                setActiveSourcesMessage(latestAssistantMsg);
-              }
-              setShowRightPanel(!showRightPanel);
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: showRightPanel ? 'rgba(56, 189, 248, 0.2)' : '#0b1329',
-              border: `1px solid ${showRightPanel ? '#38bdf8' : '#1e3a8a'}`,
-              color: showRightPanel ? '#38bdf8' : '#cbd5e1',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-            title="Toggle Evidence & Retrieved Sources Drawer"
-          >
-            <BookOpen size={14} color="#38bdf8" />
-            <span>Retrieved Sources ({activeSources.length})</span>
-            <PanelRight size={14} />
-          </button>
-
-          {/* Model Status Indicator */}
-          <div
-            onClick={() => setShowConfigModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: aiConfig.apiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-              border: `1px solid ${aiConfig.apiKey ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
-              padding: '5px 12px',
-              borderRadius: '20px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-            title="Click to configure AI API key and model"
-          >
-            <span style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: aiConfig.apiKey ? '#10b981' : '#f59e0b',
-              boxShadow: `0 0 8px ${aiConfig.apiKey ? '#10b981' : '#f59e0b'}`
-            }} />
-            <span style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: aiConfig.apiKey ? '#6ee7b7' : '#fcd34d',
-              textTransform: 'uppercase',
-              letterSpacing: '0.02em'
+              justifyContent: 'center',
+              boxShadow: '0 0 14px rgba(14, 165, 233, 0.45)'
             }}>
-              {aiConfig.apiKey
-                ? `${aiConfig.provider === 'openai' ? 'OpenAI' : 'Gemini'} • ${activeModelDisplay}`
-                : 'API Key Required'}
-            </span>
+              <Sparkles size={18} color="#ffffff" />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <strong style={{ fontSize: '0.98rem', letterSpacing: '-0.01em', color: '#f8fafc' }}>
+                  EquipFixAI Copilot
+                </strong>
+                {activeMachineCode && (
+                  <span style={{
+                    backgroundColor: '#0f172a',
+                    color: '#38bdf8',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid #334155'
+                  }}>
+                    {activeMachineCode}
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                Grounded RAG Maintenance Assistant • OEM Documentation • OSHA LOTO Protocols
+              </span>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowConfigModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: '#1e293b',
-              color: '#e2e8f0',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            <Key size={13} color="#38bdf8" />
-            <span>Key</span>
-          </button>
+          {/* Right: Key Status Badge, Sources Drawer Toggle & Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Evidence Drawer Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (activeSources.length > 0 && !activeSourcesMessage) {
+                  setActiveSourcesMessage(latestAssistantMsg);
+                }
+                setShowRightPanel(!showRightPanel);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: showRightPanel ? 'rgba(56, 189, 248, 0.2)' : '#0b1329',
+                border: `1px solid ${showRightPanel ? '#38bdf8' : '#1e3a8a'}`,
+                color: showRightPanel ? '#38bdf8' : '#cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              title="Toggle Evidence & Retrieved Sources Drawer"
+            >
+              <BookOpen size={14} color="#38bdf8" />
+              <span>Retrieved Sources ({activeSources.length})</span>
+              <PanelRight size={14} />
+            </button>
 
+            {/* Model Status Indicator */}
+            <div
+              onClick={() => setShowConfigModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: aiConfig.apiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                border: `1px solid ${aiConfig.apiKey ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                padding: '5px 12px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to configure AI API key and model"
+            >
+              <span style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: aiConfig.apiKey ? '#10b981' : '#f59e0b',
+                boxShadow: `0 0 8px ${aiConfig.apiKey ? '#10b981' : '#f59e0b'}`
+              }} />
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: aiConfig.apiKey ? '#6ee7b7' : '#fcd34d',
+                textTransform: 'uppercase',
+                letterSpacing: '0.02em'
+              }}>
+                {aiConfig.apiKey
+                  ? `${aiConfig.provider === 'openai' ? 'OpenAI' : 'Gemini'} • ${activeModelDisplay}`
+                  : 'API Key Required'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowConfigModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#1e293b',
+                color: '#e2e8f0',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <Key size={13} color="#38bdf8" />
+              <span>Key</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearChat}
+              style={{
+                backgroundColor: '#0f172a',
+                color: '#94a3b8',
+                border: '1px solid #334155',
+                fontSize: '0.75rem',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+              title="Clear Chat Thread"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* COMPACT UTILITY BAR (rendered when hideTopHeader is true) */}
+      {hideTopHeader && (
+        <div style={{
+          backgroundColor: '#050a17',
+          borderBottom: '1px solid #1e293b',
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '10px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setShowLeftPanel(!showLeftPanel)}
+              style={{
+                backgroundColor: showLeftPanel ? 'rgba(56, 189, 248, 0.15)' : '#0b1329',
+                border: '1px solid #1e3a8a',
+                borderRadius: '6px',
+                padding: '5px 10px',
+                color: showLeftPanel ? '#38bdf8' : '#94a3b8',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title={showLeftPanel ? 'Hide Asset Specs & Quick Actions' : 'Show Asset Specs & Quick Actions'}
+            >
+              <Sidebar size={14} />
+              <span>{showLeftPanel ? 'Hide Panel' : 'Asset Panel'}</span>
+            </button>
+
+            {activeMachineCode && (
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(56, 189, 248, 0.25)'
+              }}>
+                Target: {activeMachineCode} {activeMachineData?.name ? `• ${activeMachineData.name}` : ''}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (activeSources.length > 0 && !activeSourcesMessage) {
+                  setActiveSourcesMessage(latestAssistantMsg);
+                }
+                setShowRightPanel(!showRightPanel);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: showRightPanel ? 'rgba(56, 189, 248, 0.2)' : '#0b1329',
+                border: `1px solid ${showRightPanel ? '#38bdf8' : '#1e3a8a'}`,
+                color: showRightPanel ? '#38bdf8' : '#cbd5e1',
+                borderRadius: '6px',
+                padding: '5px 10px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Toggle Evidence & Retrieved Sources Drawer"
+            >
+              <BookOpen size={13} color="#38bdf8" />
+              <span>OEM Sources ({activeSources.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowConfigModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: aiConfig.apiKey ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                border: `1px solid ${aiConfig.apiKey ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                color: aiConfig.apiKey ? '#6ee7b7' : '#fcd34d',
+                borderRadius: '6px',
+                padding: '5px 10px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Configure AI API Model and Key"
+            >
+              <Key size={12} color={aiConfig.apiKey ? '#34d399' : '#f59e0b'} />
+              <span>{activeModelDisplay}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearChat}
+              style={{
+                backgroundColor: '#0f172a',
+                color: '#94a3b8',
+                border: '1px solid #334155',
+                fontSize: '0.72rem',
+                padding: '5px 9px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+              title="Clear Conversation Thread"
+            >
+              <Trash2 size={13} />
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODE NAVIGATION TABS (rendered when not hidden by hideTopHeader) */}
+      {!hideTopHeader && (
+        <div style={{
+          display: 'flex',
+          backgroundColor: '#091124',
+          borderBottom: '1px solid #1e293b',
+          padding: '0 16px',
+          overflowX: 'auto'
+        }}>
           <button
             type="button"
-            onClick={handleClearChat}
+            onClick={() => setActiveTab('DIAGNOSTICS')}
             style={{
-              backgroundColor: '#0f172a',
-              color: '#94a3b8',
-              border: '1px solid #334155',
-              fontSize: '0.75rem',
-              padding: '6px 10px',
-              borderRadius: '8px',
+              padding: '11px 16px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'DIAGNOSTICS' ? '3px solid #38bdf8' : '3px solid transparent',
+              color: activeTab === 'DIAGNOSTICS' ? '#ffffff' : '#94a3b8',
+              fontSize: '0.82rem',
+              fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '5px'
+              gap: '8px',
+              whiteSpace: 'nowrap'
             }}
-            title="Clear Chat Thread"
           >
-            <Trash2 size={13} />
+            <Zap size={15} color={activeTab === 'DIAGNOSTICS' ? '#38bdf8' : '#64748b'} />
+            <span>Copilot Workspace</span>
+            <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '1px 6px', borderRadius: '10px', fontWeight: 800 }}>
+              3-PANEL
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('VISION')}
+            style={{
+              padding: '11px 16px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'VISION' ? '3px solid #38bdf8' : '3px solid transparent',
+              color: activeTab === 'VISION' ? '#ffffff' : '#94a3b8',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Eye size={15} color={activeTab === 'VISION' ? '#38bdf8' : '#64748b'} />
+            <span>Multimodal Photo Inspection</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('IMAGE_GEN')}
+            style={{
+              padding: '11px 16px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'IMAGE_GEN' ? '3px solid #38bdf8' : '3px solid transparent',
+              color: activeTab === 'IMAGE_GEN' ? '#ffffff' : '#94a3b8',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Palette size={15} color={activeTab === 'IMAGE_GEN' ? '#38bdf8' : '#64748b'} />
+            <span>CAD Schematics Generator</span>
           </button>
         </div>
-      </div>
-
-      {/* 2. MODE NAVIGATION TABS */}
-      <div style={{
-        display: 'flex',
-        backgroundColor: '#091124',
-        borderBottom: '1px solid #1e293b',
-        padding: '0 16px',
-        overflowX: 'auto'
-      }}>
-        <button
-          type="button"
-          onClick={() => setActiveTab('DIAGNOSTICS')}
-          style={{
-            padding: '11px 16px',
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'DIAGNOSTICS' ? '3px solid #38bdf8' : '3px solid transparent',
-            color: activeTab === 'DIAGNOSTICS' ? '#ffffff' : '#94a3b8',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <Zap size={15} color={activeTab === 'DIAGNOSTICS' ? '#38bdf8' : '#64748b'} />
-          <span>Copilot Workspace</span>
-          <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '1px 6px', borderRadius: '10px', fontWeight: 800 }}>
-            3-PANEL
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('VISION')}
-          style={{
-            padding: '11px 16px',
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'VISION' ? '3px solid #38bdf8' : '3px solid transparent',
-            color: activeTab === 'VISION' ? '#ffffff' : '#94a3b8',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <Eye size={15} color={activeTab === 'VISION' ? '#38bdf8' : '#64748b'} />
-          <span>Multimodal Photo Inspection</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('IMAGE_GEN')}
-          style={{
-            padding: '11px 16px',
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'IMAGE_GEN' ? '3px solid #38bdf8' : '3px solid transparent',
-            color: activeTab === 'IMAGE_GEN' ? '#ffffff' : '#94a3b8',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <Palette size={15} color={activeTab === 'IMAGE_GEN' ? '#38bdf8' : '#64748b'} />
-          <span>CAD Schematics Generator</span>
-        </button>
-      </div>
+      )}
 
       {/* Notifications / Error Banner */}
       {error && (
@@ -1299,12 +1479,30 @@ export const AITroubleshootingPanel = ({
           ======================================================== */}
       {activeTab === 'DIAGNOSTICS' && (
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: `${showLeftPanel ? '280px' : '0px'} 1fr ${showRightPanel ? '340px' : '0px'}`,
+          display: isMobile ? 'flex' : 'grid',
+          gridTemplateColumns: isMobile ? undefined : `${showLeftPanel ? '280px' : '0px'} 1fr ${showRightPanel ? '340px' : '0px'}`,
+          flexDirection: isMobile ? 'column' : undefined,
           transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-          minHeight: '620px',
-          overflow: 'hidden'
+          flex: 1,
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative'
         }}>
+          {/* Mobile Overlay Backdrop for Left Panel */}
+          {isMobile && showLeftPanel && (
+            <div
+              onClick={() => setShowLeftPanel(false)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(3, 7, 18, 0.8)',
+                backdropFilter: 'blur(3px)',
+                zIndex: 55
+              }}
+            />
+          )}
+
           {/* ──────────────────────────────────────────────────────────
               LEFT PANEL: CURRENT EQUIPMENT + QUICK ACTIONS + THREADS
               ────────────────────────────────────────────────────────── */}
@@ -1315,8 +1513,32 @@ export const AITroubleshootingPanel = ({
             flexDirection: 'column',
             overflowY: 'auto',
             padding: '16px',
-            gap: '18px'
+            gap: '18px',
+            ...(isMobile ? {
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: '85%',
+              maxWidth: '320px',
+              zIndex: 60,
+              boxShadow: '0 0 35px rgba(0, 0, 0, 0.9)'
+            } : {})
           }}>
+            {/* Mobile Header with Close X */}
+            {isMobile && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid #1e293b' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#38bdf8' }}>Equipment Specifications</span>
+                <button
+                  type="button"
+                  onClick={() => setShowLeftPanel(false)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            )}
+
             {/* 1. Target Equipment Card */}
             <div style={{
               backgroundColor: '#091124',
@@ -1354,6 +1576,7 @@ export const AITroubleshootingPanel = ({
                       setActiveMachineCode(match.machine_code);
                       setActiveMachineData(match);
                     }
+                    if (onMachineChange) onMachineChange(id);
                   }}
                   style={{
                     width: '100%',
@@ -1588,7 +1811,10 @@ export const AITroubleshootingPanel = ({
             flexDirection: 'column',
             backgroundColor: '#070d1e',
             overflow: 'hidden',
-            position: 'relative'
+            position: 'relative',
+            flex: 1,
+            height: '100%',
+            minHeight: 0
           }}>
             {/* Inline Key Configuration Warning Banner */}
             {showInlineKeyForm && (
@@ -1717,6 +1943,7 @@ export const AITroubleshootingPanel = ({
               style={{
                 flex: 1,
                 overflowY: 'auto',
+                minHeight: 0,
                 padding: '20px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -2302,7 +2529,7 @@ export const AITroubleshootingPanel = ({
 
             {/* Input Form Console */}
             <div style={{
-              padding: '14px 18px',
+              padding: isMobile ? '10px 12px' : '14px 18px',
               backgroundColor: '#050a17',
               borderTop: '1px solid #1e293b'
             }}>
@@ -2311,15 +2538,15 @@ export const AITroubleshootingPanel = ({
                   e.preventDefault();
                   handleSearch();
                 }}
-                style={{ display: 'flex', gap: '10px', alignItems: 'center' }}
+                style={{ display: 'flex', gap: isMobile ? '6px' : '10px', alignItems: 'center' }}
               >
                 {/* Voice Input Microphone Button */}
                 <button
                   type="button"
                   onClick={toggleVoiceInput}
                   style={{
-                    width: '42px',
-                    height: '42px',
+                    width: isMobile ? '38px' : '42px',
+                    height: isMobile ? '38px' : '42px',
                     borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
@@ -2329,11 +2556,12 @@ export const AITroubleshootingPanel = ({
                     color: isListening ? '#f87171' : '#94a3b8',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
-                    boxShadow: isListening ? '0 0 12px rgba(239, 68, 68, 0.5)' : 'none'
+                    boxShadow: isListening ? '0 0 12px rgba(239, 68, 68, 0.5)' : 'none',
+                    flexShrink: 0
                   }}
                   title={isListening ? 'Stop Voice Dictation' : 'Start Voice Dictation'}
                 >
-                  {isListening ? <MicOff size={18} className="pulse" /> : <Mic size={18} />}
+                  {isListening ? <MicOff size={16} className="pulse" /> : <Mic size={16} />}
                 </button>
 
                 <input
@@ -2343,15 +2571,18 @@ export const AITroubleshootingPanel = ({
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder={
                     isListening
-                      ? 'Listening to technician voice...'
+                      ? 'Listening...'
                       : replyingTo
-                        ? `Ask follow-up: "${replyingTo.textSnippet.slice(0, 40)}..."`
-                        : `Ask EquipFixAI Copilot: e.g. Why is ${activeMachineCode || 'spindle'} overheating? What is LOTO procedure?`
+                        ? `Follow-up: "${replyingTo.textSnippet.slice(0, 24)}..."`
+                        : isMobile
+                          ? `Ask AI Copilot for ${activeMachineCode || 'machine'}...`
+                          : `Ask EquipFixAI Copilot: e.g. Why is ${activeMachineCode || 'spindle'} overheating? What is LOTO procedure?`
                   }
                   style={{
-                    fontSize: '0.875rem',
+                    fontSize: isMobile ? '16px' : '0.875rem',
                     flex: 1,
-                    padding: '11px 16px',
+                    minWidth: 0,
+                    padding: isMobile ? '9px 12px' : '11px 16px',
                     borderRadius: '10px',
                     backgroundColor: '#000000',
                     color: '#ffffff',
@@ -2367,29 +2598,39 @@ export const AITroubleshootingPanel = ({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '11px 22px',
+                    gap: isMobile ? '4px' : '8px',
+                    padding: isMobile ? '9px 14px' : '11px 22px',
                     borderRadius: '10px',
                     background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
                     color: '#ffffff',
                     border: '1px solid rgba(56, 189, 248, 0.4)',
                     boxShadow: '0 0 16px rgba(14, 165, 233, 0.35)',
                     fontWeight: 700,
+                    fontSize: '0.8rem',
                     cursor: loading || !question.trim() ? 'not-allowed' : 'pointer',
-                    opacity: loading || !question.trim() ? 0.7 : 1
+                    opacity: loading || !question.trim() ? 0.7 : 1,
+                    flexShrink: 0
                   }}
                 >
-                  {loading ? <RefreshCw size={15} className="spin" /> : <Send size={15} />}
-                  <span>{loading ? 'Analyzing...' : 'Send'}</span>
+                  {loading ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
+                  <span>{loading ? '...' : (isMobile ? 'Send' : 'Send')}</span>
                 </button>
               </form>
 
               {/* Quick Prompt Pills */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
-                <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, alignSelf: 'center', textTransform: 'uppercase' }}>
-                  Quick Suggestions:
+              <div style={{
+                display: 'flex',
+                gap: '6px',
+                flexWrap: isMobile ? 'nowrap' : 'wrap',
+                overflowX: isMobile ? 'auto' : 'visible',
+                WebkitOverflowScrolling: 'touch',
+                marginTop: '8px',
+                paddingBottom: isMobile ? '4px' : '0'
+              }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, alignSelf: 'center', textTransform: 'uppercase', flexShrink: 0 }}>
+                  Suggestions:
                 </span>
-                {quickPrompts.slice(0, 3).map((p, idx) => (
+                {quickPrompts.slice(0, 4).map((p, idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -2401,7 +2642,9 @@ export const AITroubleshootingPanel = ({
                       padding: '4px 10px',
                       fontSize: '0.7rem',
                       color: '#94a3b8',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap'
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = '#38bdf8'; e.currentTarget.style.borderColor = '#38bdf8'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#1e293b'; }}
@@ -2416,6 +2659,20 @@ export const AITroubleshootingPanel = ({
           {/* ──────────────────────────────────────────────────────────
               RIGHT PANEL: EVIDENCE & RETRIEVED SOURCES DRAWER
               ────────────────────────────────────────────────────────── */}
+          {/* Mobile Overlay Backdrop for Right Panel */}
+          {isMobile && showRightPanel && (
+            <div
+              onClick={() => setShowRightPanel(false)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(3, 7, 18, 0.8)',
+                backdropFilter: 'blur(3px)',
+                zIndex: 55
+              }}
+            />
+          )}
+
           <aside style={{
             backgroundColor: '#050915',
             borderLeft: '1px solid #1e293b',
@@ -2423,7 +2680,17 @@ export const AITroubleshootingPanel = ({
             flexDirection: 'column',
             overflowY: 'auto',
             padding: '16px',
-            gap: '14px'
+            gap: '14px',
+            ...(isMobile ? {
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: '88%',
+              maxWidth: '340px',
+              zIndex: 60,
+              boxShadow: '0 0 35px rgba(0, 0, 0, 0.9)'
+            } : {})
           }}>
             {/* Drawer Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1e293b', paddingBottom: '10px' }}>
@@ -2605,7 +2872,7 @@ export const AITroubleshootingPanel = ({
           TAB 2: MULTIMODAL IMAGE ANALYSIS (ANALYZE ANYTHING)
           ======================================================== */}
       {activeTab === 'VISION' && (
-        <div style={{ padding: '20px', color: '#f8fafc' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', color: '#f8fafc' }}>
           <div style={{ marginBottom: '16px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#38bdf8', margin: '0 0 4px 0' }}>
               Multimodal Inspection Engine
@@ -2723,7 +2990,7 @@ export const AITroubleshootingPanel = ({
           TAB 3: AI CAD & SCHEMATIC GENERATOR
           ======================================================== */}
       {activeTab === 'IMAGE_GEN' && (
-        <div style={{ padding: '20px', color: '#f8fafc' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', color: '#f8fafc' }}>
           <div style={{ marginBottom: '16px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#38bdf8', margin: '0 0 4px 0' }}>
               Industrial CAD &amp; Schematic Generator

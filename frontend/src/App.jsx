@@ -142,6 +142,10 @@ const ProtectedLayout = () => {
             <Route path="/parts" element={<PartsPage />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/ai-assistant" element={<AIAssistantPage />} />
+            <Route path="/ai-copilot" element={<Navigate to="/ai-assistant" replace />} />
+            <Route path="/ai-chat" element={<Navigate to="/ai-assistant" replace />} />
+            <Route path="/copilot" element={<Navigate to="/ai-assistant" replace />} />
+            <Route path="/chat" element={<Navigate to="/ai-assistant" replace />} />
             <Route
               path="/audit-logs"
               element={
