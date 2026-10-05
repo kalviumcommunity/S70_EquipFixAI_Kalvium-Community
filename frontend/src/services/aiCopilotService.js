@@ -72,15 +72,14 @@ export const DEFAULT_MODELS = {
 export const resolveGeminiCandidateModels = (modelName) => {
   let raw = (modelName || 'gemini-flash-lite-latest').replace(/^models\//, '').trim();
   const list = [];
-  if (raw && !['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'].includes(raw)) {
+  if (raw && !['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'].includes(raw)) {
     list.push(raw);
   }
   for (const fallback of [
     'gemini-flash-lite-latest',
-    'gemini-3.5-flash',
     'gemini-flash-latest',
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash-lite'
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite'
   ]) {
     if (!list.includes(fallback)) list.push(fallback);
   }
@@ -88,11 +87,12 @@ export const resolveGeminiCandidateModels = (modelName) => {
 };
 
 export const getAIConfig = () => {
-  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '';
-  let apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+  const envKey = ((typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '').trim();
+  let apiKey = (localStorage.getItem(STORAGE_KEYS.API_KEY) || '').trim();
   
   // Clean up any stale or placeholder keys from previous development or sync env key
-  if (!apiKey || apiKey.includes('AQ.Ab8RN6JQDh8K') || (envKey && !apiKey.startsWith('AQ.') && !apiKey.startsWith('AIza') && !apiKey.startsWith('sk-'))) {
+  const isStaleKey = apiKey && (apiKey.length < 20 || apiKey.includes('JQDh8K') || (envKey && apiKey !== envKey && !apiKey.startsWith('sk-')));
+  if (!apiKey || isStaleKey) {
     apiKey = envKey;
     if (apiKey) {
       try {
@@ -266,7 +266,7 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
   let effectiveProvider = provider;
   if (key.startsWith('sk-')) {
     effectiveProvider = 'openai';
-  } else if (key.startsWith('AIza')) {
+  } else if (key.startsWith('AIza') || key.startsWith('AQ.')) {
     effectiveProvider = 'gemini';
   } else if (!effectiveProvider) {
     effectiveProvider = 'gemini';
@@ -286,8 +286,8 @@ export const testAIConnection = async ({ apiKey, provider, model, customModel })
 
   // Instant syntax sanity check
   if (effectiveProvider === 'gemini') {
-    if (!key.startsWith('AIza') && key.length < 20) {
-      throw new Error('Invalid Google Gemini key format. Google API keys typically begin with "AIza..."');
+    if (!key.startsWith('AIza') && !key.startsWith('AQ.') && key.length < 20) {
+      throw new Error('Invalid Google Gemini key format. Google API keys typically begin with "AIza..." or "AQ...."');
     }
   } else if (effectiveProvider === 'openai') {
     if (!key.startsWith('sk-') && key.length < 20) {

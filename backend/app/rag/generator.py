@@ -76,6 +76,16 @@ class GroundedGenerator:
         safety_chunks = retrieval_data.get("safety_chunks", [])
         previous_repairs_data = retrieval_data.get("previous_repairs", [])
 
+        # Role-Aware Safety Filtering for Floor Operators
+        is_operator = (user_role or "").upper() == "OPERATOR"
+        is_restricted_action = False
+        if is_operator:
+            q_lower = query.lower()
+            is_restricted_action = any(kw in q_lower for kw in [
+                "replace", "disassemble", "take apart", "open panel", "electrical", "rewire", "solder",
+                "motor", "belt change", "modify setting", "bypass", "remove bearing", "repair myself", "myself", "cabinet"
+            ])
+
         # 1. Determine Grounding Status
         if not chunks:
             grounding_status = GroundingStatus.INSUFFICIENT_EVIDENCE
@@ -91,6 +101,13 @@ class GroundedGenerator:
             safety_warnings = [
                 "⚠️ CAUTION: Do not attempt unverified mechanical or electrical disassembly without approved documentation."
             ]
+            if is_operator and is_restricted_action:
+                safety_warnings.insert(0, "⛔ RESTRICTED OPERATOR ACTION: Disassembly, component replacement, and high-voltage electrical repairs are strictly restricted to authorized Maintenance Technicians under OSHA LOTO (29 CFR 1910.147).")
+                recommended_checks = [
+                    "Stop the machine immediately using standard shutdown procedures.",
+                    "Do NOT open high-voltage electrical cabinets or machine enclosures.",
+                    "Report this incident via EquipFixAI to dispatch a certified technician."
+                ]
             sources = []
             repairs = []
             return AIQueryResponse(
