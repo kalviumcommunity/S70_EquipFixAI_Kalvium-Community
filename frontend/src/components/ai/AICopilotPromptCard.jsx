@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Bot, ArrowRight, Zap, Shield, Search, Eye, Palette, Camera } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Sparkles, Bot, ArrowRight, Zap, Shield, Search, Eye, Palette, Camera, X } from 'lucide-react';
 import AICopilotModal from './AICopilotModal';
 import { getAIConfig } from '../../services/aiCopilotService';
 
@@ -14,6 +14,9 @@ export const AICopilotPromptCard = ({
   const [activeQuery, setActiveQuery] = useState('');
   const [activeMachineCode, setActiveMachineCode] = useState(defaultMachineCode);
   const [config, setConfig] = useState(getAIConfig());
+  const [attachedImage, setAttachedImage] = useState(null);
+  const [attachedImageBase64, setAttachedImageBase64] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const handleConfigUpdate = (e) => {
@@ -34,10 +37,24 @@ export const AICopilotPromptCard = ({
     { label: 'Fleet MTTR benchmark analysis', code: '' }
   ];
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAttachedImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachedImageBase64(reader.result);
+      if (!question.trim()) {
+        setQuestion(`Diagnose visual fault, wear indicators, and component damage in this equipment snapshot for ${defaultMachineCode || 'machinery'}.`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleLaunch = (queryText, machineCode = '') => {
     const q = (queryText || question).trim();
-    if (!q) return;
-    setActiveQuery(q);
+    if (!q && !attachedImageBase64) return;
+    setActiveQuery(q || 'Diagnose equipment snapshot and identify root cause.');
     if (machineCode) setActiveMachineCode(machineCode);
     setModalOpen(true);
   };
@@ -107,23 +124,61 @@ export const AICopilotPromptCard = ({
           </div>
         </div>
 
+        {/* Visual Snapshot Preview Chip */}
+        {attachedImage && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(2, 132, 199, 0.2)',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            borderRadius: '8px',
+            padding: '4px 10px',
+            marginTop: '8px',
+            marginBottom: '4px',
+            fontSize: '0.78rem',
+            color: '#38bdf8'
+          }}>
+            <Camera size={13} />
+            <span>Snapshot attached: <strong>{attachedImage.name}</strong></span>
+            <button
+              type="button"
+              onClick={() => {
+                setAttachedImage(null);
+                setAttachedImageBase64(null);
+              }}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         {/* Input Bar */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleLaunch(question, defaultMachineCode);
           }}
-          style={{ display: 'flex', gap: '10px', marginTop: '14px', marginBottom: '14px' }}
+          style={{ display: 'flex', gap: '10px', marginTop: attachedImage ? '8px' : '14px', marginBottom: '14px' }}
         >
-          <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleImageUpload}
+          />
+          <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+            <Search size={18} color="#64748b" style={{ position: 'absolute', left: '14px' }} />
             <input
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask AI: e.g. Why is CNC-04 overheating? What is the LOTO procedure for hydraulic press?"
+              placeholder="Ask AI: e.g. Why is CNC-04 overheating? Attach a machine snapshot..."
               style={{
                 width: '100%',
-                padding: '11px 16px 11px 40px',
+                padding: '11px 44px 11px 40px',
                 backgroundColor: 'rgba(7, 12, 24, 0.8)',
                 border: '1px solid #334155',
                 borderRadius: '10px',
@@ -136,7 +191,24 @@ export const AICopilotPromptCard = ({
               onFocus={(e) => { e.currentTarget.style.borderColor = '#38bdf8'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#334155'; }}
             />
-            <Search size={18} color="#64748b" style={{ position: 'absolute', left: '14px', top: '12px' }} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                background: 'none',
+                border: 'none',
+                color: attachedImage ? '#38bdf8' : '#64748b',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              title="Attach equipment fault photo for multimodal vision diagnosis"
+            >
+              <Camera size={18} />
+            </button>
           </div>
 
           <button
@@ -209,6 +281,7 @@ export const AICopilotPromptCard = ({
         onClose={() => setModalOpen(false)}
         initialMachineCode={activeMachineCode}
         initialQuestion={activeQuery}
+        initialImageBase64={attachedImageBase64}
       />
     </>
   );
