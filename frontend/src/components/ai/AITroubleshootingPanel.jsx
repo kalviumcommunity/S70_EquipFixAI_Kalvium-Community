@@ -5,7 +5,7 @@ import {
   Paperclip, Mic, MicOff, Send, X, ExternalLink, Download, Layers, MoreVertical,
   BookOpen, Trash2, ChevronRight, FileText, ChevronDown, CheckCircle2,
   Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings, Key,
-  HelpCircle, MessageSquare, Square
+  HelpCircle, MessageSquare, Square, Zap, Brain
 } from 'lucide-react';
 import { aiApi, machinesApi, documentsApi, workOrdersApi, maintenanceApi, incidentsApi } from '../../services/api';
 import {
@@ -2118,144 +2118,257 @@ export const AITroubleshootingPanel = ({
             );
           })}
 
-          {/* Assistant Live Reasoning: Sleek, Interactive & Professional */}
+          {/* Assistant Live Diagnostic Analyzing Effect */}
           {loading && (
-            <div style={{
-              display: 'inline-flex',
-              flexDirection: 'column',
-              backgroundColor: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)',
-              overflow: 'hidden',
-              maxWidth: '460px',
-              animation: 'thinkingGlow 2s infinite ease-in-out',
-              marginBottom: '4px'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '16px',
-                padding: '12px 16px',
-                backgroundColor: '#ffffff'
-              }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                flexDirection: 'column',
+                backgroundColor: '#ffffff',
+                border: '1px solid rgba(56, 189, 248, 0.45)',
+                borderRadius: '14px',
+                boxShadow: '0 8px 24px -4px rgba(2, 132, 199, 0.16), 0 0 16px rgba(56, 189, 248, 0.1)',
+                overflow: 'hidden',
+                maxWidth: '520px',
+                animation: 'analyzingPulseGlow 2.5s infinite ease-in-out',
+                marginBottom: '6px',
+                position: 'relative'
+              }}
+            >
+              {/* Laser Scanning Beam Top Line */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '2.5px',
+                  background: 'linear-gradient(90deg, transparent, #0284c7, #38bdf8, #06b6d4, #6366f1, transparent)',
+                  animation: 'analyzingScanBeam 1.8s linear infinite'
+                }}
+              />
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '14px',
+                  padding: '12px 16px',
+                  backgroundColor: '#ffffff'
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {/* Subtle 3-dot pulse wave */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 8px',
-                    backgroundColor: '#eff6ff',
-                    borderRadius: '8px',
-                    border: '1px solid #dbeafe'
-                  }}>
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
+                  {/* Active Sonar Radar Scanner */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '32px',
+                      height: '32px',
                       borderRadius: '50%',
-                      backgroundColor: '#2563eb',
-                      display: 'inline-block',
-                      animation: 'dotPulse 1.4s infinite ease-in-out',
-                      animationDelay: '0s'
-                    }} />
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: '#2563eb',
-                      display: 'inline-block',
-                      animation: 'dotPulse 1.4s infinite ease-in-out',
-                      animationDelay: '0.2s'
-                    }} />
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: '#2563eb',
-                      display: 'inline-block',
-                      animation: 'dotPulse 1.4s infinite ease-in-out',
-                      animationDelay: '0.4s'
-                    }} />
+                      backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                      border: '1.5px solid rgba(14, 165, 233, 0.45)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 0 12px rgba(14, 165, 233, 0.25)',
+                      flexShrink: 0,
+                      overflow: 'hidden'
+                    }}
+                    title="Active AI Diagnostic Radar"
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'conic-gradient(from 0deg, rgba(14, 165, 233, 0.6) 0deg, transparent 60deg, transparent 360deg)',
+                        animation: 'analyzingRadarSweep 1.8s linear infinite'
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '14px',
+                        height: '14px',
+                        borderRadius: '50%',
+                        border: '1px dashed rgba(14, 165, 233, 0.6)',
+                        zIndex: 1
+                      }}
+                    />
+                    <Sparkles size={11} color="#0284c7" style={{ position: 'relative', zIndex: 2 }} />
                   </div>
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
-                        EquipFix AI Reasoning
+                      <span
+                        style={{
+                          fontSize: '0.675rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          color: '#0284c7',
+                          backgroundColor: '#e0f2fe',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid #bae6fd'
+                        }}
+                      >
+                        ANALYZING
                       </span>
-                      <span style={{
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        fontFamily: 'monospace',
-                        color: '#64748b',
-                        backgroundColor: '#f1f5f9',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        border: '1px solid #e2e8f0'
-                      }}>
-                        {thinkingElapsed}s
+                      <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                        EquipFix AI Diagnostic Engine
                       </span>
                     </div>
-                    <div style={{
-                      fontSize: '0.75rem',
-                      color: '#64748b',
-                      marginTop: '2px',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      maxWidth: '260px'
-                    }}>
-                      {thinkingStage}
+
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        color: '#475569',
+                        marginTop: '2px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '280px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span style={{
+                        display: 'inline-block',
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: '#0284c7',
+                        animation: 'telemetryChipPulse 1.4s ease-in-out infinite'
+                      }} />
+                      <span>{thinkingStage || 'Analyzing equipment telemetry & root cause...'}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Interactive Stop Button */}
-                <button
-                  onClick={handleStopGenerating}
-                  type="button"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '5px 10px',
-                    borderRadius: '7px',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    color: '#475569',
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #cbd5e1',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    flexShrink: 0
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#fee2e2';
-                    e.currentTarget.style.color = '#dc2626';
-                    e.currentTarget.style.borderColor = '#fca5a5';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f8fafc';
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.borderColor = '#cbd5e1';
-                  }}
-                  title="Stop generating response"
-                >
-                  <Square size={11} style={{ fill: 'currentColor' }} />
-                  <span>Stop</span>
-                </button>
+                {/* Right Side: Equalizer Waveform + Monospace Latency + Stop Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Dynamic 5-Bar Frequency Waveform */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      gap: '2.5px',
+                      height: '18px',
+                      padding: '2px',
+                      backgroundColor: '#f0f9ff',
+                      borderRadius: '4px',
+                      border: '1px solid #bae6fd'
+                    }}
+                    title="Real-time telemetry signal streaming"
+                  >
+                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar1 0.9s ease-in-out infinite' }} />
+                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar2 1.1s ease-in-out infinite' }} />
+                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar3 0.8s ease-in-out infinite' }} />
+                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar4 1.2s ease-in-out infinite' }} />
+                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar5 1.0s ease-in-out infinite' }} />
+                  </div>
+
+                  {/* Monospace Latency Timer */}
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      fontFamily: 'monospace',
+                      color: '#0284c7',
+                      backgroundColor: '#f0f9ff',
+                      padding: '2px 6px',
+                      borderRadius: '5px',
+                      border: '1px solid #bae6fd'
+                    }}
+                    title="Diagnostic processing elapsed time"
+                  >
+                    {thinkingElapsed}s
+                  </span>
+
+                  {/* Interactive Stop Button */}
+                  <button
+                    onClick={handleStopGenerating}
+                    type="button"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '4px 9px',
+                      borderRadius: '7px',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      color: '#475569',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      flexShrink: 0
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#fee2e2';
+                      e.currentTarget.style.color = '#dc2626';
+                      e.currentTarget.style.borderColor = '#fca5a5';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f8fafc';
+                      e.currentTarget.style.color = '#475569';
+                      e.currentTarget.style.borderColor = '#cbd5e1';
+                    }}
+                    title="Stop generating response"
+                  >
+                    <Square size={10} style={{ fill: 'currentColor' }} />
+                    <span>Stop</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Shimmer line indicator */}
-              <div style={{
-                height: '2px',
-                width: '100%',
-                background: 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #3b82f6 100%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmerBar 1.5s infinite linear'
-              }} />
+              {/* Bottom Telemetry Scanning Status Ribbon */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  backgroundColor: '#f8fafc',
+                  borderTop: '1px solid #f1f5f9',
+                  fontSize: '0.68rem',
+                  color: '#64748b'
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                    animation: 'telemetryChipPulse 2s ease-in-out infinite'
+                  }}
+                >
+                  <Zap size={11} color="#0284c7" />
+                  <span>Telemetry Scanning</span>
+                </span>
+                <span>•</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Brain size={11} color="#6366f1" />
+                  <span>1,400+ OEM Schematics</span>
+                </span>
+                <span>•</span>
+                <span style={{ color: '#059669', fontWeight: 600 }}>OSHA / ISO Verified</span>
+                {machineCode && (
+                  <span
+                    style={{
+                      marginLeft: 'auto',
+                      color: '#2563eb',
+                      fontWeight: 700,
+                      fontFamily: 'monospace'
+                    }}
+                  >
+                    Station: {machineCode}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
