@@ -698,6 +698,30 @@ export const AITroubleshootingPanel = ({
     };
   }, []);
 
+  // Quick Model Selector Dropdown State
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const modelDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target)) {
+        setShowModelDropdown(false);
+      }
+    };
+    if (showModelDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showModelDropdown]);
+
+  const handleQuickSelectModel = (modelId) => {
+    const updated = { ...aiConfig, model: modelId };
+    saveAIConfig(updated);
+    setAiConfig(updated);
+    setShowModelDropdown(false);
+    window.dispatchEvent(new CustomEvent('equipfix:aiconfig-updated', { detail: updated }));
+  };
+
   // Fetch Real Plant Data from Backend on Mount
   useEffect(() => {
     let isMounted = true;
@@ -1383,33 +1407,154 @@ export const AITroubleshootingPanel = ({
               <span>Export Report</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowConfigModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: aiConfig.apiKey ? '#f0fdf4' : '#fffbeb',
-                border: `1px solid ${aiConfig.apiKey ? '#86efac' : '#fde68a'}`,
-                borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                color: aiConfig.apiKey ? '#15803d' : '#b45309',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              title="Configure Gemini API Key & AI Models"
-            >
-              <Key size={14} color={aiConfig.apiKey ? '#16a34a' : '#d97706'} />
-              <span>
-                {aiConfig.apiKey
-                  ? `${(aiConfig.model || 'Gemini 3.8 Flash').replace(/^models\//, '')} • Key Connected`
-                  : 'Add API Key'}
-              </span>
-              <Settings size={13} style={{ opacity: 0.7 }} />
-            </button>
+            {/* Quick Model Selector & Key Config */}
+            <div ref={modelDropdownRef} style={{ position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModelDropdown(!showModelDropdown)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: aiConfig.apiKey ? '#f0fdf4' : '#fffbeb',
+                    border: `1px solid ${aiConfig.apiKey ? '#86efac' : '#fde68a'}`,
+                    borderRadius: '8px 0 0 8px',
+                    padding: '6px 10px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: aiConfig.apiKey ? '#15803d' : '#b45309',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Quick-switch active AI reasoning model"
+                >
+                  <span style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    backgroundColor: aiConfig.apiKey ? '#22c55e' : '#f59e0b',
+                    display: 'inline-block'
+                  }} />
+                  <span>
+                    {(aiConfig.model || 'gemini-3.8-flash').replace(/^models\//, '')}
+                  </span>
+                  <ChevronDown size={13} style={{ opacity: 0.7 }} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(true)}
+                  style={{
+                    backgroundColor: aiConfig.apiKey ? '#f0fdf4' : '#fffbeb',
+                    border: `1px solid ${aiConfig.apiKey ? '#86efac' : '#fde68a'}`,
+                    borderLeft: 'none',
+                    borderRadius: '0 8px 8px 0',
+                    padding: '6px 8px',
+                    color: aiConfig.apiKey ? '#15803d' : '#b45309',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  title="Configure AI API Key & Advanced Settings"
+                >
+                  <Settings size={14} />
+                </button>
+              </div>
+
+              {/* Model Quick Switch Dropdown */}
+              {showModelDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  zIndex: 50,
+                  minWidth: '240px',
+                  padding: '6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px'
+                }}>
+                  <div style={{ padding: '6px 8px', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Active Reasoning Model
+                  </div>
+                  {[
+                    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tag: 'Fastest Flagship (<300ms)', icon: '⚡' },
+                    { id: 'gemini-3.8-flash-lite', name: 'Gemini 3.8 Flash-Lite', tag: 'Ultra-Light Telemetry', icon: '🚀' },
+                    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', tag: 'Next-Gen Multimodal', icon: '✨' },
+                    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', tag: 'OpenAI Operational', icon: '🧠' }
+                  ].map((m) => {
+                    const isSelected = (aiConfig.model || 'gemini-3.8-flash') === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => handleQuickSelectModel(m.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: isSelected ? '#eff6ff' : 'transparent',
+                          color: isSelected ? '#1d4ed8' : '#334155',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          width: '100%',
+                          transition: 'background-color 0.1s ease'
+                        }}
+                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 600 }}>
+                            {m.icon} {m.name}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: isSelected ? '#3b82f6' : '#64748b' }}>
+                            {m.tag}
+                          </div>
+                        </div>
+                        {isSelected && <Check size={14} color="#2563eb" />}
+                      </button>
+                    );
+                  })}
+                  <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px', paddingTop: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModelDropdown(false);
+                        setShowConfigModal(true);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 8px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <Key size={13} />
+                      <span>Manage API Key & Endpoints...</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
