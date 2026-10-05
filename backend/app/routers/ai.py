@@ -214,6 +214,39 @@ def submit_query_feedback(
     return {"status": "SUCCESS", "message": "Feedback submitted successfully."}
 
 
+@router.post("/queries/{query_id}/export")
+def export_query_report(
+    query_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate and log a formal engineering diagnostic report for a completed AI query."""
+    query_record = db.query(AIQuery).filter(AIQuery.id == query_id).first()
+    if not query_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"AI Query #{query_id} not found."
+        )
+
+    AuditService.log_action(
+        db=db,
+        action=AuditAction.AI_QUERY_EXECUTED,
+        entity_type="ai_query_export",
+        entity_id=query_record.id,
+        user_id=current_user.id,
+        new_value={"action": "EXPORT_DIAGNOSTIC_REPORT", "query_id": query_id}
+    )
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "query_id": query_id,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "technician": current_user.email,
+        "message": "Diagnostic report exported successfully."
+    }
+
+
 @router.get("/history", response_model=List[AIQueryHistoryItem])
 def get_query_history(
     machine_id: Optional[int] = None,
