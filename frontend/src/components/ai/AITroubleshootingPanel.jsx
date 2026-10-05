@@ -2117,37 +2117,57 @@ export const AITroubleshootingPanel = ({
         }}>
           {/* Quick Action Pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
-            {[
-              { label: '⚡ Diagnose Issue', prompt: `Diagnose active fault for ${activeMachineData.machine_code}. What are the primary root causes and initial verification checks?` },
-              { label: '📖 Search Manuals', prompt: `Search maintenance manual specifications, wiring, and tolerances for ${activeMachineData.machine_code}.` },
-              { label: '⚙️ Troubleshoot', prompt: `Provide step-by-step diagnostic verification guide for ${activeMachineData.machine_code}.` },
-              { label: '🕒 Maintenance History', prompt: `Review recent maintenance logs, historical breakdowns, and wear trends for ${activeMachineData.machine_code}.` },
-              { label: '🛡️ Safety & LOTO Check', prompt: `What are the critical OSHA Lockout/Tagout (LOTO) requirements and personal protective equipment for servicing ${activeMachineData.machine_code}?` }
-            ].map((pill, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSendPrompt(pill.prompt)}
-                disabled={loading}
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '20px',
-                  padding: '6px 14px',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  color: '#334155',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
-                onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#ffffff'; }}
-              >
-                {pill.label}
-              </button>
-            ))}
+            {(() => {
+              const pills = [];
+              if (activeMachineData.alarm) {
+                pills.push({
+                  label: `🚨 Alarm: ${activeMachineData.alarm.replace(/^Alarm:\s*/i, '').slice(0, 26)}...`,
+                  prompt: `Immediate Emergency Investigation for ${activeMachineData.machine_code}: ${activeMachineData.alarm}. Provide root cause analysis, immediate shutdown or containment actions, and component wear thresholds.`,
+                  isAlarm: true
+                });
+              }
+              pills.push(
+                { label: '⚡ Diagnose Issue', prompt: `Diagnose active fault for ${activeMachineData.machine_code}. What are the primary root causes and initial verification checks?` },
+                { label: '📖 Search Manuals', prompt: `Search maintenance manual specifications, wiring, and tolerances for ${activeMachineData.machine_code}.` },
+                { label: '⚙️ Troubleshoot', prompt: `Provide step-by-step diagnostic verification guide for ${activeMachineData.machine_code}.` },
+                { label: '🌡️ Bearing & Thermal', prompt: `Check bearing thermal limits, lubrication intervals, and overheating symptoms for ${activeMachineData.machine_code}.` },
+                { label: '🕒 Maintenance History', prompt: `Review recent maintenance logs, historical breakdowns, and wear trends for ${activeMachineData.machine_code}.` },
+                { label: '🛡️ Safety & LOTO Check', prompt: `What are the critical OSHA Lockout/Tagout (LOTO) requirements and personal protective equipment for servicing ${activeMachineData.machine_code}?` }
+              );
+              return pills.map((pill, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSendPrompt(pill.prompt)}
+                  disabled={loading}
+                  style={{
+                    backgroundColor: pill.isAlarm ? '#fef2f2' : '#ffffff',
+                    border: pill.isAlarm ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                    borderRadius: '20px',
+                    padding: '6px 14px',
+                    fontSize: '0.78rem',
+                    fontWeight: pill.isAlarm ? 700 : 600,
+                    color: pill.isAlarm ? '#b91c1c' : '#334155',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: pill.isAlarm ? '0 1px 3px rgba(239, 68, 68, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.02)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = pill.isAlarm ? '#fee2e2' : '#f1f5f9';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = pill.isAlarm ? '#fef2f2' : '#ffffff';
+                    }
+                  }}
+                >
+                  {pill.label}
+                </button>
+              ));
+            })()}
           </div>
 
           {/* Floating Prompt Input Box */}
@@ -2166,12 +2186,12 @@ export const AITroubleshootingPanel = ({
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
                   e.preventDefault();
                   handleSendPrompt();
                 }
               }}
-              placeholder={`Ask EquipFixAI about ${activeMachineData.machine_code}... (Press Enter to send)`}
+              placeholder={`Ask EquipFixAI about ${activeMachineData.machine_code}... (Press Enter or ⌘↵ to send)`}
               rows={1}
               style={{
                 width: '100%',
@@ -2236,6 +2256,9 @@ export const AITroubleshootingPanel = ({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600, userSelect: 'none' }}>
+                  ↵ Send
+                </span>
                 <button
                   type="button"
                   onClick={() => handleSendPrompt()}
