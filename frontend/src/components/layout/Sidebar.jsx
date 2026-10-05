@@ -217,6 +217,17 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
 
   useEffect(() => {
     fetchLiveCounts();
+    const interval = setInterval(() => {
+      fetchLiveCounts();
+    }, 12000);
+
+    const handleExternalUpdate = () => fetchLiveCounts();
+    window.addEventListener('equipfix:notifications-updated', handleExternalUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('equipfix:notifications-updated', handleExternalUpdate);
+    };
   }, [lastEvent]);
 
   const navItemStyle = ({ isActive }) => ({
@@ -581,6 +592,20 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
                   <Bell size={17} />
                   <span>Notifications</span>
                 </div>
+                {counts.unreadNotifs > 0 && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                    }}
+                  >
+                    {counts.unreadNotifs}
+                  </span>
+                )}
               </NavLink>
             </>
           )}
@@ -624,6 +649,20 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
                   <Bell size={17} />
                   <span>Notifications</span>
                 </div>
+                {counts.unreadNotifs > 0 && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                    }}
+                  >
+                    {counts.unreadNotifs}
+                  </span>
+                )}
               </NavLink>
             </>
           )}

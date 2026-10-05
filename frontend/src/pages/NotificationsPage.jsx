@@ -24,6 +24,57 @@ export const NotificationsPage = () => {
 
   useEffect(() => {
     fetchNotifications();
+
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 12000);
+
+    const handleExternalUpdate = () => fetchNotifications();
+    window.addEventListener('equipfix:notifications-updated', handleExternalUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('equipfix:notifications-updated', handleExternalUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (
+      lastEvent.event === 'notification.created' ||
+      lastEvent.event === 'NOTIFICATION_CREATED'
+    ) {
+      const payload = lastEvent.data;
+      if (payload) {
+        setNotifications((prev) => {
+          const exists = prev.some((n) => n.id === payload.id);
+          if (exists) return prev;
+          return [
+            {
+              id: payload.id || Date.now(),
+              title: payload.title || 'New Notification',
+              message: payload.message || '',
+              notification_type: payload.type || payload.notification_type || 'ALERT',
+              created_at: payload.created_at || new Date().toISOString(),
+              is_read: false,
+              related_entity_type: payload.related_entity_type,
+              related_entity_id: payload.related_entity_id
+            },
+            ...prev
+          ];
+        });
+      }
+      fetchNotifications();
+    } else if (
+      lastEvent.event?.startsWith('incident.') ||
+      lastEvent.event?.startsWith('work_order.') ||
+      lastEvent.event?.startsWith('maintenance.') ||
+      lastEvent.event?.startsWith('inventory.') ||
+      lastEvent.event?.startsWith('machine.')
+    ) {
+      fetchNotifications();
+    }
   }, [lastEvent]);
 
   const handleMarkAsRead = async (id) => {
@@ -32,6 +83,7 @@ export const NotificationsPage = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
+      window.dispatchEvent(new CustomEvent('equipfix:notifications-updated'));
     } catch (err) {
       console.error(err);
     }
@@ -41,6 +93,7 @@ export const NotificationsPage = () => {
     try {
       await notificationsApi.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      window.dispatchEvent(new CustomEvent('equipfix:notifications-updated'));
     } catch (err) {
       console.error(err);
     }

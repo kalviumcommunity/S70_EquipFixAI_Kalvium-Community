@@ -63,7 +63,9 @@ export const Navbar = ({ onToggleSidebar }) => {
   const fetchNotifications = async () => {
     try {
       const res = await notificationsApi.list();
-      setNotifications(res.data);
+      if (Array.isArray(res.data)) {
+        setNotifications(res.data);
+      }
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -73,7 +75,63 @@ export const Navbar = ({ onToggleSidebar }) => {
     if (user) {
       fetchNotifications();
     }
-  }, [user, lastEvent]);
+  }, [user]);
+
+  // Real-time synchronization on WebSocket events
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (
+      lastEvent.event === 'notification.created' ||
+      lastEvent.event === 'NOTIFICATION_CREATED'
+    ) {
+      const payload = lastEvent.data;
+      if (payload) {
+        setNotifications((prev) => {
+          const exists = prev.some((n) => n.id === payload.id);
+          if (exists) return prev;
+          return [
+            {
+              id: payload.id || Date.now(),
+              title: payload.title || 'New Notification',
+              message: payload.message || '',
+              notification_type: payload.type || payload.notification_type || 'ALERT',
+              created_at: payload.created_at || new Date().toISOString(),
+              is_read: false,
+              related_entity_type: payload.related_entity_type,
+              related_entity_id: payload.related_entity_id
+            },
+            ...prev
+          ];
+        });
+      }
+      fetchNotifications();
+    } else if (
+      lastEvent.event?.startsWith('incident.') ||
+      lastEvent.event?.startsWith('work_order.') ||
+      lastEvent.event?.startsWith('maintenance.') ||
+      lastEvent.event?.startsWith('inventory.') ||
+      lastEvent.event?.startsWith('machine.')
+    ) {
+      fetchNotifications();
+    }
+  }, [lastEvent]);
+
+  // Periodic polling fallback (every 12 seconds) to keep notifications 100% real-time
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 12000);
+
+    const handleExternalUpdate = () => fetchNotifications();
+    window.addEventListener('equipfix:notifications-updated', handleExternalUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('equipfix:notifications-updated', handleExternalUpdate);
+    };
+  }, [user]);
 
   // Handle Search Input Change
   const handleSearchChange = (e) => {
@@ -121,6 +179,7 @@ export const Navbar = ({ onToggleSidebar }) => {
     try {
       await notificationsApi.markAllRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      window.dispatchEvent(new CustomEvent('equipfix:notifications-updated'));
     } catch (err) {
       console.error(err);
     }
@@ -132,6 +191,7 @@ export const Navbar = ({ onToggleSidebar }) => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
+      window.dispatchEvent(new CustomEvent('equipfix:notifications-updated'));
       // Navigate to relevant entity if applicable
       if (notif.related_entity_type === 'incident') {
         navigate('/incidents');
@@ -505,7 +565,7 @@ export const Navbar = ({ onToggleSidebar }) => {
             title="Notification Center"
           >
             <Bell size={18} color={isAiAssistant ? '#94a3b8' : '#475569'} />
-            {(unreadCount > 0 || isAiAssistant) && (
+            {unreadCount > 0 && (
               <span style={{
                 position: 'absolute',
                 top: '-4px',
@@ -514,14 +574,16 @@ export const Navbar = ({ onToggleSidebar }) => {
                 color: 'white',
                 fontSize: '0.65rem',
                 fontWeight: 700,
-                width: '18px',
+                minWidth: '18px',
                 height: '18px',
-                borderRadius: '50%',
+                padding: '0 4px',
+                borderRadius: '9px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                boxShadow: '0 0 0 2px #ffffff'
               }}>
-                {unreadCount > 0 ? unreadCount : 3}
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
