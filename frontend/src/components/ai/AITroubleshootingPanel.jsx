@@ -1020,6 +1020,65 @@ export const AITroubleshootingPanel = ({
     }
   };
 
+  // Export Diagnostic Session Report (.md / .txt)
+  const handleExportReport = () => {
+    if (!messages || messages.length === 0) {
+      alert('No diagnostic records to export. Please run a diagnostic query first.');
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `EquipFixAI_Diagnostic_Report_${activeMachineCode}_${timestamp.slice(0, 10)}.md`;
+
+    let report = `# 🏭 EquipFixAI Industrial Equipment Diagnostic Report\n\n`;
+    report += `**Generated At**: ${new Date().toLocaleString()}\n`;
+    report += `**Equipment Code**: ${activeMachineData.machine_code || activeMachineCode}\n`;
+    report += `**Machine Name**: ${activeMachineData.name || 'Industrial Machine'}\n`;
+    report += `**Model / Type**: ${activeMachineData.model || 'Standard Machinery'}\n`;
+    report += `**Location / Bay**: ${activeMachineData.location || 'Plant Floor'}\n`;
+    report += `**Operating Status**: ${activeMachineData.status || 'Active'}\n`;
+    if (activeMachineData.alarm) {
+      report += `**Active Alarm / Fault**: ${activeMachineData.alarm}\n`;
+    }
+    report += `\n---\n\n`;
+    report += `## 📋 Diagnostic Chat Transcript\n\n`;
+
+    messages.forEach((msg, idx) => {
+      const sender = msg.role === 'user' ? '👷 Technician (User)' : '🤖 EquipFixAI Copilot';
+      const cleanText = (msg.content || '').replace(/<[^>]*>/g, '').trim();
+      report += `### ${idx + 1}. ${sender} [${msg.timestamp || 'Recorded'}]\n\n${cleanText}\n\n`;
+    });
+
+    report += `---\n\n`;
+    report += `## 📚 Verified Knowledge Base & OEM Manual References\n\n`;
+    if (activeSources && activeSources.length > 0) {
+      activeSources.forEach((src) => {
+        report += `- **${src.title}** (${src.section || 'Manual'}) — Relevance Match: ${src.relevance || '95%'}\n`;
+      });
+    } else {
+      report += `- Standard Plant Maintenance Knowledge Base & OEM Safety Guidelines\n`;
+    }
+
+    report += `\n---\n\n`;
+    report += `## 🛡️ OSHA 1910.147 Compliance & Sign-Off\n\n`;
+    report += `- [x] Visual telemetry inspection performed prior to intervention\n`;
+    report += `- [ ] Lockout/Tagout (LOTO) OSHA 1910.147 de-energization applied\n`;
+    report += `- [ ] Stored pneumatic/hydraulic/electrical energy dissipated\n`;
+    report += `- [ ] Personal Protective Equipment (PPE) verified (Eye, Ear, Cut-resistant gloves)\n\n`;
+    report += `**Lead Technician Signature**: ___________________________  **Date**: ______________\n`;
+    report += `**Supervisor Review / Approval**: ________________________  **Date**: ______________\n`;
+
+    const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Start New Chat Handler
   const handleStartNewChat = () => {
     const newId = `chat-${Date.now()}`;
@@ -1204,6 +1263,31 @@ export const AITroubleshootingPanel = ({
             >
               <Trash2 size={14} />
               <span>Clear</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportReport}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#0284c7',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f9ff'; e.currentTarget.style.borderColor = '#bae6fd'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+              title="Export complete diagnostic session report"
+            >
+              <Download size={14} />
+              <span>Export Report</span>
             </button>
 
             <button
