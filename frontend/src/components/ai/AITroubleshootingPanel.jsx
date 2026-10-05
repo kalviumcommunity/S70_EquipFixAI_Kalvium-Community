@@ -582,6 +582,7 @@ export const AITroubleshootingPanel = ({
   machineCode = null,
   incidentSummary = '',
   initialQuestion = '',
+  initialImageBase64 = null,
   isFullPage = false
 }) => {
   const location = useLocation();
@@ -643,8 +644,14 @@ export const AITroubleshootingPanel = ({
   // Voice & Attachments
   const [isListening, setIsListening] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
-  const [attachedImageBase64, setAttachedImageBase64] = useState(null);
+  const [attachedImageBase64, setAttachedImageBase64] = useState(initialImageBase64 || null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (initialImageBase64) {
+      setAttachedImageBase64(initialImageBase64);
+    }
+  }, [initialImageBase64]);
 
   // Key Config Modal
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -2368,7 +2375,7 @@ export const AITroubleshootingPanel = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: attachedImage ? '#2563eb' : '#64748b',
+                    color: (attachedImage || attachedImageBase64) ? '#2563eb' : '#64748b',
                     fontSize: '0.78rem',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -2379,7 +2386,7 @@ export const AITroubleshootingPanel = ({
                   }}
                 >
                   <Paperclip size={14} />
-                  <span>{attachedImage ? 'Image Attached' : 'Attach'}</span>
+                  <span>{(attachedImage || attachedImageBase64) ? 'Image Attached' : 'Attach'}</span>
                 </button>
 
                 <button

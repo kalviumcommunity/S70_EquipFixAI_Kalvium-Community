@@ -7,7 +7,8 @@ export const AICopilotModal = ({
   onClose,
   initialMachineId = null,
   initialMachineCode = '',
-  initialQuestion = ''
+  initialQuestion = '',
+  initialImageBase64 = null
 }) => {
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -89,6 +90,7 @@ export const AICopilotModal = ({
           machineCode={initialMachineCode}
           incidentSummary={initialQuestion}
           initialQuestion={initialQuestion}
+          initialImageBase64={initialImageBase64}
           isFullPage={true}
         />
       </div>
