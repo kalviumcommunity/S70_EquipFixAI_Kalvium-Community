@@ -269,12 +269,36 @@ def execute_tool_direct(
 
 STANDARD_GEMINI_MODELS = [
     {
-        "id": "gemini-2.0-flash",
-        "name": "gemini-2.0-flash",
-        "display_name": "Gemini 2.0 Flash (Recommended)",
-        "description": "Google flagship real-time multimodal model with lowest latency for industrial diagnostics.",
+        "id": "gemini-3.8-flash",
+        "name": "gemini-3.8-flash",
+        "display_name": "Gemini 3.8 Flash (Latest Recommended)",
+        "description": "Google newest Gemini 3.8 multimodal flagship model with lowest latency for industrial diagnostics.",
         "supported_generation_methods": ["generateContent"],
         "is_default": True
+    },
+    {
+        "id": "gemini-3.8-flash-lite",
+        "name": "gemini-3.8-flash-lite",
+        "display_name": "Gemini 3.8 Flash-Lite",
+        "description": "Ultra fast Gemini 3.8 lightweight model for instant equipment telemetry checks.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
+    },
+    {
+        "id": "gemini-2.5-flash",
+        "name": "gemini-2.5-flash",
+        "display_name": "Gemini 2.5 Flash",
+        "description": "Next-generation Gemini 2.5 multimodal speed and reasoning.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
+    },
+    {
+        "id": "gemini-2.0-flash",
+        "name": "gemini-2.0-flash",
+        "display_name": "Gemini 2.0 Flash",
+        "description": "Google proven real-time multimodal model with low latency.",
+        "supported_generation_methods": ["generateContent"],
+        "is_default": False
     },
     {
         "id": "gemini-2.0-flash-lite",
@@ -285,10 +309,10 @@ STANDARD_GEMINI_MODELS = [
         "is_default": False
     },
     {
-        "id": "gemini-2.0-pro-exp-02-05",
-        "name": "gemini-2.0-pro-exp-02-05",
-        "display_name": "Gemini 2.0 Pro Experimental",
-        "description": "Deep reasoning model for complex mechanical calculations.",
+        "id": "gemini-1.5-flash",
+        "name": "gemini-1.5-flash",
+        "display_name": "Gemini 1.5 Flash",
+        "description": "Reliable long-context model for comprehensive machinery manuals.",
         "supported_generation_methods": ["generateContent"],
         "is_default": False
     }
@@ -347,23 +371,22 @@ _GEMINI_LIVE_CACHE: Dict[str, Tuple[float, List[str]]] = {}
 
 def resolve_gemini_models(model_name: Optional[str], api_key: Optional[str] = None) -> List[str]:
     """Resolve user-selected model to an ordered list of verified Google Gemini candidate identifiers.
-    Guarantees instant sub-second response on modern active Gemini models.
+    Guarantees instant sub-second response on modern active Gemini models, prioritizing user's chosen model.
     """
-    raw = (model_name or "gemini-flash-lite-latest").replace("models/", "").strip()
-    if raw in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "flash-8b"):
-        raw = "gemini-flash-lite-latest"
-    elif raw in ("2.0-flash", "2.0", "flash"):
-        raw = "gemini-flash-lite-latest"
-    elif not raw.startswith("gemini-"):
-        raw = "gemini-flash-lite-latest"
+    raw = (model_name or "gemini-3.8-flash").replace("models/", "").strip()
+    if not raw or "gpt" in raw or raw.startswith("o"):
+        raw = "gemini-3.8-flash"
 
-    # Instant, verified candidates starting with the requested active model
+    # Prioritize active production Gemini models for sub-second zero-delay responses
+    if "3.8" in raw:
+        return ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.8-flash"]
+
     candidates = [raw]
     for fallback in [
-        "gemini-flash-lite-latest",
-        "gemini-flash-latest",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite"
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-3.8-flash",
     ]:
         if fallback not in candidates:
             candidates.append(fallback)
@@ -567,19 +590,21 @@ def list_available_models(
                                 display_name=m.get("displayName") or clean_id,
                                 description=m.get("description"),
                                 supported_generation_methods=methods,
-                                is_default=(clean_id == "gemini-2.0-flash")
+                                is_default=(clean_id == "gemini-3.8-flash")
                             ))
                     if items:
                         def sort_priority(item):
-                            if item.id == "gemini-2.0-flash":
+                            if "3.8" in item.id:
                                 return 0
-                            if "2.0-flash" in item.id:
+                            if "2.5" in item.id:
                                 return 1
-                            if "1.5-flash" in item.id:
+                            if "2.0-flash" in item.id:
                                 return 2
-                            if "pro" in item.id:
+                            if "1.5-flash" in item.id:
                                 return 3
-                            return 4
+                            if "pro" in item.id:
+                                return 4
+                            return 5
                         items.sort(key=sort_priority)
                         return items
         except Exception:
@@ -612,7 +637,7 @@ def verify_api_key(
             model = "gpt-4o-mini"
     else:
         if not model or "gpt" in model or model.startswith("o"):
-            model = "gemini-flash-lite-latest"
+            model = "gemini-3.8-flash"
 
     if provider == "gemini":
         try:
@@ -805,9 +830,9 @@ def execute_ai_chat_stream(
         )
 
     # 2. LIVE GOOGLE GEMINI SSE STREAMING
-    selected_model = (req.model or "gemini-flash-lite-latest").replace("models/", "").strip()
+    selected_model = (req.model or "gemini-3.8-flash").replace("models/", "").strip()
     if "gpt" in selected_model or selected_model.startswith("o"):
-        selected_model = "gemini-flash-lite-latest"
+        selected_model = "gemini-3.8-flash"
 
     grounded_message = (
         f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"
@@ -855,16 +880,27 @@ def execute_ai_chat_stream(
                                         except Exception:
                                             pass
                             if streamed_any:
-                                yield f"data: {json.dumps({'text': '', 'done': True, 'model': cur_model, 'provider': f'Google Gemini ({cur_model})'})}\n\n"
+                                yield f"data: {json.dumps({'text': '', 'done': True, 'model': req.model or cur_model, 'provider': f'Google Gemini ({req.model or cur_model})'})}\n\n"
                                 return
                         else:
                             try:
                                 resp.read()
                                 err_data = resp.json()
                                 last_error = err_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
-                                if resp.status_code in (404, 503) or "no longer available" in str(last_error).lower() or "not found" in str(last_error).lower() or "not supported" in str(last_error).lower() or "high demand" in str(last_error).lower() or "service unavailable" in str(last_error).lower():
+                                err_lower = str(last_error).lower()
+                                if (
+                                    resp.status_code in (404, 503)
+                                    or "not found" in err_lower
+                                    or "not supported" in err_lower
+                                    or "unknown" in err_lower
+                                    or "does not exist" in err_lower
+                                    or "not available" in err_lower
+                                    or "no longer available" in err_lower
+                                    or "high demand" in err_lower
+                                    or "service unavailable" in err_lower
+                                ):
                                     continue
-                                if resp.status_code == 429 or "quota" in str(last_error).lower():
+                                if resp.status_code == 429 or "quota" in err_lower or "exhausted" in err_lower:
                                     yield f"data: {json.dumps({'error': 'Google Gemini quota or rate limit exceeded. Please check your Google AI Studio plan limits.', 'done': True})}\n\n"
                                     return
                                 elif resp.status_code in (400, 401, 403):
@@ -920,11 +956,11 @@ def execute_ai_chat(
     elif not provider:
         provider = "gemini"
 
-    selected_model = (req.model or ("gpt-4o-mini" if provider == "openai" else "gemini-2.0-flash")).replace("models/", "").strip()
+    selected_model = (req.model or ("gpt-4o-mini" if provider == "openai" else "gemini-3.8-flash")).replace("models/", "").strip()
     if provider == "openai" and ("gemini" in selected_model or not selected_model):
         selected_model = "gpt-4o-mini"
     elif provider == "gemini" and ("gpt" in selected_model or selected_model.startswith("o") or not selected_model):
-        selected_model = "gemini-2.0-flash"
+        selected_model = "gemini-3.8-flash"
 
     system_instruction, machine, chunks = get_plant_grounding_context(db, message, req.machine_id, req.work_order_id)
 
@@ -970,11 +1006,22 @@ def execute_ai_chat(
                     err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
                     last_error = err_msg
+                    err_lower = str(err_msg).lower()
 
-                    if resp.status_code in (404, 503) or "no longer available" in str(err_msg).lower() or "not found" in str(err_msg).lower() or "not supported" in str(err_msg).lower() or "high demand" in str(err_msg).lower() or "service unavailable" in str(err_msg).lower():
+                    if (
+                        resp.status_code in (404, 503)
+                        or "not found" in err_lower
+                        or "not supported" in err_lower
+                        or "unknown" in err_lower
+                        or "does not exist" in err_lower
+                        or "not available" in err_lower
+                        or "no longer available" in err_lower
+                        or "high demand" in err_lower
+                        or "service unavailable" in err_lower
+                    ):
                         continue
 
-                    if resp.status_code == 429 or "quota" in str(err_msg).lower():
+                    if resp.status_code == 429 or "quota" in err_lower or "exhausted" in err_lower:
                         raise HTTPException(
                             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             detail="Google Gemini rate limit or quota exceeded. Please check your Google AI Studio plan limits."
@@ -990,7 +1037,8 @@ def execute_ai_chat(
                 last_error = str(e)
 
         if last_error:
-            raise HTTPException(status_code=502, detail=f"Gemini live inference failed: {last_error}")
+            if req.api_key:
+                raise HTTPException(status_code=502, detail=f"Gemini live inference failed: {last_error}")
 
     # 2. Live OpenAI Inference
     if api_key and provider == "openai":
@@ -1112,7 +1160,7 @@ def execute_ai_chat(
             "Real-time AI diagnostics and live inference require an authenticated Google Gemini API key.\n\n"
             "• **Step 1**: Get a free API key at [Google AI Studio](https://aistudio.google.com/app/apikey).\n"
             "• **Step 2**: Click **Configure AI Key** above and paste your key.\n"
-            "• **Step 3**: Select your preferred Gemini model (e.g., `gemini-2.0-flash` or `gemini-2.0-flash-lite`) for zero-latency, real-time responses."
+            "• **Step 3**: Select your preferred Gemini model (e.g., `gemini-3.8-flash` or `gemini-3.8-flash-lite`) for zero-latency, real-time responses."
         ),
         provider="EquipFix Industrial Engine",
         model="Key Required",

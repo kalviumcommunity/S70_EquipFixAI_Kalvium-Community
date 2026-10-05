@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Bot, ArrowRight, Zap, Shield, Search, Eye, Palette, Camera } from 'lucide-react';
 import AICopilotModal from './AICopilotModal';
 import { getAIConfig } from '../../services/aiCopilotService';
@@ -13,7 +13,19 @@ export const AICopilotPromptCard = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [activeQuery, setActiveQuery] = useState('');
   const [activeMachineCode, setActiveMachineCode] = useState(defaultMachineCode);
-  const config = getAIConfig();
+  const [config, setConfig] = useState(getAIConfig());
+
+  useEffect(() => {
+    const handleConfigUpdate = (e) => {
+      if (e.detail) {
+        setConfig(e.detail);
+      } else {
+        setConfig(getAIConfig());
+      }
+    };
+    window.addEventListener('equipfix:aiconfig-updated', handleConfigUpdate);
+    return () => window.removeEventListener('equipfix:aiconfig-updated', handleConfigUpdate);
+  }, []);
 
   const suggestionChips = [
     { label: 'Why is CNC-04 overheating?', code: 'CNC-04' },
@@ -85,7 +97,7 @@ export const AICopilotPromptCard = ({
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <Zap size={10} /> {config.apiKey ? `${config.provider.toUpperCase()} REALTIME ACTIVE` : 'RAG ENGINE ACTIVE'}
+                  <Zap size={10} /> {config.apiKey ? `${(config.model || 'Gemini 3.8 Flash').replace(/^models\//, '')} • REALTIME ACTIVE` : 'API KEY REQUIRED'}
                 </span>
               </div>
               <p style={{ fontSize: '0.775rem', color: '#94a3b8', margin: '2px 0 0 0' }}>

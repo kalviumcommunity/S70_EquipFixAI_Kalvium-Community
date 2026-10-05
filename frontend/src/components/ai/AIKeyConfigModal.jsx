@@ -8,7 +8,7 @@ import {
 export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
   const [provider, setProvider] = useState('gemini');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gemini-2.0-flash');
+  const [model, setModel] = useState('gemini-3.8-flash');
   const [customModel, setCustomModel] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -39,7 +39,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     setProvider(newProvider);
     setTestResult(null);
     if (newProvider === 'gemini') {
-      setModel('gemini-2.0-flash');
+      setModel('gemini-3.8-flash');
     } else {
       setModel('gpt-4o-mini');
     }
@@ -57,7 +57,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     } else if (clean.startsWith('AIza') || clean.startsWith('AQ.')) {
       if (provider !== 'gemini') {
         setProvider('gemini');
-        setModel('gemini-2.0-flash');
+        setModel('gemini-3.8-flash');
       }
     }
   };
@@ -75,7 +75,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
     } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
-      effectiveModel = 'gemini-2.0-flash';
+      effectiveModel = 'gemini-3.8-flash';
     }
 
     if (effectiveModel === 'custom' && !customModel.trim()) {
@@ -122,7 +122,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
     } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
-      effectiveModel = 'gemini-2.0-flash';
+      effectiveModel = 'gemini-3.8-flash';
     }
 
     saveAIConfig({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
@@ -299,7 +299,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
-                  Gemini 2.5, 2.0, 1.5 & custom models with live streaming
+                  Gemini 3.8 Flash, 3.8 Flash-Lite, 2.5, 2.0 & custom models
                 </span>
               </button>
 
@@ -393,13 +393,13 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
             {model === 'custom' && (
               <div style={{ marginTop: '10px' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>
-                  Enter Custom Model Identifier (e.g. gemini-2.0-flash, gemini-2.0-flash-lite, etc.):
+                  Enter Custom Model Identifier (e.g. gemini-3.8-flash, gemini-3.8-flash-lite, etc.):
                 </label>
                 <input
                   type="text"
                   value={customModel}
                   onChange={(e) => setCustomModel(e.target.value)}
-                  placeholder="e.g. gemini-2.0-flash"
+                  placeholder="e.g. gemini-3.8-flash"
                   style={{
                     width: '100%',
                     padding: '9px 12px',
