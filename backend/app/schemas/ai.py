@@ -108,7 +108,7 @@ class AIChatResponse(BaseModel):
 class AIVerifyKeyRequest(BaseModel):
     api_key: str
     provider: Optional[str] = "gemini"
-    model: Optional[str] = "gemini-2.0-flash"
+    model: Optional[str] = "gemini-3.8-flash"
 
 
 class AIVerifyKeyResponse(BaseModel):

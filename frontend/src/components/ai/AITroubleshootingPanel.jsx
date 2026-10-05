@@ -4,8 +4,8 @@ import {
   Sparkles, Wrench, AlertTriangle, Shield, Check, Copy, ThumbsUp, ThumbsDown,
   Paperclip, Mic, MicOff, Send, X, ExternalLink, Download, Layers, MoreVertical,
   BookOpen, Trash2, ChevronRight, FileText, ChevronDown, CheckCircle2,
-  Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings,
-  HelpCircle, MessageSquare
+  Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings, Key,
+  HelpCircle, MessageSquare, Square
 } from 'lucide-react';
 import { aiApi, machinesApi, documentsApi, workOrdersApi, maintenanceApi, incidentsApi } from '../../services/api';
 import {
@@ -306,6 +306,28 @@ const AI_RESPONSE_STYLES = `
     flex: 1;
     line-height: 1.55;
     font-weight: 500;
+  }
+  @keyframes dotPulse {
+    0%, 80%, 100% {
+      transform: scale(0.6);
+      opacity: 0.35;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes thinkingGlow {
+    0%, 100% {
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.06);
+    }
+    50% {
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.16);
+    }
+  }
+  @keyframes shimmerBar {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
   }
 `;
 
@@ -628,6 +650,19 @@ export const AITroubleshootingPanel = ({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [aiConfig, setAiConfig] = useState(getAIConfig());
 
+  // Keep aiConfig synchronized across components and storage
+  useEffect(() => {
+    const handleConfigUpdate = (e) => {
+      if (e.detail) {
+        setAiConfig(e.detail);
+      } else {
+        setAiConfig(getAIConfig());
+      }
+    };
+    window.addEventListener('equipfix:aiconfig-updated', handleConfigUpdate);
+    return () => window.removeEventListener('equipfix:aiconfig-updated', handleConfigUpdate);
+  }, []);
+
   // Domestic Refs
   const chatScrollRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -636,6 +671,32 @@ export const AITroubleshootingPanel = ({
   const activeChatIdRef = useRef(currentChatId);
   activeChatIdRef.current = currentChatId;
   const isSendingRef = useRef(false);
+
+  // Interactive Reasoning / Thinking State
+  const [thinkingStage, setThinkingStage] = useState('Analyzing equipment telemetry & fault signals...');
+  const [thinkingElapsed, setThinkingElapsed] = useState('0.0');
+  const thinkingTimerRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  const handleStopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (thinkingTimerRef.current) {
+      clearInterval(thinkingTimerRef.current);
+      thinkingTimerRef.current = null;
+    }
+    isSendingRef.current = false;
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
 
   // Fetch Real Plant Data from Backend on Mount
   useEffect(() => {
@@ -879,6 +940,22 @@ export const AITroubleshootingPanel = ({
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    abortControllerRef.current = new AbortController();
+    setThinkingElapsed('0.0');
+    setThinkingStage('Analyzing equipment telemetry & fault signals...');
+    const startTime = Date.now();
+    if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+    thinkingTimerRef.current = setInterval(() => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      setThinkingElapsed(elapsed);
+      const sec = parseFloat(elapsed);
+      if (sec > 2.0) {
+        setThinkingStage('Formulating precision diagnostic procedure...');
+      } else if (sec > 0.8) {
+        setThinkingStage('Synthesizing OEM machinery manuals & LOTO safety...');
+      }
+    }, 100);
+
     const asstId = `asst-${Date.now()}`;
     let hasReceivedFirstToken = false;
 
@@ -892,6 +969,7 @@ export const AITroubleshootingPanel = ({
         prompt: p,
         history: historyList,
         imageBase64: userMsg.image,
+        signal: abortControllerRef.current.signal,
         context: {
           machineCode: activeMachineCode,
           name: activeMachineData.name,
@@ -902,6 +980,10 @@ export const AITroubleshootingPanel = ({
           department: activeMachineData.department
         },
         onChunk: (chunk, totalText) => {
+          if (thinkingTimerRef.current) {
+            clearInterval(thinkingTimerRef.current);
+            thinkingTimerRef.current = null;
+          }
           if (!hasReceivedFirstToken) {
             hasReceivedFirstToken = true;
             setLoading(false);
@@ -952,6 +1034,10 @@ export const AITroubleshootingPanel = ({
         })
       );
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted') || abortControllerRef.current?.signal?.aborted) {
+        // User deliberately aborted generation via Stop button
+        return;
+      }
       if (hasReceivedFirstToken) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -961,17 +1047,24 @@ export const AITroubleshootingPanel = ({
           )
         );
       } else {
+        const isKeyErr = /api key|configure|authenticat|unauthorized|forbidden|401|403|quota/i.test(err.message || '');
         setMessages((prev) => [
           ...prev,
           {
             id: `err-${Date.now()}`,
             role: 'assistant',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            content: `<div class="ai-warn">⚠️ <strong>Diagnostic Notice:</strong> ${err.message || 'Unable to execute query. Check API configuration.'}</div>`
+            content: `<div class="ai-warn">⚠️ <strong>Diagnostic Notice:</strong> ${err.message || 'Unable to execute query. Check API configuration.'}</div>`,
+            needsKey: isKeyErr
           }
         ]);
       }
     } finally {
+      if (thinkingTimerRef.current) {
+        clearInterval(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
+      abortControllerRef.current = null;
       isSendingRef.current = false;
       setLoading(false);
     }
@@ -1210,18 +1303,28 @@ export const AITroubleshootingPanel = ({
               type="button"
               onClick={() => setShowConfigModal(true)}
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '6px 8px',
-                color: '#64748b',
-                cursor: 'pointer',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: aiConfig.apiKey ? '#f0fdf4' : '#fffbeb',
+                border: `1px solid ${aiConfig.apiKey ? '#86efac' : '#fde68a'}`,
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                color: aiConfig.apiKey ? '#15803d' : '#b45309',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
-              title="Configure AI API Key & Models"
+              title="Configure Gemini API Key & AI Models"
             >
-              <Settings size={15} />
+              <Key size={14} color={aiConfig.apiKey ? '#16a34a' : '#d97706'} />
+              <span>
+                {aiConfig.apiKey
+                  ? `${(aiConfig.model || 'Gemini 3.8 Flash').replace(/^models\//, '')} • Key Connected`
+                  : 'Add API Key'}
+              </span>
+              <Settings size={13} style={{ opacity: 0.7 }} />
             </button>
           </div>
         </div>
@@ -1583,6 +1686,32 @@ export const AITroubleshootingPanel = ({
 
                 <FormattedAIMessage content={m.content} />
 
+                {m.needsKey && (
+                  <div style={{ marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfigModal(true)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                        color: '#ffffff',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)'
+                      }}
+                    >
+                      <Key size={14} />
+                      <span>Configure Google Gemini API Key</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Actions row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9', marginTop: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1750,37 +1879,144 @@ export const AITroubleshootingPanel = ({
             );
           })}
 
-          {/* Assistant Live Analyzing: Clean, Modern, Simple */}
+          {/* Assistant Live Reasoning: Sleek, Interactive & Professional */}
           {loading && (
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '14px 18px',
+              display: 'inline-flex',
+              flexDirection: 'column',
               backgroundColor: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-              maxWidth: 'fit-content'
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)',
+              overflow: 'hidden',
+              maxWidth: '460px',
+              animation: 'thinkingGlow 2s infinite ease-in-out',
+              marginBottom: '4px'
             }}>
               <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                backgroundColor: '#eff6ff',
-                border: '1px solid #bfdbfe',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: '#2563eb'
+                justifyContent: 'space-between',
+                gap: '16px',
+                padding: '12px 16px',
+                backgroundColor: '#ffffff'
               }}>
-                <Sparkles size={15} style={{ animation: 'spin 2s linear infinite' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Subtle 3-dot pulse wave */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 8px',
+                    backgroundColor: '#eff6ff',
+                    borderRadius: '8px',
+                    border: '1px solid #dbeafe'
+                  }}>
+                    <span style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: '#2563eb',
+                      display: 'inline-block',
+                      animation: 'dotPulse 1.4s infinite ease-in-out',
+                      animationDelay: '0s'
+                    }} />
+                    <span style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: '#2563eb',
+                      display: 'inline-block',
+                      animation: 'dotPulse 1.4s infinite ease-in-out',
+                      animationDelay: '0.2s'
+                    }} />
+                    <span style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: '#2563eb',
+                      display: 'inline-block',
+                      animation: 'dotPulse 1.4s infinite ease-in-out',
+                      animationDelay: '0.4s'
+                    }} />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                        EquipFix AI Reasoning
+                      </span>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        fontFamily: 'monospace',
+                        color: '#64748b',
+                        backgroundColor: '#f1f5f9',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid #e2e8f0'
+                      }}>
+                        {thinkingElapsed}s
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: '#64748b',
+                      marginTop: '2px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '260px'
+                    }}>
+                      {thinkingStage}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Interactive Stop Button */}
+                <button
+                  onClick={handleStopGenerating}
+                  type="button"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '5px 10px',
+                    borderRadius: '7px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    color: '#475569',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    flexShrink: 0
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#fee2e2';
+                    e.currentTarget.style.color = '#dc2626';
+                    e.currentTarget.style.borderColor = '#fca5a5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f8fafc';
+                    e.currentTarget.style.color = '#475569';
+                    e.currentTarget.style.borderColor = '#cbd5e1';
+                  }}
+                  title="Stop generating response"
+                >
+                  <Square size={11} style={{ fill: 'currentColor' }} />
+                  <span>Stop</span>
+                </button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
-                  EquipFixAI is thinking...
-                </span>
-              </div>
+
+              {/* Shimmer line indicator */}
+              <div style={{
+                height: '2px',
+                width: '100%',
+                background: 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #3b82f6 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmerBar 1.5s infinite linear'
+              }} />
             </div>
           )}
 
