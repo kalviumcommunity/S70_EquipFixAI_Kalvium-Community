@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   HardHat, Wrench, UserCheck, Factory, Check,
-  ArrowRight, X, Shield, Sparkles, Loader2, Edit2
+  ArrowRight, X, Shield, Sparkles, Loader2, Edit2,
+  AlertTriangle, Zap
 } from 'lucide-react';
 
 const ROLE_OPTIONS = [
@@ -56,9 +57,25 @@ export const GoogleRoleConfirmModal = ({
   googleUser,
   defaultRole = 'LABOR',
   onConfirmRole,
+  onOfflineAccess,
   onCancel,
-  loading = false
+  loading = false,
+  error = null
 }) => {
+  const [loadingSlow, setLoadingSlow] = useState(false);
+
+  useEffect(() => {
+    let t;
+    if (loading) {
+      t = setTimeout(() => {
+        setLoadingSlow(true);
+      }, 4000);
+    } else {
+      setLoadingSlow(false);
+    }
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const [selectedRoleId, setSelectedRoleId] = useState(() => {
     const em = (googleUser?.email || '').toLowerCase();
     if (em.includes('manager') || em.includes('kalvium')) return 'MANAGER';
@@ -479,6 +496,93 @@ export const GoogleRoleConfirmModal = ({
             );
           })}
         </div>
+
+        {/* Error Alert if authorization failed */}
+        {error && (
+          <div style={{
+            marginBottom: '16px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <AlertTriangle size={16} color="#f87171" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '0.8rem', color: '#fca5a5', lineHeight: 1.4 }}>
+                {error}
+              </div>
+            </div>
+            {onOfflineAccess && (
+              <button
+                type="button"
+                onClick={() => {
+                  const finalEmail = (emailInput || '').trim() || (googleUser?.email || '').trim();
+                  onOfflineAccess(selectedRoleId, finalEmail);
+                }}
+                style={{
+                  alignSelf: 'flex-start',
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  border: '1px solid #f59e0b',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginTop: '2px'
+                }}
+              >
+                <Zap size={13} />
+                <span>Enter Station Clearance Now (Offline / Instant Access)</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Slow loading helper prompt */}
+        {loading && loadingSlow && onOfflineAccess && (
+          <div style={{
+            marginBottom: '12px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '0.75rem', color: '#fbbf24' }}>
+              Server response taking longer than usual.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const finalEmail = (emailInput || '').trim() || (googleUser?.email || '').trim();
+                onOfflineAccess(selectedRoleId, finalEmail);
+              }}
+              style={{
+                backgroundColor: '#f59e0b',
+                color: '#0f172a',
+                border: 'none',
+                borderRadius: '5px',
+                padding: '4px 9px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Skip Wait & Enter →
+            </button>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

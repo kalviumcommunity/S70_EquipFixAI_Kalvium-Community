@@ -80,6 +80,16 @@ export const AuthProvider = ({ children }) => {
     return loggedUser;
   };
 
+  const loginOffline = (userData, customToken = null) => {
+    const offlineToken = customToken || `offline-access-token-${Date.now()}`;
+    setAuthToken(offlineToken);
+    localStorage.setItem('equipfix_token', offlineToken);
+    localStorage.setItem('equipfix_user', JSON.stringify(userData));
+    setToken(offlineToken);
+    setUser(userData);
+    return userData;
+  };
+
   const logout = () => {
     setAuthToken(null);
     localStorage.removeItem('equipfix_token');
@@ -123,6 +133,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         googleLogin,
+        loginOffline,
         logout,
         hasRole,
         updateUser,

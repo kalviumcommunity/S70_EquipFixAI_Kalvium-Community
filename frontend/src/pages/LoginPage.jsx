@@ -15,13 +15,14 @@ import {
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, googleLogin } = useAuth();
+  const { login, googleLogin, loginOffline } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
   const [googleNotice, setGoogleNotice] = useState(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -317,6 +318,7 @@ export const LoginPage = () => {
         idToken,
         isFallback: false,
       });
+      setModalError('');
       setShowGoogleRoleModal(true);
     } catch (err) {
       console.error('Firebase Google Sign-In Error:', err);
@@ -352,26 +354,60 @@ export const LoginPage = () => {
         idToken: 'direct-auth-fallback-token',
         isFallback: true,
       });
+      setModalError('');
       setShowGoogleRoleModal(true);
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  const handleConfirmGoogleRole = async (chosenRole, customEmail) => {
+  const handleConfirmGoogleRole = async (chosenRole, customEmail, forceOffline = false) => {
     if (!pendingGoogleAuth) return;
     setConfirmRoleLoading(true);
     setError('');
+    setModalError('');
     const targetEmail = (customEmail || pendingGoogleAuth.email || (identifier && identifier.includes('@') ? identifier.trim() : '')).trim().toLowerCase();
     if (!targetEmail) {
-      setError('Please provide a valid account email.');
+      setModalError('Please provide a valid account email.');
       setConfirmRoleLoading(false);
       return;
     }
-    const normalizedRole = (chosenRole === 'LABOR' || chosenRole === 'LABOUR') ? 'OPERATOR' : chosenRole;
+    const normalizedRole = (chosenRole === 'LABOR' || chosenRole === 'LABOUR') ? 'OPERATOR' : (chosenRole || 'OPERATOR');
     const derivedName = (pendingGoogleAuth.full_name && !['Google Verified User', 'Google Station Operator', 'Google Station User', 'Google User'].includes(pendingGoogleAuth.full_name))
       ? pendingGoogleAuth.full_name
       : targetEmail.split('@')[0].replace('.', ' ').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    if (forceOffline) {
+      const offlineUser = {
+        id: Date.now(),
+        username: targetEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_') || 'operator',
+        email: targetEmail,
+        full_name: derivedName,
+        role: { id: 1, name: normalizedRole, description: `Standard ${normalizedRole} clearance` },
+        is_active: true,
+        created_at: new Date().toISOString()
+      };
+      loginOffline(offlineUser);
+      setShowGoogleRoleModal(false);
+      setModalError('');
+      setConfirmRoleLoading(false);
+      saveAccountToRecent({
+        id: offlineUser.id,
+        username: offlineUser.username,
+        email: offlineUser.email,
+        full_name: derivedName,
+        role: normalizedRole,
+        lastLogin: new Date().toISOString()
+      });
+      setSuccessPopupData({
+        isOpen: true,
+        title: `Welcome, ${derivedName}!`,
+        message: `Offline Station Clearance authorized for ${normalizedRole}.`,
+        roleName: normalizedRole,
+        targetRole: normalizedRole
+      });
+      return;
+    }
 
     try {
       const loggedUser = await googleLogin({
@@ -383,6 +419,7 @@ export const LoginPage = () => {
       });
 
       setShowGoogleRoleModal(false);
+      setModalError('');
       const userRole = loggedUser?.role?.name || loggedUser?.role || normalizedRole;
       const displayName = loggedUser?.full_name || loggedUser?.username || derivedName || 'Station Operator';
 
@@ -409,16 +446,21 @@ export const LoginPage = () => {
       let errMsg = '';
       const responseData = err.response?.data;
       if (
+        err.code === 'ECONNABORTED' ||
+        err.message?.includes('timeout')
+      ) {
+        errMsg = 'Backend server request timed out. If running on Render, the backend service is waking up (~30s). You can retry or proceed with Offline Station Clearance.';
+      } else if (
         err.message === 'Network Error' ||
         (!err.response && err.isAxiosError) ||
         err.code === 'ERR_NETWORK' ||
         (typeof responseData === 'string' && responseData.includes('ECONNREFUSED'))
       ) {
-        errMsg = 'Backend server connection error: Unable to reach FastAPI backend. If the backend is waking up on Render, please wait ~30 seconds and retry.';
+        errMsg = 'Backend server connection error: Unable to reach FastAPI backend. You can retry or proceed with Offline Station Clearance.';
       } else if (err.response?.status === 404) {
-        errMsg = 'Authentication endpoint not found (404). Backend service is waking up or deploying. Please wait a few moments and try again.';
+        errMsg = 'Authentication endpoint not found (404). Backend service is waking up or deploying.';
       } else if (err.response?.status === 502 || err.response?.status === 504) {
-        errMsg = 'Backend gateway unavailable (502/504). Backend is warming up on Render, please wait a moment and retry.';
+        errMsg = 'Backend gateway unavailable (502/504). Render backend is warming up (~30s).';
       } else if (typeof responseData?.detail === 'string') {
         errMsg = responseData.detail;
       } else if (Array.isArray(responseData?.detail)) {
@@ -426,6 +468,7 @@ export const LoginPage = () => {
       } else {
         errMsg = err.message || 'Google sign-in could not be completed.';
       }
+      setModalError(errMsg);
       setError(errMsg);
     } finally {
       setConfirmRoleLoading(false);
@@ -766,6 +809,7 @@ export const LoginPage = () => {
                         idToken: 'direct-auth-fallback-token',
                         isFallback: true,
                       });
+                      setModalError('');
                       setShowGoogleRoleModal(true);
                     }}
                     style={{
@@ -887,6 +931,7 @@ export const LoginPage = () => {
                   idToken: 'direct-auth-fallback-token',
                   isFallback: true,
                 });
+                setModalError('');
                 setShowGoogleRoleModal(true);
               }}
               style={{
@@ -1092,10 +1137,13 @@ export const LoginPage = () => {
         googleUser={pendingGoogleAuth}
         defaultRole="OPERATOR"
         loading={confirmRoleLoading}
+        error={modalError}
         onConfirmRole={handleConfirmGoogleRole}
+        onOfflineAccess={(role, email) => handleConfirmGoogleRole(role, email, true)}
         onCancel={() => {
           setShowGoogleRoleModal(false);
           setPendingGoogleAuth(null);
+          setModalError('');
         }}
       />
 

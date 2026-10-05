@@ -3,8 +3,23 @@ import axios from 'axios';
 export const getBaseURL = () => {
   let url = (import.meta.env.VITE_API_URL || '').trim();
 
-  // 1. If explicitly defined via env variables
+  // 1. Local development (port 5173, localhost, or 127.0.0.1)
+  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    // If VITE_API_URL explicitly specifies an external absolute http(s) URL, use it
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      url = url.replace(/\/+$/, '');
+      return url.endsWith('/api') ? url : `${url}/api`;
+    }
+    // Local development: use Vite proxy `/api` (proxied to http://127.0.0.1:8000)
+    return '/api';
+  }
+
+  // 2. If explicitly defined via env variables
   if (url) {
+    if (url.startsWith('/')) {
+      url = url.replace(/\/+$/, '');
+      return url.endsWith('/api') ? url : `${url}/api`;
+    }
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = `https://${url}`;
     }
@@ -13,11 +28,6 @@ export const getBaseURL = () => {
       url = `${url}/api`;
     }
     return url;
-  }
-
-  // 2. Local development
-  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:8000/api';
   }
 
   // 3. Render cloud deployment auto-detection:
@@ -36,6 +46,7 @@ export const getBaseURL = () => {
 
 const api = axios.create({
   baseURL: getBaseURL(),
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
