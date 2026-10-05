@@ -635,6 +635,7 @@ export const AITroubleshootingPanel = ({
   const recognitionRef = useRef(null);
   const activeChatIdRef = useRef(currentChatId);
   activeChatIdRef.current = currentChatId;
+  const isSendingRef = useRef(false);
 
   // Fetch Real Plant Data from Backend on Mount
   useEffect(() => {
@@ -853,7 +854,8 @@ export const AITroubleshootingPanel = ({
   const handleSendPrompt = async (overridePrompt = null) => {
     const p = (overridePrompt || question).trim();
     if (!p && !attachedImageBase64) return;
-    if (loading) return;
+    if (loading || isSendingRef.current) return;
+    isSendingRef.current = true;
 
     // Immediately clear input box & attached image
     setQuestion('');
@@ -876,7 +878,6 @@ export const AITroubleshootingPanel = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
-    scrollToBottom('smooth');
 
     const asstId = `asst-${Date.now()}`;
     let hasReceivedFirstToken = false;
@@ -918,12 +919,8 @@ export const AITroubleshootingPanel = ({
               prev.map((m) => (m.id === asstId ? { ...m, content: totalText } : m))
             );
           }
-          scrollToBottom('smooth');
         }
       });
-
-      setLoading(false);
-      scrollToBottom('smooth');
 
       const finalAnswer = res?.text || res?.answer || res?.content || 'Diagnostic analysis complete.';
       setMessages((prev) => {
@@ -941,7 +938,6 @@ export const AITroubleshootingPanel = ({
         }
         return prev.map((m) => (m.id === asstId ? { ...m, content: finalAnswer } : m));
       });
-      scrollToBottom('smooth');
 
       // Update recent chats title and subtitle in sidebar
       const shortTitle = `${activeMachineCode} — ${p.length > 26 ? p.slice(0, 26) + '...' : p}`;
@@ -956,16 +952,28 @@ export const AITroubleshootingPanel = ({
         })
       );
     } catch (err) {
+      if (hasReceivedFirstToken) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === asstId
+              ? { ...m, content: `${m.content}\n\n<div class="ai-warn">⚠️ <strong>Notice:</strong> ${err.message || 'Stream finalized.'}</div>` }
+              : m
+          )
+        );
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            content: `<div class="ai-warn">⚠️ <strong>Diagnostic Notice:</strong> ${err.message || 'Unable to execute query. Check API configuration.'}</div>`
+          }
+        ]);
+      }
+    } finally {
+      isSendingRef.current = false;
       setLoading(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          role: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `<div class="ai-warn">⚠️ <strong>Diagnostic Notice:</strong> ${err.message || 'Unable to execute query. Check API configuration.'}</div>`
-        }
-      ]);
     }
   };
 

@@ -106,6 +106,7 @@ export const OperatorDashboard = () => {
   const [aiQuery, setAiQuery] = useState('');
   const [aiMachineId, setAiMachineId] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const isAiQueryingRef = useRef(false);
   const [aiResponses, setAiResponses] = useState([
     {
       id: 'default-welcome',
@@ -266,6 +267,8 @@ export const OperatorDashboard = () => {
   const handleAIQuery = async (queryText, machineId = null) => {
     const textToSend = queryText || aiQuery;
     if (!textToSend.trim()) return;
+    if (aiLoading || isAiQueryingRef.current) return;
+    isAiQueryingRef.current = true;
 
     const targetMachineId = machineId || (aiMachineId ? parseInt(aiMachineId, 10) : null);
     const targetMachine = machines.find((m) => String(m.id) === String(targetMachineId));
@@ -364,6 +367,7 @@ export const OperatorDashboard = () => {
         )
       );
     } finally {
+      isAiQueryingRef.current = false;
       setAiLoading(false);
     }
   };

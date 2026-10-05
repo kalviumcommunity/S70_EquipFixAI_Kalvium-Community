@@ -498,7 +498,10 @@ Direct, single-sentence command for the technician or shift supervisor right now
     groundedSource = '',
     isStreamed = false
   }) => {
-    const missingInfo = /insufficient information|more information needed|need the equipment|please specify|missing information/i.test(text);
+    const retrievedSources = Array.isArray(context?.sources) ? context.sources : [];
+    const previousRepairs = Array.isArray(context?.previousRepairs) ? context.previousRepairs : [];
+    const ragData = context?.ragData || null;
+    const missingInfo = /insufficient information|more information needed|need the equipment|please specify|missing information/i.test(text || '');
     const confidence = retrievedSources.length >= 2
       ? 'STRONG'
       : (retrievedSources.length === 1 ? 'PARTIAL' : (missingInfo ? 'INSUFFICIENT' : 'PARTIAL'));
@@ -529,6 +532,8 @@ Direct, single-sentence command for the technician or shift supervisor right now
       missingInfo
     };
   };
+
+  let hasStreamedAnyToken = false;
 
   // STRATEGY 1A: Direct Real-Time Streaming from OpenAI API (SSE)
   if (effectiveProvider === 'openai') {
@@ -606,6 +611,7 @@ Direct, single-sentence command for the technician or shift supervisor right now
                   const chunk = parsed.choices?.[0]?.delta?.content || '';
                   if (chunk) {
                     accumulatedText += chunk;
+                    hasStreamedAnyToken = true;
                     if (onChunk) onChunk(chunk, accumulatedText);
                   }
                 } catch (e) {}
@@ -680,18 +686,21 @@ Direct, single-sentence command for the technician or shift supervisor right now
     }
 
     const cleanList = resolveGeminiCandidateModels(effectiveModel);
+    let accumulatedText = '';
 
     for (const curModel of cleanList) {
+      if (hasStreamedAnyToken) break;
+      accumulatedText = '';
       const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:streamGenerateContent?key=${encodeURIComponent(apiKey)}&alt=sse`;
       const directEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const payload = {
         contents,
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1536 }
       };
 
       try {
         const streamController = new AbortController();
-        const streamTimeout = setTimeout(() => streamController.abort(), 8000);
+        const streamTimeout = setTimeout(() => streamController.abort(), 6000);
 
         let res = await fetch(streamEndpoint, {
           method: 'POST',
@@ -704,7 +713,6 @@ Direct, single-sentence command for the technician or shift supervisor right now
         if (res.ok && res.body) {
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
-          let accumulatedText = '';
           let buffer = '';
           let streamDone = false;
 
@@ -741,6 +749,7 @@ Direct, single-sentence command for the technician or shift supervisor right now
                     const chunk = cand?.content?.parts?.map((p) => p.text).join('') || '';
                     if (chunk) {
                       accumulatedText += chunk;
+                      hasStreamedAnyToken = true;
                       if (onChunk) onChunk(chunk, accumulatedText);
                     }
                     if (cand?.finishReason) {
@@ -813,6 +822,7 @@ Direct, single-sentence command for the technician or shift supervisor right now
           const data = await directRes.json();
           const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
           if (text.trim()) {
+            hasStreamedAnyToken = true;
             if (onChunk) onChunk(text, text);
             return buildCopilotResult({
               text,
@@ -845,6 +855,17 @@ Direct, single-sentence command for the technician or shift supervisor right now
           continue;
         }
       } catch (streamErr) {
+        if (hasStreamedAnyToken && accumulatedText.trim()) {
+          return buildCopilotResult({
+            text: accumulatedText,
+            provider: `Google Gemini (${curModel})`,
+            model: curModel,
+            realtime: true,
+            hasVision: Boolean(imageBase64),
+            groundedSource: `Gemini ${curModel} Live Stream`,
+            isStreamed: true
+          });
+        }
         if (streamErr.message && (
           streamErr.message.toLowerCase().includes('no longer available') ||
           streamErr.message.toLowerCase().includes('not found') ||
@@ -868,6 +889,23 @@ Direct, single-sentence command for the technician or shift supervisor right now
         console.warn(`[EquipFixAI] Direct attempt on ${curModel} failed:`, streamErr.message);
       }
     }
+
+    if (hasStreamedAnyToken && accumulatedText.trim()) {
+      return buildCopilotResult({
+        text: accumulatedText,
+        provider: 'Google Gemini',
+        model: 'gemini',
+        realtime: true,
+        hasVision: Boolean(imageBase64),
+        groundedSource: 'Gemini Direct Live Stream',
+        isStreamed: true
+      });
+    }
+  }
+
+  // If tokens were already streamed directly, do not cascade into backend proxy
+  if (hasStreamedAnyToken) {
+    return;
   }
 
   // STRATEGY 2: Backend Real-Time Streaming Proxy (/api/ai/chat/stream)
@@ -926,6 +964,7 @@ Direct, single-sentence command for the technician or shift supervisor right now
                 }
                 if (parsed.text) {
                   accumulatedText += parsed.text;
+                  hasStreamedAnyToken = true;
                   if (onChunk) {
                     onChunk(parsed.text, accumulatedText);
                   }
@@ -959,6 +998,11 @@ Direct, single-sentence command for the technician or shift supervisor right now
       throw backendStreamErr;
     }
     console.warn('[EquipFixAI] Backend SSE stream proxy attempt failed:', backendStreamErr.message);
+  }
+
+  // If either Strategy 1 or Strategy 2 already streamed tokens, do not invoke Strategy 3 non-streaming fallback
+  if (hasStreamedAnyToken) {
+    return;
   }
 
   // STRATEGY 3: Backend Non-Streaming Call (/api/ai/chat)
