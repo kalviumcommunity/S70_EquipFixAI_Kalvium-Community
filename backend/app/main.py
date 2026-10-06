@@ -73,6 +73,10 @@ app.include_router(search.router, prefix=settings.API_V1_STR)
 app.include_router(upload.router, prefix=settings.API_V1_STR)
 app.include_router(upload.uploads_router, prefix=settings.API_V1_STR)
 
+# Direct alias endpoints for specification compliance (/api/chat and /api/chat/stream)
+app.add_api_route("/api/chat", ai.execute_ai_chat, methods=["POST"], response_model=ai.AIChatResponse, tags=["AI Chat"])
+app.add_api_route("/api/chat/stream", ai.execute_ai_chat_stream, methods=["POST"], tags=["AI Chat"])
+
 
 @app.get("/", tags=["Health Check"])
 @app.get("/health", tags=["Health Check"])

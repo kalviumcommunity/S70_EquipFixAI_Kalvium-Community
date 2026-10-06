@@ -1081,15 +1081,15 @@ export const AITroubleshootingPanel = ({
           )
         );
       } else {
-        const isKeyErr = /api key|configure|authenticat|unauthorized|forbidden|401|403|quota/i.test(err.message || '');
         setMessages((prev) => [
           ...prev,
           {
             id: `err-${Date.now()}`,
             role: 'assistant',
+            isError: true,
+            retryPrompt: p,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            content: `<div class="ai-warn">⚠️ <strong>Diagnostic Notice:</strong> ${err.message || 'Unable to execute query. Check API configuration.'}</div>`,
-            needsKey: isKeyErr
+            content: `<div class="ai-warn">⚠️ <strong>Error:</strong> ${err.message || 'Unable to execute query. Please try again.'}</div>`
           }
         ]);
       }
@@ -1925,28 +1925,28 @@ export const AITroubleshootingPanel = ({
 
                 <FormattedAIMessage content={m.content} />
 
-                {(m.needsKey || (typeof m.content === 'string' && (m.content.includes('Configure AI Key') || m.content.includes('Quota Exceeded')))) && (
+                {m.retryPrompt && (
                   <div style={{ marginTop: '10px' }}>
                     <button
                       type="button"
-                      onClick={() => setShowConfigModal(true)}
+                      onClick={() => handleSendPrompt(m.retryPrompt)}
                       style={{
                         padding: '8px 16px',
                         borderRadius: '8px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-                        color: '#ffffff',
+                        border: '1px solid #bfdbfe',
+                        backgroundColor: '#eff6ff',
+                        color: '#2563eb',
                         fontSize: '0.8rem',
                         fontWeight: 700,
                         cursor: 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '6px',
-                        boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)'
+                        boxShadow: '0 1px 3px rgba(37, 99, 235, 0.1)'
                       }}
                     >
-                      <Key size={14} />
-                      <span>Configure / Switch API Key</span>
+                      <RefreshCw size={14} />
+                      <span>Retry</span>
                     </button>
                   </div>
                 )}
@@ -2459,7 +2459,7 @@ export const AITroubleshootingPanel = ({
                   handleSendPrompt();
                 }
               }}
-              placeholder={`Ask EquipFixAI about ${activeMachineData.machine_code}... (Press Enter or ⌘↵ to send)`}
+              placeholder="Ask EquipFixAI anything... (Press Enter to send, Shift+Enter for new line)"
               rows={1}
               style={{
                 width: '100%',

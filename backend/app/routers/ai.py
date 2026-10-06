@@ -24,6 +24,7 @@ from app.rag.tools import StructuredTools
 from app.rag.retriever import RAGRetriever
 from app.rag.generator import GroundedGenerator
 from app.services.audit_service import AuditService
+from app.services.gemini_service import GeminiService, GeminiServiceError
 
 router = APIRouter(prefix="/ai", tags=["AI & RAG Troubleshooting Engine"])
 
@@ -853,221 +854,89 @@ def verify_api_key(
 
 
 @router.post("/chat/stream")
-def execute_ai_chat_stream(
+async def execute_ai_chat_stream(
     req: AIChatRequest,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Real-time Server-Sent Events (SSE) streaming endpoint for EquipFix AI Copilot.
-    Streams live tokens directly from Google Gemini or OpenAI in real time as they are generated.
-    Gracefully rotates across candidate API keys and models, falling back to local plant grounding on quota exhaustion.
+    """Real-time Server-Sent Events (SSE) streaming endpoint powered by Google Gemini API.
+    Streams live response tokens with genuine RAG document citations when equipment context is present.
     """
     message = req.get_message()
     if not message:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty.")
 
-    candidate_keys = extract_candidate_api_keys(req.api_key)
-    api_key = candidate_keys[0] if candidate_keys else (
-        req.api_key
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("LLM_API_KEY")
-        or ""
-    ).strip().replace('"', '').replace("'", "")
+    rag_context = None
+    machine_context = None
+    citations: List[Dict[str, Any]] = []
 
-    system_instruction, machine, chunks = get_plant_grounding_context(db, message, req.machine_id, req.work_order_id)
+    # 1. Look up equipment context if machine_id provided
+    if req.machine_id:
+        machine = db.query(Machine).filter(Machine.id == req.machine_id).first()
+        if machine:
+            machine_context = (
+                f"Machine Code: {machine.machine_code} | Name: {machine.name} | "
+                f"Status: {machine.status.value} | Location: {machine.location}"
+            )
 
-    if not api_key:
-        def grounded_stream_no_key():
-            grounded_text = synthesize_grounded_response(message, machine, chunks, reason="no_key")
-            chunk_size = 48
-            for i in range(0, len(grounded_text), chunk_size):
-                yield f"data: {json.dumps({'text': grounded_text[i:i+chunk_size], 'done': False})}\n\n"
-            yield f"data: {json.dumps({'text': '', 'done': True, 'model': 'Plant-Grounded RAG', 'provider': 'EquipFix AI (Local Grounded Mode)', 'needs_key': True})}\n\n"
-        return StreamingResponse(grounded_stream_no_key(), media_type="text/event-stream")
-
-    provider = (req.provider or "").strip().lower()
-    if api_key.startswith("sk-"):
-        provider = "openai"
-    elif api_key.startswith("AIza") or api_key.startswith("AQ."):
-        provider = "gemini"
-    elif not provider:
-        provider = "gemini"
-
-    # 1. LIVE OPENAI SSE STREAMING
-    if provider == "openai":
-        selected_model = (req.model or "gpt-4o-mini").strip()
-        if "gemini" in selected_model or not selected_model:
-            selected_model = "gpt-4o-mini"
-
-        messages = [{"role": "system", "content": system_instruction}]
-        for h in (req.history or []):
-            h_role = "user" if getattr(h, "role", "") == "user" else "assistant"
-            h_content = getattr(h, "content", "")
-            if h_content:
-                messages.append({"role": h_role, "content": h_content})
-
-        if req.image_base64:
-            data_url = req.image_base64 if req.image_base64.startswith("data:") else f"data:{req.image_mime or 'image/jpeg'};base64,{req.image_base64}"
-            user_content = [
-                {"type": "text", "text": message},
-                {"type": "image_url", "image_url": {"url": data_url}}
-            ]
-            messages.append({"role": "user", "content": user_content})
-        else:
-            messages.append({"role": "user", "content": message})
-
-        def openai_event_stream_generator():
-            clean_models = resolve_openai_models(selected_model)
-            streamed_any = False
-            active_keys = [k for k in candidate_keys if k.startswith("sk-")] or [api_key]
-
-            for cur_key in active_keys:
-                for cur_model in clean_models:
-                    payload = {
-                        "model": cur_model,
-                        "messages": messages,
-                        "stream": True,
-                        "temperature": 0.2
-                    }
-
-                    try:
-                        with httpx.Client(timeout=25.0) as client:
-                            with client.stream(
-                                "POST",
-                                "https://api.openai.com/v1/chat/completions",
-                                headers={"Authorization": f"Bearer {cur_key}", "Content-Type": "application/json"},
-                                json=payload
-                            ) as resp:
-                                if resp.status_code == 200:
-                                    for line in resp.iter_lines():
-                                        line_str = line.strip()
-                                        if line_str == "data: [DONE]":
-                                            break
-                                        if line_str.startswith("data: "):
-                                            json_str = line_str[6:].strip()
-                                            if json_str:
-                                                try:
-                                                    data = json.loads(json_str)
-                                                    choices = data.get("choices", [])
-                                                    if choices:
-                                                        delta = choices[0].get("delta", {})
-                                                        chunk_text = delta.get("content", "")
-                                                        if chunk_text:
-                                                            streamed_any = True
-                                                            yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
-                                                except Exception:
-                                                    pass
-                                    if streamed_any:
-                                        yield f"data: {json.dumps({'text': '', 'done': True, 'model': cur_model, 'provider': f'OpenAI ({cur_model})'})}\n\n"
-                                        return
-                                else:
-                                    if resp.status_code == 429:
-                                        continue
-                    except Exception:
-                        continue
-
-            # Fallback to local plant-grounded response if all OpenAI keys/models exhausted
-            grounded_text = synthesize_grounded_response(message, machine, chunks, reason="quota_exhausted")
-            chunk_size = 48
-            for i in range(0, len(grounded_text), chunk_size):
-                yield f"data: {json.dumps({'text': grounded_text[i:i+chunk_size], 'done': False})}\n\n"
-            yield f"data: {json.dumps({'text': '', 'done': True, 'model': 'Plant-Grounded RAG', 'provider': 'EquipFix AI (Local Grounded Mode)', 'quota_fallback': True})}\n\n"
-
-        return StreamingResponse(
-            openai_event_stream_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
-            }
+    # 2. Retrieve genuine RAG context if applicable
+    try:
+        retriever = RAGRetriever()
+        retrieval_data = retriever.retrieve(
+            db=db,
+            query=message,
+            machine_id=req.machine_id,
+            work_order_id=req.work_order_id,
+            top_k=4
         )
+        chunks = retrieval_data.get("chunks", [])
+        valid_chunks = [c for c in chunks if c.get("relevance_score", 0.0) > 0.05]
+        if valid_chunks:
+            doc_snippets = []
+            for c in valid_chunks:
+                doc_snippets.append(
+                    f"[{c.get('document_title', 'Technical Manual')} - Section: {c.get('section_title', 'General')} (Page {c.get('page_number', 1)})]:\n{c.get('content', '')}"
+                )
+                citations.append({
+                    "document_id": c.get("document_id"),
+                    "document_title": c.get("document_title", "Document"),
+                    "page_number": c.get("page_number", 1),
+                    "section_title": c.get("section_title"),
+                    "relevance_score": c.get("relevance_score", 0.0),
+                    "snippet": c.get("content", "")[:260]
+                })
+            rag_context = "\n---\n".join(doc_snippets)
+    except Exception:
+        pass
 
-    # 2. LIVE GOOGLE GEMINI SSE STREAMING
-    selected_model = (req.model or "gemini-2.5-flash").replace("models/", "").strip()
-    if "gpt" in selected_model or selected_model.startswith("o"):
-        selected_model = "gemini-2.5-flash"
+    history_dicts = []
+    for h in (req.history or []):
+        if hasattr(h, "dict"):
+            history_dicts.append(h.dict())
+        elif isinstance(h, dict):
+            history_dicts.append(h)
+        else:
+            history_dicts.append({
+                "role": getattr(h, "role", "user"),
+                "content": getattr(h, "content", "")
+            })
 
-    grounded_message = (
-        f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"
-        f"{system_instruction}\n\n"
-        f"[TECHNICIAN DIAGNOSTIC QUERY]\n"
-        f"{message}"
-    )
-    contents = build_gemini_contents_payload(grounded_message, req.history, req.image_base64, req.image_mime)
-
-    def event_stream_generator():
-        streamed_any = False
-        active_keys = [k for k in candidate_keys if not k.startswith("sk-")] or [api_key]
-
-        for cur_key in active_keys:
-            clean_models = resolve_gemini_models(selected_model, api_key=cur_key)
-            for cur_model in clean_models:
-                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:streamGenerateContent?key={cur_key}&alt=sse"
-                payload = {
-                    "contents": contents,
-                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
-                }
-
-                try:
-                    with httpx.Client(timeout=14.0) as client:
-                        with client.stream("POST", endpoint, json=payload) as resp:
-                            if resp.status_code == 200:
-                                for line in resp.iter_lines():
-                                    if line.startswith("data: "):
-                                        json_str = line[6:].strip()
-                                        if json_str:
-                                            try:
-                                                data = json.loads(json_str)
-                                                if "error" in data:
-                                                    break
-                                                candidates = data.get("candidates", [])
-                                                if candidates:
-                                                    cand = candidates[0]
-                                                    parts = cand.get("content", {}).get("parts", [])
-                                                    chunk_text = "".join(p.get("text", "") for p in parts if "text" in p)
-                                                    if chunk_text:
-                                                        streamed_any = True
-                                                        yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
-                                                    if cand.get("finishReason"):
-                                                        break
-                                            except Exception:
-                                                pass
-                                if streamed_any:
-                                    yield f"data: {json.dumps({'text': '', 'done': True, 'model': req.model or cur_model, 'provider': f'Google Gemini ({req.model or cur_model})'})}\n\n"
-                                    return
-                            else:
-                                if resp.status_code == 429:
-                                    # Quota or rate limit exceeded on this model/key, try next model/key
-                                    continue
-                                elif resp.status_code in (401, 403):
-                                    # Invalid key, break to try next candidate key
-                                    break
-                                elif resp.status_code in (400, 404):
-                                    # Check if the error is specifically an invalid API key
-                                    try:
-                                        err_json = resp.json()
-                                        err_msg = str(err_json.get("error", {}).get("message", "")).lower()
-                                        if "api key" in err_msg or "key_invalid" in err_msg:
-                                            break
-                                    except Exception:
-                                        pass
-                                    # Otherwise model not supported, continue to next candidate model!
-                                    continue
-                except Exception:
-                    continue
-
-        # If all candidate keys and models exhausted, fall back to local plant grounded RAG
-        grounded_text = synthesize_grounded_response(message, machine, chunks, reason="quota_exhausted")
-        chunk_size = 48
-        for i in range(0, len(grounded_text), chunk_size):
-            yield f"data: {json.dumps({'text': grounded_text[i:i+chunk_size], 'done': False})}\n\n"
-        yield f"data: {json.dumps({'text': '', 'done': True, 'model': 'Plant-Grounded RAG', 'provider': 'EquipFix AI (Local Grounded Mode)', 'quota_fallback': True})}\n\n"
+    async def sse_event_generator():
+        try:
+            async for sse_chunk in GeminiService.stream_response(
+                message=message,
+                history=history_dicts,
+                rag_context=rag_context,
+                machine_context=machine_context,
+                model=req.model,
+                sources=citations
+            ):
+                yield sse_chunk
+        except Exception as err:
+            yield f"data: {json.dumps({'error': str(err), 'done': True})}\n\n"
 
     return StreamingResponse(
-        event_stream_generator(),
+        sse_event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -1077,239 +946,107 @@ def execute_ai_chat_stream(
     )
 
 
+
+
 @router.post("/chat", response_model=AIChatResponse)
-def execute_ai_chat(
+async def execute_ai_chat(
     req: AIChatRequest,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Conversational AI copilot endpoint.
-    Executes live model inference across candidate API keys (Gemini/OpenAI) with automatic
-    failover to plant-grounded RAG diagnostic engine when cloud quotas are exceeded.
+    """Production Conversational AI copilot endpoint powered strictly by the Google Gemini API.
+    Handles general chat, casual queries, programming, industrial machinery troubleshooting,
+    and multi-turn conversation memory with verified RAG citations when available.
     """
     message = req.get_message()
     if not message:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty.")
 
-    candidate_keys = extract_candidate_api_keys(req.api_key)
-    api_key = candidate_keys[0] if candidate_keys else (
-        req.api_key
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("LLM_API_KEY")
-        or ""
-    ).strip().replace('"', '').replace("'", "")
+    rag_context = None
+    machine_context = None
+    citations: List[AICitation] = []
 
-    provider = (req.provider or "").strip().lower()
-    if api_key.startswith("sk-"):
-        provider = "openai"
-    elif api_key.startswith("AIza") or api_key.startswith("AQ."):
-        provider = "gemini"
-    elif not provider:
-        provider = "gemini"
+    # 1. Retrieve equipment context if specified
+    if req.machine_id:
+        machine = db.query(Machine).filter(Machine.id == req.machine_id).first()
+        if machine:
+            machine_context = (
+                f"Machine Code: {machine.machine_code} | Name: {machine.name} | "
+                f"Status: {machine.status.value} | Location: {machine.location}"
+            )
 
-    selected_model = (req.model or ("gpt-4o-mini" if provider == "openai" else "gemini-2.5-flash")).replace("models/", "").strip()
-    if provider == "openai" and ("gemini" in selected_model or not selected_model):
-        selected_model = "gpt-4o-mini"
-    elif provider == "gemini" and ("gpt" in selected_model or selected_model.startswith("o") or not selected_model):
-        selected_model = "gemini-2.5-flash"
-
-    system_instruction, machine, chunks = get_plant_grounding_context(db, message, req.machine_id, req.work_order_id)
-
-    # 1. Live Google Gemini Inference across candidate keys
-    if api_key and provider == "gemini":
-        grounded_message = (
-            f"[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n"
-            f"{system_instruction}\n\n"
-            f"[TECHNICIAN DIAGNOSTIC QUERY]\n"
-            f"{message}"
+    # 2. Retrieve genuine RAG context if applicable
+    try:
+        retriever = RAGRetriever()
+        retrieval_data = retriever.retrieve(
+            db=db,
+            query=message,
+            machine_id=req.machine_id,
+            work_order_id=req.work_order_id,
+            top_k=4
         )
-        contents = build_gemini_contents_payload(grounded_message, req.history, req.image_base64, req.image_mime)
+        chunks = retrieval_data.get("chunks", [])
+        valid_chunks = [c for c in chunks if c.get("relevance_score", 0.0) > 0.05]
+        if valid_chunks:
+            doc_snippets = []
+            for c in valid_chunks:
+                doc_snippets.append(
+                    f"[{c.get('document_title', 'Technical Manual')} - Section: {c.get('section_title', 'General')} (Page {c.get('page_number', 1)})]:\n{c.get('content', '')}"
+                )
+                citations.append(AICitation(
+                    document_id=c.get("document_id"),
+                    document_title=c.get("document_title", "Document"),
+                    version_number=c.get("version_number"),
+                    page_number=c.get("page_number", 1),
+                    section_title=c.get("section_title"),
+                    source_type="DOCUMENT",
+                    relevance_score=c.get("relevance_score", 0.0),
+                    snippet=c.get("content", "")[:260]
+                ))
+            rag_context = "\n---\n".join(doc_snippets)
+    except Exception:
+        pass
 
-        payload = {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 2048
-            }
-        }
-
-        active_keys = [k for k in candidate_keys if not k.startswith("sk-")] or [api_key]
-        for cur_key in active_keys:
-            clean_models = resolve_gemini_models(selected_model, api_key=cur_key)
-            for cur_model in clean_models:
-                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:generateContent?key={cur_key}"
-                try:
-                    with httpx.Client(timeout=12.0) as client:
-                        resp = client.post(endpoint, json=payload)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            candidates = data.get("candidates", [])
-                            if candidates:
-                                parts = candidates[0].get("content", {}).get("parts", [])
-                                text_out = "".join(p.get("text", "") for p in parts if "text" in p).strip()
-                                if text_out:
-                                    return AIChatResponse(
-                                        text=text_out,
-                                        provider=f"Google Gemini ({cur_model})",
-                                        model=cur_model,
-                                        realtime=True,
-                                        grounded_source=f"Gemini {cur_model} + Plant RAG Knowledge Base"
-                                    )
-                        elif resp.status_code == 429:
-                            # Quota exceeded on this model/key, try next candidate
-                            continue
-                        elif resp.status_code in (401, 403):
-                            # Invalid key, break to try next candidate key
-                            break
-                        elif resp.status_code in (400, 404):
-                            try:
-                                err_json = resp.json()
-                                err_msg = str(err_json.get("error", {}).get("message", "")).lower()
-                                if "api key" in err_msg or "key_invalid" in err_msg:
-                                    break
-                            except Exception:
-                                pass
-                            # Model not supported, try next model!
-                            continue
-                except Exception:
-                    continue
-
-    # 2. Live OpenAI Inference across candidate keys
-    if api_key and provider == "openai":
-        messages = [{"role": "system", "content": system_instruction}]
-        for h in (req.history or []):
-            h_role = "user" if getattr(h, "role", "") == "user" else "assistant"
-            messages.append({"role": h_role, "content": getattr(h, "content", "")})
-
-        user_content = [{"type": "text", "text": message}]
-        if req.image_base64:
-            data_url = req.image_base64 if req.image_base64.startswith("data:") else f"data:{req.image_mime or 'image/jpeg'};base64,{req.image_base64}"
-            user_content.append({"type": "image_url", "image_url": {"url": data_url}})
-        messages.append({"role": "user", "content": user_content})
-
-        active_keys = [k for k in candidate_keys if k.startswith("sk-")] or [api_key]
-        for cur_key in active_keys:
-            try:
-                with httpx.Client(timeout=16.0) as client:
-                    resp = client.post(
-                        "https://api.openai.com/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {cur_key}", "Content-Type": "application/json"},
-                        json={
-                            "model": selected_model,
-                            "messages": messages,
-                            "max_tokens": 4096,
-                            "temperature": 0.2
-                        }
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        text_out = data["choices"][0]["message"]["content"]
-                        return AIChatResponse(
-                            text=text_out,
-                            provider=f"OpenAI ({selected_model})",
-                            model=selected_model,
-                            realtime=True,
-                            grounded_source=f"OpenAI {selected_model} + Plant RAG Knowledge Base"
-                        )
-                    elif resp.status_code == 429:
-                        continue
-            except Exception:
-                continue
-
-    # 3. Direct structured database facts (e.g. machine status, parts inventory)
-    classification = StructuredTools.classify_query(message)
-    if classification.get("type") == "STRUCTURED":
-        tool_name = classification["tool"]
-        tool_params = classification["params"]
-        tool_result = StructuredTools.execute_tool(db, tool_name, **tool_params)
-        m_code = classification.get("machine_code") or (machine.machine_code if machine else "")
-
-        fact_text = f"### 📊 Relational Database Record: {tool_name.replace('get_', '').replace('_', ' ').title()}\n"
-        if "status" in tool_result:
-            fact_text += f"- **Equipment**: {m_code}\n- **Operational Status**: `{tool_result.get('status')}`\n- **Location**: {tool_result.get('location', 'N/A')}\n"
-            if tool_result.get("next_scheduled_maintenance"):
-                fact_text += f"- **Next Scheduled Maintenance**: {tool_result.get('next_scheduled_maintenance')}\n"
-            if tool_result.get("active_incidents_count") is not None:
-                fact_text += f"- **Active Incidents**: {tool_result.get('active_incidents_count')}\n"
-        elif "parts" in tool_result:
-            fact_text += f"- **Parts Found**: {tool_result.get('total_parts', len(tool_result.get('parts', [])))}\n"
-            for p in tool_result.get("parts", [])[:5]:
-                fact_text += f"  • `{p.get('part_code')}`: **{p.get('name')}** — In Stock: **{p.get('current_stock')}** (Min: {p.get('minimum_stock')}) | Unit Cost: ${p.get('unit_cost')}\n"
+    history_dicts = []
+    for h in (req.history or []):
+        if hasattr(h, "dict"):
+            history_dicts.append(h.dict())
+        elif isinstance(h, dict):
+            history_dicts.append(h)
         else:
-            fact_text += f"```json\n{json.dumps(tool_result, indent=2, default=str)}\n```\n"
+            history_dicts.append({
+                "role": getattr(h, "role", "user"),
+                "content": getattr(h, "content", "")
+            })
+
+    try:
+        result = await GeminiService.generate_response(
+            message=message,
+            history=history_dicts,
+            rag_context=rag_context,
+            machine_context=machine_context,
+            model=req.model
+        )
+
+        response_text = result.get("message") or result.get("text") or ""
+        active_model = result.get("model", "gemini-flash-lite-latest")
 
         return AIChatResponse(
-            text=fact_text,
-            provider="EquipFix Structured Fact Engine",
-            model="PostgreSQL Relational Store",
+            success=True,
+            message=response_text,
+            text=response_text,
+            conversationId=req.get_conversation_id(),
+            provider=result.get("provider", "Google Gemini"),
+            model=active_model,
             realtime=True,
-            grounded_source="PostgreSQL Operational Tables"
+            grounded_source=f"Google Gemini ({active_model})" + (" + Plant RAG" if citations else ""),
+            sources=citations
+        )
+    except GeminiServiceError as gse:
+        raise HTTPException(status_code=gse.status_code, detail=gse.message)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Google Gemini AI service error: {str(e)}"
         )
 
-    # 4. No API Key Handling: Preserve test suite expectations while mandating API key for live AI
-    msg_lower = message.lower().strip()
-    pure_greetings = ["hi", "hello", "hey", "who are you", "what can you do", "good morning", "good afternoon", "greetings"]
-    is_greeting = msg_lower in pure_greetings or (
-        any(msg_lower.startswith(g) for g in ["hi ", "hello ", "hey "]) and len(msg_lower.split()) <= 3
-    )
-
-    if is_greeting:
-        return AIChatResponse(
-            text=(
-                "### 🤖 EquipFix AI Operations Director Copilot\n"
-                "Hello! I am your AI Diagnostics & Plant Operations Assistant. I monitor real-time plant machinery, "
-                "parse technical manuals, enforce OSHA 1910.147 LOTO compliance, and diagnose equipment anomalies.\n\n"
-                "⚡ **Real-Time Gemini Mode**: Connect your Google Gemini API key to activate live real-time reasoning and visual inspection!"
-            ),
-            provider="EquipFix Industrial Engine",
-            model="Gemini Required",
-            realtime=False,
-            grounded_source="EquipFix Core Knowledge Base"
-        )
-
-    # Check for safety / electrical isolation questions (OSHA compliance)
-    if any(kw in msg_lower for kw in ["isolate electrical", "lockout", "tagout", "loto", "safety protocol", "zero energy"]):
-        return AIChatResponse(
-            text=(
-                "### ⚠️ Safety & Lockout/Tagout (LOTO) Compliance\n"
-                "Under OSHA 1910.147 standard, zero-energy state isolation is mandatory:\n"
-                "1. Notify affected operators of shutdown.\n"
-                "2. De-energize equipment via dedicated disconnect switch.\n"
-                "3. Apply lockout padlock and tag to main energy isolation device.\n"
-                "4. Dissipate all stored energy (electrical capacitors, hydraulic pressure, pneumatic lines).\n"
-                "5. Verify zero-energy state with a calibrated multimeter before beginning inspection.\n\n"
-                "🔑 **Real-Time Diagnostic Engine**: Configure your Google Gemini API key above to enable multi-turn AI reasoning and document synthesis."
-            ),
-            provider="EquipFix Industrial Engine",
-            model="OSHA LOTO Safety Standard",
-            realtime=False,
-            grounded_source="OSHA 1910.147 Control of Hazardous Energy"
-        )
-
-    # Grounded response for queries when cloud endpoints experience quota exhaustion or temporary spikes
-    if api_key or candidate_keys or req.api_key:
-        grounded_html = synthesize_grounded_response(message, machine, chunks, reason="quota_exhausted")
-        return AIChatResponse(
-            text=grounded_html,
-            provider="EquipFix AI (Local Grounded Mode)",
-            model=selected_model,
-            realtime=True,
-            grounded_source="Plant RAG Vector Store + Equipment Specs (Cloud Quota Fallback)"
-        )
-
-    # General technical queries without API key
-    return AIChatResponse(
-        text=(
-            "### 🔑 Google Gemini API Key Required\n"
-            "Real-time AI diagnostics and live inference require an authenticated Google Gemini API key.\n\n"
-            "• **Step 1**: Get a free API key at [Google AI Studio](https://aistudio.google.com/app/apikey).\n"
-            "• **Step 2**: Click **Configure AI Key** above and paste your key.\n"
-            "• **Step 3**: Select your preferred Gemini model (e.g., `gemini-3.8-flash` or `gemini-3.8-flash-lite`) for zero-latency, real-time responses."
-        ),
-        provider="EquipFix Industrial Engine",
-        model="Key Required",
-        realtime=False,
-        grounded_source="Google Gemini API Engine"
-    )
