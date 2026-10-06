@@ -72,14 +72,30 @@ class GeminiService:
         "     preventive maintenance schedules, standard operating procedures (SOPs), or user roles, give a DETAILED, "
         "     thorough, and accurate response referencing this project data directly.\n"
         "   - Be specific: cite exact machine codes, locations, part numbers, stock levels, and incident details.\n\n"
-        "5. GROUNDING & HONESTY:\n"
+        "5. FACTORY MACHINE IMAGE ANALYSIS & VISUAL INSPECTION:\n"
+        "   - When image(s) of factory machinery, equipment components, control panels, error screens, leaks, damage, or wear are provided:\n"
+        "     a. Carefully analyze the visual contents (machine model, component, gauge readings, warning lights, error codes, wiring, physical defects, cracks, leaks, corrosion, discoloration).\n"
+        "     b. Use confidence-aware language ('The image appears to show...', 'I can observe...', 'This indicates likely...').\n"
+        "     c. If the image is blurry, dark, obstructed, or lacking sufficient visual detail, state clearly what cannot be seen and what additional photo/angle/lighting is needed.\n"
+        "     d. Strictly structure your diagnosis using the following clear sections:\n"
+        "        **🔍 What I Found**\n"
+        "        * Detail each visible observation, component, and any detected error code or indicator.\n\n"
+        "        **⚠️ Possible Issue**\n"
+        "        * Technical explanation of the failure mode, defect, or operational abnormality based on the image and retrieved OEM documentation.\n\n"
+        "        **🛠 Recommended Actions**\n"
+        "        1. Step-by-step numbered actions and verification checks for technicians/operators.\n\n"
+        "        **🦺 Safety Precautions**\n"
+        "        * Mandatory safety protocols before physical inspection (OSHA 1910.147 LOTO, verified zero-energy state, pressure relief, PPE).\n\n"
+        "        **📚 Sources**\n"
+        "        * Cite the retrieved OEM manuals, standard operating procedures, or maintenance records provided in the context.\n\n"
+        "6. GROUNDING & HONESTY:\n"
         "   - Distinguish general knowledge from company-specific data. Use the provided project data and documents as your source of truth. "
         "     Never invent fictional data outside what is provided in the project context.\n\n"
-        "6. CONVERSATION CONTEXT & CLARIFICATIONS:\n"
+        "7. CONVERSATION CONTEXT & CLARIFICATIONS:\n"
         "   - Maintain context across messages (e.g., correlating pronouns or measurements like '95°C' to the equipment discussed earlier).\n"
         "   - When asked to 'Explain differently' or 'Explain simpler', break down the previous answer in intuitive, "
         "     beginner-friendly terms without losing technical correctness.\n\n"
-        "7. CLEAN MARKDOWN FORMATTING:\n"
+        "8. CLEAN MARKDOWN FORMATTING:\n"
         "   - Use clean Markdown: paragraphs, headings (###), bold (**text**), bullet points (* or -), numbered lists (1.), "
         "     tables (| Column 1 | Column 2 |), and code blocks (```lang)."
     )
@@ -124,9 +140,10 @@ class GeminiService:
         message: str,
         history: Optional[List[Dict[str, Any]]] = None,
         rag_context: Optional[str] = None,
-        machine_context: Optional[str] = None
+        machine_context: Optional[str] = None,
+        images: Optional[List[Dict[str, str]]] = None
     ) -> List[Dict[str, Any]]:
-        """Construct multi-turn conversation contents payload for Gemini API with bounded history."""
+        """Construct multi-turn conversation contents payload for Gemini API with bounded history and multimodal images."""
         contents: List[Dict[str, Any]] = []
 
         # 1. Format past conversation history (last 10 turns to avoid token overflow)
@@ -154,7 +171,8 @@ class GeminiService:
         while contents and contents[0]["role"] != "user":
             contents.pop(0)
 
-        # 2. Build current user message with RAG context if present
+        # 2. Build current user message with RAG context and images
+        current_parts = []
         current_text_parts = []
         if machine_context:
             current_text_parts.append(f"[EQUIPMENT CONTEXT]\n{machine_context}")
@@ -165,14 +183,32 @@ class GeminiService:
                 f"Note: Use these excerpts where relevant. If they do not answer the query, "
                 f"use general knowledge and state that internal documentation did not specify."
             )
-        current_text_parts.append(message)
+
+        effective_message = (message or "").strip()
+        if not effective_message and images:
+            effective_message = (
+                "Please perform a complete diagnostic visual inspection of the provided factory equipment image(s). "
+                "Identify the machine, components, visible defects, error codes, leaks, wear, or safety hazards and provide recommendations."
+            )
+        current_text_parts.append(effective_message)
         final_prompt = "\n\n".join(current_text_parts)
+        current_parts.append({"text": final_prompt})
 
-        if contents and contents[-1]["role"] == "user":
-            contents[-1]["parts"][0]["text"] += f"\n\n{final_prompt}"
-        else:
-            contents.append({"role": "user", "parts": [{"text": final_prompt}]})
+        # Add image inlineData parts
+        if images:
+            for img in images:
+                raw_data = img.get("data") or img.get("image_base64") or ""
+                mime = img.get("mime_type") or img.get("type") or "image/jpeg"
+                clean_b64 = re.sub(r"^data:image/[^;]+;base64,", "", raw_data).strip()
+                if clean_b64:
+                    current_parts.append({
+                        "inlineData": {
+                            "mimeType": mime,
+                            "data": clean_b64
+                        }
+                    })
 
+        contents.append({"role": "user", "parts": current_parts})
         return contents
 
     @classmethod
@@ -183,6 +219,7 @@ class GeminiService:
         history: Optional[List[Dict[str, Any]]] = None,
         rag_context: Optional[str] = None,
         machine_context: Optional[str] = None,
+        images: Optional[List[Dict[str, str]]] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048
@@ -201,7 +238,8 @@ class GeminiService:
             message=user_message,
             history=history,
             rag_context=rag_context,
-            machine_context=machine_context
+            machine_context=machine_context,
+            images=images
         )
 
         models_to_try = cls.get_model_candidates(model)
@@ -280,6 +318,7 @@ class GeminiService:
         history: Optional[List[Dict[str, Any]]] = None,
         rag_context: Optional[str] = None,
         machine_context: Optional[str] = None,
+        images: Optional[List[Dict[str, str]]] = None,
         model: Optional[str] = None,
         sources: Optional[List[Dict[str, Any]]] = None,
         temperature: float = 0.7,
@@ -296,7 +335,8 @@ class GeminiService:
             message=user_message,
             history=history,
             rag_context=rag_context,
-            machine_context=machine_context
+            machine_context=machine_context,
+            images=images
         )
 
         models_to_try = cls.get_model_candidates(model)

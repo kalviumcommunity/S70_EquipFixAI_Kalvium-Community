@@ -124,11 +124,30 @@ export const askEquipFixCopilot = async ({
   context = {},
   imageBase64 = null,
   imageMime = 'image/jpeg',
+  images = [],
   onChunk = null,
   signal = null
 }) => {
+  const formattedImages = (images || []).map((img) => {
+    if (typeof img === 'string') {
+      return { data: img, mime_type: 'image/jpeg' };
+    }
+    return {
+      data: img.data || img.dataUrl || img.url || '',
+      mime_type: img.mime_type || img.type || 'image/jpeg',
+      name: img.name || 'image.jpg'
+    };
+  }).filter((img) => Boolean(img.data));
+
+  if (!formattedImages.length && imageBase64) {
+    formattedImages.push({
+      data: imageBase64,
+      mime_type: imageMime || 'image/jpeg'
+    });
+  }
+
   const queryText = (prompt || message || '').trim();
-  if (!queryText && !imageBase64) {
+  if (!queryText && formattedImages.length === 0) {
     throw new Error('Please enter a message or attach an image.');
   }
 
@@ -146,8 +165,9 @@ export const askEquipFixCopilot = async ({
     conversationId: conversationId || context.conversationId || undefined,
     history: formattedHistory,
     model: activeModel,
-    image_base64: imageBase64,
-    image_mime: imageMime,
+    image_base64: formattedImages[0]?.data || imageBase64 || null,
+    image_mime: formattedImages[0]?.mime_type || imageMime || 'image/jpeg',
+    images: formattedImages.length ? formattedImages : undefined,
     machine_id: context.machineId || undefined,
     work_order_id: context.workOrderId || undefined
   };

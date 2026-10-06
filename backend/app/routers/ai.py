@@ -916,6 +916,45 @@ def verify_api_key(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported provider: {provider}")
 
 
+async def extract_visual_rag_keywords(images: List[Dict[str, str]], user_query: str = "") -> str:
+    """Uses Gemini vision to quickly extract equipment types, components, and error codes
+    from uploaded factory images to ground RAG retrieval in relevant OEM manuals."""
+    if not images:
+        return ""
+    try:
+        api_key = GeminiService.get_api_key()
+        if not api_key:
+            return ""
+
+        prompt = (
+            f"You are a factory equipment visual pre-processor. Analyze the image(s) with user query: '{user_query or 'inspect machine'}'. "
+            "Output 1 single line containing only: machine type, component name, visible error code, or specific defect keywords "
+            "for searching technical maintenance manuals (e.g. 'CNC-04 spindle vibration E-104 bearing lubrication')."
+        )
+        parts = [{"text": prompt}]
+        for img in images[:2]:
+            raw_data = img.get("data") or img.get("image_base64") or ""
+            clean_b64 = re.sub(r"^data:image/[^;]+;base64,", "", raw_data).strip()
+            mime = img.get("mime_type") or "image/jpeg"
+            if clean_b64:
+                parts.append({"inlineData": {"mimeType": mime, "data": clean_b64}})
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={api_key}"
+        payload = {"contents": [{"role": "user", "parts": parts}]}
+
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    kw_text = "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", []))
+                    return kw_text.strip()
+    except Exception as e:
+        logger.warning(f"Visual keyword extraction skipped: {e}")
+    return ""
+
+
 @router.post("/chat/stream")
 async def execute_ai_chat_stream(
     req: AIChatRequest,
@@ -923,11 +962,17 @@ async def execute_ai_chat_stream(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Real-time Server-Sent Events (SSE) streaming endpoint powered by Google Gemini API.
-    Streams live response tokens with genuine RAG document citations when equipment context is present.
+    Streams live response tokens with multimodal vision inspection and genuine RAG document citations.
     """
-    message = req.get_message()
-    if not message:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty.")
+    images = req.get_images_list()
+    raw_message = req.get_message()
+    if not raw_message and not images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide a message or attach an image.")
+
+    message = raw_message or (
+        "Please perform a complete diagnostic visual inspection of the provided factory equipment image(s). "
+        "Identify the machine, components, visible defects, error codes, leaks, wear, or safety hazards and provide recommendations."
+    )
 
     rag_context = None
     machine_context = None
@@ -942,13 +987,19 @@ async def execute_ai_chat_stream(
                 f"Status: {machine.status.value} | Location: {machine.location}"
             )
 
-    # 2. Retrieve genuine RAG context if applicable
+    # 2. Retrieve genuine RAG context: enrich query with visual metadata if images are present
     doc_context = None
     try:
+        search_query = raw_message or "factory machinery inspection troubleshooting"
+        if images:
+            extracted_kw = await extract_visual_rag_keywords(images, raw_message)
+            if extracted_kw:
+                search_query = f"{raw_message} {extracted_kw}".strip()
+
         retriever = RAGRetriever()
         retrieval_data = retriever.retrieve(
             db=db,
-            query=message,
+            query=search_query,
             machine_id=req.machine_id,
             work_order_id=req.work_order_id,
             top_k=4
@@ -999,6 +1050,7 @@ async def execute_ai_chat_stream(
                 history=history_dicts,
                 rag_context=rag_context,
                 machine_context=machine_context,
+                images=images,
                 model=req.model,
                 sources=citations
             ):
@@ -1029,9 +1081,15 @@ async def execute_ai_chat(
     Handles general chat, casual queries, programming, industrial machinery troubleshooting,
     and multi-turn conversation memory with verified RAG citations when available.
     """
-    message = req.get_message()
-    if not message:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty.")
+    images = req.get_images_list()
+    raw_message = req.get_message()
+    if not raw_message and not images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide a message or attach an image.")
+
+    message = raw_message or (
+        "Please perform a complete diagnostic visual inspection of the provided factory equipment image(s). "
+        "Identify the machine, components, visible defects, error codes, leaks, wear, or safety hazards and provide recommendations."
+    )
 
     rag_context = None
     machine_context = None
@@ -1046,13 +1104,19 @@ async def execute_ai_chat(
                 f"Status: {machine.status.value} | Location: {machine.location}"
             )
 
-    # 2. Retrieve genuine RAG context if applicable
+    # 2. Retrieve genuine RAG context: enrich query with visual metadata if images are present
     doc_context = None
     try:
+        search_query = raw_message or "factory machinery inspection troubleshooting"
+        if images:
+            extracted_kw = await extract_visual_rag_keywords(images, raw_message)
+            if extracted_kw:
+                search_query = f"{raw_message} {extracted_kw}".strip()
+
         retriever = RAGRetriever()
         retrieval_data = retriever.retrieve(
             db=db,
-            query=message,
+            query=search_query,
             machine_id=req.machine_id,
             work_order_id=req.work_order_id,
             top_k=4
@@ -1104,6 +1168,7 @@ async def execute_ai_chat(
             history=history_dicts,
             rag_context=rag_context,
             machine_context=machine_context,
+            images=images,
             model=req.model
         )
 
