@@ -24,6 +24,7 @@ from app.schemas.ai import (
 from app.rag.tools import StructuredTools
 from app.rag.retriever import RAGRetriever
 from app.rag.generator import GroundedGenerator
+from app.rag.project_context import build_live_project_context
 from app.services.audit_service import AuditService
 from app.services.gemini_service import GeminiService, GeminiServiceError
 
@@ -942,6 +943,7 @@ async def execute_ai_chat_stream(
             )
 
     # 2. Retrieve genuine RAG context if applicable
+    doc_context = None
     try:
         retriever = RAGRetriever()
         retrieval_data = retriever.retrieve(
@@ -967,9 +969,16 @@ async def execute_ai_chat_stream(
                     "relevance_score": c.get("relevance_score", 0.0),
                     "snippet": c.get("content", "")[:260]
                 })
-            rag_context = "\n---\n".join(doc_snippets)
+            doc_context = "\n---\n".join(doc_snippets)
     except Exception:
         pass
+
+    # 3. Supply Authoritative Project & Plant Data Context
+    live_project_data = build_live_project_context(db, message)
+    if doc_context:
+        rag_context = f"{live_project_data}\n\n[RETRIEVED MANUAL & PROCEDURE EXCERPTS]\n{doc_context}"
+    else:
+        rag_context = live_project_data
 
     history_dicts = []
     for h in (req.history or []):
@@ -1038,6 +1047,7 @@ async def execute_ai_chat(
             )
 
     # 2. Retrieve genuine RAG context if applicable
+    doc_context = None
     try:
         retriever = RAGRetriever()
         retrieval_data = retriever.retrieve(
@@ -1065,9 +1075,16 @@ async def execute_ai_chat(
                     relevance_score=c.get("relevance_score", 0.0),
                     snippet=c.get("content", "")[:260]
                 ))
-            rag_context = "\n---\n".join(doc_snippets)
+            doc_context = "\n---\n".join(doc_snippets)
     except Exception:
         pass
+
+    # 3. Supply Authoritative Project & Plant Data Context
+    live_project_data = build_live_project_context(db, message)
+    if doc_context:
+        rag_context = f"{live_project_data}\n\n[RETRIEVED MANUAL & PROCEDURE EXCERPTS]\n{doc_context}"
+    else:
+        rag_context = live_project_data
 
     history_dicts = []
     for h in (req.history or []):

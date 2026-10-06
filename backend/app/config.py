@@ -11,11 +11,20 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
-    # Database URL defaults to local db, can be overridden by env variable (e.g. Postgres in Docker or Render)
-    _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _default_db = os.path.join(_backend_dir, "equipfixai.db")
-    _raw_db = os.getenv("DATABASE_URL", f"sqlite:///{_default_db}")
-    DATABASE_URL: str = _raw_db.replace("postgres://", "postgresql://", 1) if _raw_db.startswith("postgres://") else _raw_db
+    DATABASE_URL: str = "sqlite:///./equipfixai.db"
+
+    @validator("DATABASE_URL", pre=True)
+    def normalize_database_url(cls, v):
+        _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if not v:
+            return f"sqlite:///{os.path.join(_backend_dir, 'equipfixai.db')}"
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql://", 1)
+            if v.startswith("sqlite:///./"):
+                rel_name = v[len("sqlite:///./"):]
+                return f"sqlite:///{os.path.join(_backend_dir, rel_name)}"
+        return v
 
     GOOGLE_CLIENT_ID: Union[str, None] = os.getenv("GOOGLE_CLIENT_ID", None)
     GOOGLE_CLIENT_SECRET: Union[str, None] = os.getenv("GOOGLE_CLIENT_SECRET", None)
