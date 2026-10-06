@@ -1040,7 +1040,9 @@ async def execute_ai_chat_stream(
         else:
             history_dicts.append({
                 "role": getattr(h, "role", "user"),
-                "content": getattr(h, "content", "")
+                "content": getattr(h, "content", ""),
+                "images": getattr(h, "images", None),
+                "image": getattr(h, "image", None)
             })
 
     async def sse_event_generator():
@@ -1159,7 +1161,9 @@ async def execute_ai_chat(
         else:
             history_dicts.append({
                 "role": getattr(h, "role", "user"),
-                "content": getattr(h, "content", "")
+                "content": getattr(h, "content", ""),
+                "images": getattr(h, "images", None),
+                "image": getattr(h, "image", None)
             })
 
     try:

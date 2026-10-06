@@ -57,6 +57,23 @@ renderer.link = function ({ href, title, text }) {
   return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer"${titleAttr} class="ai-link">${text}</a>`;
 };
 
+// Custom industrial image renderer with click-to-zoom support
+renderer.image = function ({ href, title, text }) {
+  const safeSrc = href && (href.startsWith('http') || href.startsWith('data:image')) ? href : '';
+  const altText = text || title || 'Industrial visual inspection';
+  return `
+    <div class="ai-generated-image-card">
+      <div class="ai-image-wrapper" data-img-src="${safeSrc}" data-img-name="${altText.replace(/"/g, '&quot;')}">
+        <img src="${safeSrc}" alt="${altText.replace(/"/g, '&quot;')}" class="ai-rendered-image" loading="lazy" />
+        <div class="ai-image-overlay">
+          <span class="ai-zoom-badge">🔍 Click to Inspect (High-Res)</span>
+        </div>
+      </div>
+      ${altText ? `<div class="ai-image-caption"><span>✦ Visual Analysis:</span> ${altText}</div>` : ''}
+    </div>
+  `;
+};
+
 marked.setOptions({
   renderer,
   gfm: true,
@@ -242,6 +259,70 @@ function injectMarkdownStyles() {
     .ai-link:hover {
       color: #1d4ed8;
     }
+
+    /* Industrial Generated Images */
+    .ai-generated-image-card {
+      margin: 16px 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+    .ai-image-wrapper {
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      max-height: 480px;
+      display: flex;
+      align-items: center;
+      justifyContent: center;
+      background: #0f172a;
+    }
+    .ai-rendered-image {
+      width: 100%;
+      height: auto;
+      max-height: 480px;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.25s ease;
+    }
+    .ai-image-wrapper:hover .ai-rendered-image {
+      transform: scale(1.02);
+    }
+    .ai-image-overlay {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      pointer-events: none;
+    }
+    .ai-zoom-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(4px);
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .ai-image-caption {
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      color: #475569;
+      background: #f8fafc;
+      border-top: 1px solid #f1f5f9;
+      line-height: 1.45;
+    }
+    .ai-image-caption span {
+      font-weight: 700;
+      color: #0284c7;
+      margin-right: 4px;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -296,8 +377,24 @@ export const SafeMarkdownRenderer = ({ content = '' }) => {
       }
     };
 
+    const handleImageClick = (e) => {
+      const wrap = e.target.closest('.ai-image-wrapper');
+      if (!wrap) return;
+      const src = wrap.getAttribute('data-img-src');
+      const name = wrap.getAttribute('data-img-name') || 'Industrial Equipment View';
+      if (src) {
+        window.dispatchEvent(new CustomEvent('equipfix:open-image-viewer', {
+          detail: { url: src, name }
+        }));
+      }
+    };
+
     el.addEventListener('click', handleCopyClick);
-    return () => el.removeEventListener('click', handleCopyClick);
+    el.addEventListener('click', handleImageClick);
+    return () => {
+      el.removeEventListener('click', handleCopyClick);
+      el.removeEventListener('click', handleImageClick);
+    };
   }, [content]);
 
   if (!content) return null;
@@ -312,8 +409,12 @@ export const SafeMarkdownRenderer = ({ content = '' }) => {
 
   // 2. Sanitize HTML via DOMPurify to prevent XSS
   const cleanHtml = DOMPurify.sanitize(rawHtml, {
-    ADD_TAGS: ['button', 'svg', 'path', 'rect'],
-    ADD_ATTR: ['target', 'rel', 'data-code', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']
+    ADD_TAGS: ['button', 'svg', 'path', 'rect', 'img', 'span', 'div'],
+    ADD_ATTR: [
+      'target', 'rel', 'data-code', 'data-img-src', 'data-img-name',
+      'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+      'src', 'alt', 'loading', 'class'
+    ]
   });
 
   return (

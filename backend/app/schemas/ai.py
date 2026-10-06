@@ -77,6 +77,11 @@ class AIQueryHistoryItem(BaseModel):
 class AIChatMessage(BaseModel):
     role: str
     content: str
+    images: Optional[List[dict]] = None
+    image: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 
 class AIChatRequest(BaseModel):
