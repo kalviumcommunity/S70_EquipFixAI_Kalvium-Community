@@ -1,695 +1,182 @@
 /**
- * EquipFix AI Operations Director Copilot Service
- * High-speed real-time multimodal intelligence engine powered strictly by Google Gemini API keys.
- * Supports all latest Gemini models (Gemini 2.0 Flash, Flash-Lite, 1.5 Flash, 1.5 Pro, 2.0 Pro Experimental, and custom models).
- * Features direct client-side SSE streaming and backend streaming fallback with zero dummy data and zero simulated delays.
+ * EquipFix AI Operations Copilot Service
+ * Production-ready AI assistant service communicating strictly with the server backend.
+ * All API keys are securely managed on the backend and never exposed to the client.
  */
 
 import api, { aiApi, getBaseURL } from './api';
 
-const STORAGE_KEYS = {
-  API_KEY: 'equipfix_ai_api_key',
-  PROVIDER: 'equipfix_ai_provider', // 'gemini' | 'openai'
-  MODEL: 'equipfix_ai_model',
-  CUSTOM_MODEL: 'equipfix_ai_custom_model',
-};
-
 export const AI_PROVIDERS = {
   GEMINI: 'gemini',
-  OPENAI: 'openai',
 };
 
 export const GEMINI_MODELS = [
   {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash (Latest Flagship)',
-    badge: 'LATEST 3.8 • RECOMMENDED',
-    desc: 'Google latest Gemini 3.8 flagship model with cutting-edge multimodal intelligence and sub-second latency.'
+    id: 'gemini-flash-lite-latest',
+    name: 'Gemini Flash-Lite (Recommended)',
+    badge: 'FAST & RESPONSIVE',
+    desc: 'Google lightweight Gemini model for real-time conversation and diagnostics.'
   },
   {
-    id: 'gemini-3.8-flash-lite',
-    name: 'Gemini 3.8 Flash-Lite',
-    badge: 'LATEST 3.8 • FAST',
-    desc: 'Ultra-fast Gemini 3.8 lightweight model engineered for instant diagnostic responses.'
-  },
-  {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    badge: 'ADVANCED SPEED',
-    desc: 'Next-generation Gemini 2.5 speed and multimodal intelligence for deep industrial failure analysis.'
-  },
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash-Lite',
     badge: 'HIGH SPEED',
-    desc: 'Google proven production model with low latency for industrial troubleshooting.'
+    desc: 'High-speed multimodal intelligence for rapid equipment operational checks.'
   },
   {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash-Lite',
-    badge: 'LIGHTNING FAST',
-    desc: 'Ultra-fast Gemini 2.0 model for high-throughput operational checks.'
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    badge: 'BALANCED',
+    desc: 'Advanced reasoning and precision troubleshooting for complex machinery.'
   },
   {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash',
-    badge: 'STABLE PRODUCTION',
-    desc: 'Reliable long-context model for comprehensive machinery manuals and wiring schematics.'
-  },
-  {
-    id: 'custom',
-    name: 'Custom Gemini Model ID',
-    badge: 'CUSTOM MODEL',
-    desc: 'Specify any Gemini model identifier (e.g. gemini-3.8-flash, gemini-2.5-flash, or Vertex model)'
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    badge: 'FLAGSHIP',
+    desc: 'Deep reasoning for comprehensive manufacturing and plant engineering queries.'
   }
-];
-
-export const OPENAI_MODELS = [
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', badge: 'FAST & LIGHT', desc: 'Efficient standard diagnostic queries' },
-  { id: 'gpt-4o', name: 'gpt-4o', badge: 'OMNI FLAGSHIP', desc: 'Top tier multimodal vision & reasoning' },
-  { id: 'o1', name: 'o1', badge: 'DEEP THINKING', desc: 'Complex algorithmic troubleshooting' },
-  { id: 'o3-mini', name: 'o3-mini', badge: 'REASONING MINI', desc: 'Fast STEM & industrial reasoning' },
-  { id: 'custom', name: 'Custom OpenAI Model ID', badge: 'CUSTOM', desc: 'Specify custom model name or fine-tuned checkpoint' }
 ];
 
 export const DEFAULT_MODELS = {
-  gemini: 'gemini-3.8-flash',
-  openai: 'gpt-4o-mini',
+  gemini: 'gemini-flash-lite-latest',
 };
+
+export const OPENAI_MODELS = [
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite', badge: 'RECOMMENDED', desc: 'Google Gemini real-time model' }
+];
 
 /**
- * Parse and sanitize one or multiple API keys separated by comma, semicolon, space, or newline.
+ * Storage helpers for user model preferences only (NO API keys stored client-side)
  */
-export const DEFAULT_GEMINI_API_KEY = (
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-  (typeof atob !== 'undefined' ? atob('QVEuQWI4Uk42TElfNm9aNWRvLXJqMW5kbG5vVjFnOFhEQ1E3R0t0dGdDNlBKazhMVUpySHc=') : '')
-).trim();
-
-export const isObsoleteGeminiKey = (k) => {
-  if (!k) return true;
-  return k.startsWith('AQ.Ab8RN6Je') || k.startsWith('AQ.Ab8RN6Jf');
-};
-
-export const parseCandidateApiKeys = (rawInput) => {
-  const keys = [];
-  if (rawInput) {
-    const arr = Array.isArray(rawInput) ? rawInput : String(rawInput).split(/[,;\n\r\t]+/);
-    for (const k of arr) {
-      const clean = String(k || '').trim().replace(/^["']|["']$/g, '');
-      if (clean && clean.length >= 10) {
-        if (!isObsoleteGeminiKey(clean)) {
-          if (!keys.includes(clean)) keys.push(clean);
-        }
-      }
-    }
-  }
-  // Ensure the verified active default key is always in the candidate pool
-  if (!keys.some((k) => k.startsWith('sk-')) && !keys.includes(DEFAULT_GEMINI_API_KEY)) {
-    keys.unshift(DEFAULT_GEMINI_API_KEY);
-  }
-  return keys;
-};
-
-/**
- * Resolve user-selected model identifier to an ordered list of verified working models.
- * Prioritizes active Google Generative AI production models (gemini-2.0-flash, gemini-1.5-flash) to prevent 404/400 errors.
- */
-export const resolveGeminiCandidateModels = (modelName) => {
-  let raw = (modelName || 'gemini-2.0-flash').replace(/^models\//, '').trim();
-  if (!raw || raw.startsWith('gpt') || raw.startsWith('o1') || raw.startsWith('o3')) {
-    raw = 'gemini-2.0-flash';
-  }
-
-  const candidates = [];
-
-  // Active production endpoints that Google Generative AI supports
-  const productionModels = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-pro',
-    'gemini-2.5-flash',
-    'gemini-3.8-flash'
-  ];
-
-  if (['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-2.5-flash'].includes(raw)) {
-    candidates.push(raw);
-  } else if (raw.includes('3.8')) {
-    candidates.push('gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite');
-  } else if (raw) {
-    candidates.push(raw);
-  }
-
-  for (const m of productionModels) {
-    if (!candidates.includes(m)) {
-      candidates.push(m);
-    }
-  }
-
-  return candidates;
-};
-
-export const LEGACY_GEMINI_API_KEY = 'AQ.Ab8RN6Je5gB';
-
 export const getAIConfig = () => {
-  const envKey = ((typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '').trim();
-  let apiKey = (localStorage.getItem(STORAGE_KEYS.API_KEY) || '').trim().replace(/^["']|["']$/g, '');
-
-  // Automatically migrate if key is empty or matches obsolete keys
-  const isObsolete = !apiKey || isObsoleteGeminiKey(apiKey);
-
-  if (isObsolete) {
-    apiKey = envKey || DEFAULT_GEMINI_API_KEY;
-    try {
-      localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
-    } catch {
-      // LocalStorage may be blocked in private contexts
-    }
-  }
-
-  let provider = localStorage.getItem(STORAGE_KEYS.PROVIDER);
-  // Auto-detect provider if key prefix is unmistakable
-  if (apiKey.startsWith('sk-')) {
-    provider = 'openai';
-  } else if (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) {
-    provider = 'gemini';
-  } else if (!provider) {
-    provider = 'gemini';
-  }
-
-  let model = localStorage.getItem(STORAGE_KEYS.MODEL);
-  if (provider === 'openai') {
-    if (!model || model.startsWith('gemini') || model === 'custom') {
-      model = 'gpt-4o-mini';
-      localStorage.setItem(STORAGE_KEYS.MODEL, model);
-    }
-  } else {
-    if (!model || model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) {
-      model = 'gemini-3.8-flash';
-      localStorage.setItem(STORAGE_KEYS.MODEL, model);
-    }
-  }
-
-  const customModel = localStorage.getItem(STORAGE_KEYS.CUSTOM_MODEL) || '';
-  return { apiKey, provider, model: model || 'gemini-3.8-flash', customModel };
+  return {
+    provider: 'gemini',
+    model: typeof localStorage !== 'undefined' ? (localStorage.getItem('equipfix_ai_model') || 'gemini-flash-lite-latest') : 'gemini-flash-lite-latest',
+    apiKey: '', // API key is strictly maintained on the backend
+  };
 };
 
-export const saveAIConfig = ({ apiKey, provider, model, customModel }) => {
-  let cleanKey;
-  if (apiKey !== undefined) {
-    cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
-    localStorage.setItem(STORAGE_KEYS.API_KEY, cleanKey);
-  } else {
-    cleanKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+export const saveAIConfig = ({ model }) => {
+  if (typeof localStorage !== 'undefined' && model) {
+    localStorage.setItem('equipfix_ai_model', model);
   }
-
-  let effectiveProvider = provider;
-  if (cleanKey.startsWith('sk-')) {
-    effectiveProvider = 'openai';
-  } else if (cleanKey.startsWith('AIza') || cleanKey.startsWith('AQ.')) {
-    effectiveProvider = 'gemini';
-  } else if (!effectiveProvider) {
-    effectiveProvider = localStorage.getItem(STORAGE_KEYS.PROVIDER) || 'gemini';
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('equipfix:aiconfig-updated', { detail: { model } }));
   }
-  localStorage.setItem(STORAGE_KEYS.PROVIDER, effectiveProvider);
-
-  if (model !== undefined) {
-    let cleanModel = model;
-    if (effectiveProvider === 'openai' && (cleanModel.startsWith('gemini') || cleanModel === 'custom')) {
-      cleanModel = 'gpt-4o-mini';
-    } else if (effectiveProvider === 'gemini' && (cleanModel.startsWith('gpt') || cleanModel.startsWith('o1') || cleanModel.startsWith('o3'))) {
-      cleanModel = 'gemini-3.8-flash';
-    }
-    localStorage.setItem(STORAGE_KEYS.MODEL, cleanModel);
-  }
-
-  if (customModel !== undefined) localStorage.setItem(STORAGE_KEYS.CUSTOM_MODEL, customModel.trim());
-
-  // Broadcast event so UI updates immediately without page refresh
-  try {
-    window.dispatchEvent(new CustomEvent('equipfix:aiconfig-updated', {
-      detail: {
-        apiKey: cleanKey,
-        provider: effectiveProvider,
-        model: model || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-3.8-flash'),
-        customModel
-      }
-    }));
-  } catch (_) {}
+  return { provider: 'gemini', model: model || 'gemini-flash-lite-latest' };
 };
 
 export const clearAIConfig = () => {
-  localStorage.removeItem(STORAGE_KEYS.API_KEY);
-  localStorage.removeItem(STORAGE_KEYS.PROVIDER);
-  localStorage.removeItem(STORAGE_KEYS.MODEL);
-  localStorage.removeItem(STORAGE_KEYS.CUSTOM_MODEL);
-  try {
-    window.dispatchEvent(new CustomEvent('equipfix:aiconfig-updated', {
-      detail: { apiKey: '', provider: 'gemini', model: 'gemini-3.8-flash', customModel: '' }
-    }));
-  } catch (_) {}
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('equipfix_ai_model');
+  }
 };
 
-/**
- * Dynamically fetch all available models enabled for the user's API Key.
- * Queries Google Gemini API directly or via backend proxy to list all models supporting generateContent.
- */
-export const fetchAvailableGeminiModels = async (apiKey) => {
-  const cleanKey = (apiKey || getAIConfig().apiKey || '').trim().replace(/^["']|["']$/g, '');
-  if (!cleanKey) return GEMINI_MODELS;
-
-  // Try backend proxy first
+export const testAIConnection = async () => {
   try {
-    const res = await aiApi.getModels({ api_key: cleanKey });
-    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-      const items = res.data.map((m) => ({
-        id: m.id,
-        name: m.display_name || m.name,
-        badge: (m.is_default || m.id === 'gemini-3.8-flash') ? 'RECOMMENDED' : 'AVAILABLE',
-        desc: m.description || `AI ${m.display_name} model for live diagnostics.`
-      }));
-
-      // Ensure gemini-3.8-flash is present
-      if (!items.some((i) => i.id === 'gemini-3.8-flash')) {
-        items.unshift({
-          id: 'gemini-3.8-flash',
-          name: 'Gemini 3.8 Flash (Latest Flagship)',
-          badge: 'LATEST 3.8 • RECOMMENDED',
-          desc: 'Google latest Gemini 3.8 flagship model with cutting-edge multimodal intelligence and sub-second latency.'
-        });
-      }
-
-      // Always include Custom model option at bottom
-      items.push({
-        id: 'custom',
-        name: 'Custom Model ID',
-        badge: 'CUSTOM MODEL',
-        desc: 'Specify any custom or preview model identifier'
-      });
-      return items;
-    }
-  } catch (err) {
-    console.warn('[EquipFixAI] Backend getModels attempt:', err);
-  }
-
-  // Direct Google API call fallback
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`);
-    if (res.ok) {
-      const data = await res.json();
-      const raw = data.models || [];
-      const contentModels = raw.filter((m) => {
-        const cleanId = (m.name || '').replace(/^models\//, '');
-        const methods = m.supportedGenerationMethods || [];
-        return methods.includes('generateContent') && cleanId;
-      });
-      if (contentModels.length > 0) {
-        const items = contentModels.map((m) => {
-          const cleanId = (m.name || '').replace(/^models\//, '');
-          return {
-            id: cleanId,
-            name: m.displayName || cleanId,
-            badge: cleanId === 'gemini-3.8-flash' ? 'RECOMMENDED' : 'AVAILABLE',
-            desc: m.description || `Google Gemini ${m.displayName || cleanId}`
-          };
-        });
-        if (!items.some((i) => i.id === 'gemini-3.8-flash')) {
-          items.unshift({
-            id: 'gemini-3.8-flash',
-            name: 'Gemini 3.8 Flash (Latest Flagship)',
-            badge: 'LATEST 3.8 • RECOMMENDED',
-            desc: 'Google latest Gemini 3.8 flagship model with cutting-edge multimodal intelligence and sub-second latency.'
-          });
-        }
-        items.push({
-          id: 'custom',
-          name: 'Custom Gemini Model ID',
-          badge: 'CUSTOM MODEL',
-          desc: 'Specify any custom or preview Gemini model identifier'
-        });
-        return items;
-      }
-    }
+    const res = await aiApi.chat({ message: 'ping' });
+    return { success: true, message: 'Google Gemini backend connected successfully!' };
   } catch (e) {
-    console.warn('[EquipFixAI] Direct Google models fetch failed:', e);
+    return { success: false, message: e.response?.data?.detail || e.message || 'Connection check failed' };
   }
-
-  return GEMINI_MODELS;
 };
 
-/**
- * Validate API Key connectivity for any selected Gemini or OpenAI model.
- * Tests live connection without dummy data.
- */
-export const testAIConnection = async ({ apiKey, provider, model, customModel }) => {
-  const rawKey = (apiKey || '').trim().replace(/^["']|["']$/g, '');
-  if (!rawKey) throw new Error('API key cannot be empty.');
-
-  const candidateKeys = parseCandidateApiKeys(rawKey);
-  const key = candidateKeys[0] || rawKey;
-
-  let effectiveProvider = provider;
-  if (key.startsWith('sk-')) {
-    effectiveProvider = 'openai';
-  } else if (key.startsWith('AIza') || key.startsWith('AQ.')) {
-    effectiveProvider = 'gemini';
-  } else if (!effectiveProvider) {
-    effectiveProvider = 'gemini';
-  }
-
-  let effectiveModel = (model === 'custom' && customModel?.trim())
-    ? customModel.trim()
-    : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash'));
-
-  if (effectiveProvider === 'openai' && effectiveModel.startsWith('gemini')) {
-    effectiveModel = 'gpt-4o-mini';
-  } else if (effectiveProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
-    effectiveModel = 'gemini-2.5-flash';
-  }
-
-  effectiveModel = effectiveModel.replace(/^models\//, '');
-
-  // Instant syntax sanity check
-  if (effectiveProvider === 'gemini') {
-    if (!key.startsWith('AIza') && !key.startsWith('AQ.') && key.length < 15) {
-      throw new Error('Invalid Google Gemini key format. Google API keys typically begin with "AIza..." or "AQ...."');
-    }
-  } else if (effectiveProvider === 'openai') {
-    if (!key.startsWith('sk-') && key.length < 15) {
-      throw new Error('Invalid OpenAI key format. OpenAI API keys typically begin with "sk-..."');
-    }
-  }
-
-  // 1. Direct API validation
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
-
+export const fetchAvailableGeminiModels = async () => {
   try {
-    if (effectiveProvider === 'gemini') {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        return {
-          success: true,
-          message: `Google Gemini connected successfully! Active model: ${effectiveModel}${candidateKeys.length > 1 ? ` (${candidateKeys.length} keys in pool)` : ''}`,
-          provider: 'gemini',
-          model: effectiveModel
-        };
-      } else if (response.status === 429) {
-        return {
-          success: true,
-          message: `Google Gemini key verified! (Cloud plan rate limit currently active; platform will automatically use fallback models and local plant grounding).`,
-          provider: 'gemini',
-          model: effectiveModel
-        };
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData.error?.message || `Gemini API returned status ${response.status}`;
-        throw new Error(`Google Authentication Error: ${errMsg}`);
-      }
-    }
-
-    if (effectiveProvider === 'openai') {
-      const response = await fetch('https://api.openai.com/v1/models', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          Accept: 'application/json'
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        return {
-          success: true,
-          message: `OpenAI connected successfully! Active model: ${effectiveModel}`,
-          provider: 'openai',
-          model: effectiveModel
-        };
-      } else if (response.status === 429) {
-        return {
-          success: true,
-          message: `OpenAI key verified! (Rate limit reached; fallback models and local plant grounding will be used).`,
-          provider: 'openai',
-          model: effectiveModel
-        };
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData.error?.message || `OpenAI API returned status ${response.status}`;
-        throw new Error(`OpenAI Authentication Error: ${errMsg}`);
-      }
-    }
-  } catch (err) {
-    clearTimeout(timeoutId);
-
-    // If direct fetch is blocked by CORS/network, use backend proxy verification
-    try {
-      const serverRes = await aiApi.verifyKey({
-        api_key: key,
-        provider: effectiveProvider,
-        model: effectiveModel
-      });
-
-      if (serverRes.data?.success) {
-        return {
-          success: true,
-          message: serverRes.data.message || `API key verified via secure proxy! (${effectiveModel})`,
-          provider: serverRes.data.provider || effectiveProvider,
-          model: serverRes.data.model || effectiveModel
-        };
-      } else {
-        throw new Error(serverRes.data?.message || 'API key verification failed');
-      }
-    } catch (serverErr) {
-      const msg = serverErr.response?.data?.detail || serverErr.message || err.message;
-      throw new Error(msg);
-    }
+    const res = await aiApi.getModels();
+    return res.data || GEMINI_MODELS;
+  } catch (_) {
+    return GEMINI_MODELS;
   }
+};
 
+export const buildCopilotResult = ({
+  text = '',
+  provider = 'Google Gemini',
+  model = 'gemini-flash-lite-latest',
+  sources = [],
+  success = true,
+  isStreamed = false
+}) => {
   return {
-    success: true,
-    message: `Connected to ${effectiveProvider} (${effectiveModel})`,
-    provider: effectiveProvider,
-    model: effectiveModel
+    text,
+    message: text,
+    answer: text,
+    content: text,
+    provider,
+    model,
+    sources,
+    success,
+    isStreamed,
+    timestamp: new Date().toISOString()
   };
 };
 
 /**
- * Real-Time AI Query Engine with Live SSE Streaming.
- * Strictly uses the configured Google Gemini API key. Zero dummy data, zero simulated token delays.
+ * Primary AI Chat function supporting progressive token streaming via Server-Sent Events (SSE)
+ * Architecture: User -> Chat UI -> Backend API -> Gemini API -> Backend -> Chat UI
  */
 export const askEquipFixCopilot = async ({
-  prompt,
+  prompt = '',
+  message = '',
   history = [],
+  conversationId = null,
+  context = {},
   imageBase64 = null,
   imageMime = 'image/jpeg',
-  context = {},
-  _overrideModel = null,
   onChunk = null,
-  onStageChange = null,
   signal = null
 }) => {
-  const config = getAIConfig();
-  const { apiKey, provider, model, customModel } = config;
-
-  // Strict enforcement: A valid API key is required. No dummy fallback answers!
-  if (!apiKey) {
-    throw new Error(
-      'API key required. Real-time AI response is enabled exclusively via a valid Google Gemini or OpenAI API key. Please configure your API key to proceed.'
-    );
+  const queryText = (prompt || message || '').trim();
+  if (!queryText && !imageBase64) {
+    throw new Error('Please enter a message or attach an image.');
   }
 
-  const effectiveProvider = apiKey.startsWith('sk-')
-    ? 'openai'
-    : (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.') ? 'gemini' : (provider || 'gemini'));
+  const activeModel = getAIConfig().model;
+  const formattedHistory = (history || [])
+    .filter((h) => h && h.id !== 'welcome' && !String(h.id || '').startsWith('sys-') && !String(h.id || '').startsWith('err-'))
+    .map((h) => ({
+      role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
+      content: typeof h.content === 'string' ? h.content : (h.text || h.message || '')
+    }));
 
-  let effectiveModel = _overrideModel || (
-    (model === 'custom' && customModel?.trim())
-      ? customModel.trim()
-      : (model || DEFAULT_MODELS[effectiveProvider] || (effectiveProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-3.8-flash'))
-  );
-
-  effectiveModel = effectiveModel.replace(/^models\//, '');
-  if (effectiveProvider === 'openai') {
-    if (effectiveModel.startsWith('gemini') || !effectiveModel) {
-      effectiveModel = 'gpt-4o-mini';
-    }
-  } else {
-    if (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3') || !effectiveModel) {
-      effectiveModel = 'gemini-3.8-flash';
-    }
-  }
-
-  // Direct, unbiased plant and machine context
-  const machineInfo = context.machineCode
-    ? `Active Machine Context: ${context.name || context.machineCode} (Code: ${context.machineCode}, Model: ${context.model || 'Industrial Machine'}, Location: ${context.location || 'Plant Floor'}, Status: ${context.status || 'Active'}${context.alarm ? `, Active Alarm: ${context.alarm}` : ''})`
-    : 'Active Context: Plant Machinery Diagnostics';
-
-  const pLower = (prompt || '').toLowerCase().trim();
-  const isDoubtOrClarification = /doubt|clarif|explain|simpler|simple|mean|what is this|why|help me understand|could you|tell me more|step \d/i.test(pLower);
-  const hasSpecificMachine = Boolean(context.machineCode) || /cnc[-\s]?\d+|inc[-\s]?\d+|machine|pump|motor|bearing|sensor|spindle|gearbox|hydraulic|pneumatic|breaker|transformer|compressor|fan|conveyor/i.test(pLower);
-  const isEquipmentDiagnostic = hasSpecificMachine && /diagnos|fault|alarm|symptom|drop|spike|leak|overheat|vibrat|tripped|err-|e-\d+|broken|failure|noise|repair|containment|loto|lockout|root cause|checklist/i.test(pLower);
-  const isFormalGeneralQuery = !isEquipmentDiagnostic && !isDoubtOrClarification;
-
-  // Industrial AI Maintenance Copilot System Instructions (Adaptive & Formal)
-  const systemPrompt = `You are EquipFixAI Copilot — an expert AI assistant specialized in industrial manufacturing, plant machinery maintenance, equipment diagnostics, and engineering communications.
-
-${machineInfo}
-${context.incidentSummary ? `Active Incident / Fault Context: ${context.incidentSummary}` : ''}
-
-CORE CAPABILITIES & RESPONSE DIRECTIVES:
-
-1. NORMAL FORMAL TEXT & PROFESSIONAL CONVERSATIONS:
-${isFormalGeneralQuery ? `
-- The user is asking a normal formal question, greeting, general inquiry, correspondence request (e.g. drafting an email, memo, or shift handover report), or general engineering explanation (e.g. OEE, predictive maintenance, terminology).
-- Reply in a polite, highly articulate, formal, and authoritative engineering tone.
-- Provide comprehensive, direct answers formatted in clean Markdown (use bullet points, bold key terms, numbered steps, tables where helpful).
-- DO NOT output emergency danger banners or forced diagnostic report templates when the user has not reported an equipment fault.
-- Never refuse to answer or output canned rejection disclaimers. Always assist constructively and professionally.
-` : `
-- Answer normal formal questions and general inquiries politely, authoritatively, and comprehensively in clean Markdown without forcing diagnostic fault templates.
-`}
-
-2. FACTORY & INDUSTRIAL EQUIPMENT DIAGNOSTIC QUERIES:
-${isEquipmentDiagnostic ? `
-- The user is reporting an industrial equipment anomaly, incident, alarm, or troubleshooting request.
-- Provide a structured, ChatGPT-style industrial diagnostic report in clean Markdown:
-
-# [EQUIPMENT / INCIDENT CODE] — INDUSTRIAL DIAGNOSTIC & ACTION REPORT
-**Asset:** ${context.name || context.machineCode || 'Industrial Asset'} | **Status:** ${context.status || 'Active'} | **Priority:** High / Operational
-
-### 1. 🔍 Executive Diagnostic Assessment
-Authoritative explanation of the failure mode, symptoms, and primary root causes.
-
-> [!DANGER]
-> **SAFETY & LOCKOUT/TAGOUT (LOTO) MANDATE (OSHA 1910.147)**
-> Mandatory zero-energy state verification, main circuit breaker disconnect, stored energy discharge (pneumatic/hydraulic), and required PPE (arc flash shield, cut-resistant gloves, safety glasses).
-
-### 2. 📋 Symptom & Root Cause Matrix
-| Parameter / Component | Observed Telemetry | Nominal Standard | Primary Root Cause |
-| :--- | :--- | :--- | :--- |
-| ... | ... | ... | ... |
-
-### 3. 🛠️ Step-by-Step Resolution Action Plan
-1. **[Step 1]:** Physical inspection and electrical/mechanical isolation procedure.
-2. **[Step 2]:** Component cleaning, recalibration, or replacement steps.
-3. **[Step 3]:** Reassembly, calibration check, and post-repair operational validation.
-
-### 4. ⚙️ Technical Specifications & Clearances
-Specific manufacturer tolerances, torque specifications (Nm / ft-lbs), operating temperatures, and pressure thresholds.
-
-### 5. ➡️ Immediate Next Action
-Direct, single-sentence command for the technician or shift supervisor on the plant floor right now.
-` : `
-- If an equipment fault or incident is being diagnosed, structure the response with executive assessment, OSHA 1910.147 LOTO safety protocols, root cause matrix, step-by-step action plan, and torque/tolerances.
-`}
-
-3. CONVERSATIONAL MEMORY & DOUBTS:
-${isDoubtOrClarification ? `
-- The user is asking a doubt, clarification, or follow-up question regarding a previous step or concept.
-- Answer their specific doubt directly, clearly, and thoroughly in clean Markdown.
-- If they asked to explain in simpler terms, break down complex engineering concepts into easy, practical steps with real-world analogies.
-- Avoid forcing rigid multi-section templates when a direct, friendly technical explanation is requested.
-` : `
-- Maintain complete conversational memory. Answer follow-up questions or doubts directly and clearly.
-`}
-
-4. MULTI-TURN MEMORY & REAL-TIME FACTORY DATA:
-- Retain complete memory of prior messages in this conversation.
-- Incorporate active machine context, telemetry limits, and plant procedures seamlessly.`;
-
-  const buildCopilotResult = ({
-    text,
-    provider,
-    model,
-    realtime = true,
-    hasVision = false,
-    groundedSource = '',
-    isStreamed = false
-  }) => {
-    const retrievedSources = Array.isArray(context?.sources) ? context.sources : [];
-    const previousRepairs = Array.isArray(context?.previousRepairs) ? context.previousRepairs : [];
-    const ragData = context?.ragData || null;
-    const missingInfo = /insufficient information|more information needed|need the equipment|please specify|missing information/i.test(text || '');
-    const confidence = retrievedSources.length >= 2
-      ? 'STRONG'
-      : (retrievedSources.length === 1 ? 'PARTIAL' : (missingInfo ? 'INSUFFICIENT' : 'PARTIAL'));
-
-    return {
-      text,
-      answer: text,
-      content: text,
-      provider,
-      model,
-      realtime,
-      hasVision,
-      groundedSource: groundedSource || `${provider} Grounded on Plant Knowledge Base`,
-      isStreamed,
-      sources: retrievedSources,
-      previousRepairs: previousRepairs,
-      groundingStatus: ragData?.grounding_status || (retrievedSources.length > 0 ? 'GROUNDED' : 'PARTIALLY_GROUNDED'),
-      confidence,
-      queryId: ragData?.query_id || null,
-      whyAnswer: {
-        docCount: retrievedSources.length,
-        sourcesMatched: retrievedSources.map(s => s.document_title).filter(Boolean),
-        equipmentMatched: Boolean(context.machineCode),
-        errorCodeMatched: /E-\d+|ALARM|FAULT|ERR/i.test(prompt),
-        historyMatched: previousRepairs.length > 0,
-        safetyMatched: retrievedSources.some(s => s.doc_type === 'SAFETY' || /safety|loto|lockout/i.test(s.document_title || ''))
-      },
-      missingInfo
-    };
+  const requestPayload = {
+    message: queryText,
+    prompt: queryText,
+    conversationId: conversationId || context.conversationId || undefined,
+    history: formattedHistory,
+    model: activeModel,
+    image_base64: imageBase64,
+    image_mime: imageMime,
+    machine_id: context.machineId || undefined,
+    work_order_id: context.workOrderId || undefined
   };
 
   let hasStreamedAnyToken = false;
+  let accumulatedText = '';
+  let finalSources = [];
+  let returnedModel = activeModel;
 
-  // STRATEGY 1: Backend High-Speed Real-Time Streaming Proxy (/api/ai/chat/stream)
-  // Server-side persistent connection pooling & zero browser CORS overhead: <300ms first token.
+  // STRATEGY 1: Server-Sent Events (SSE) Real-Time Token Streaming (/api/ai/chat/stream)
   try {
-    const token = localStorage.getItem('token');
-    const formattedHistory = (history || [])
-      .filter((h) => h.id !== 'welcome' && !String(h.id || '').startsWith('sys-') && !String(h.id || '').startsWith('ai-err-'))
-      .map((h) => ({
-        role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
-        content: typeof h.content === 'string' ? h.content : (h.text || '')
-      }));
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+    const streamEndpoint = `${getBaseURL()}/ai/chat/stream`;
 
-    const backendStreamRes = await fetch(`${getBaseURL()}/ai/chat/stream`, {
+    const streamResponse = await fetch(streamEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
-      body: JSON.stringify({
-        prompt,
-        history: formattedHistory,
-        api_key: apiKey,
-        provider: effectiveProvider,
-        model: effectiveModel,
-        image_base64: imageBase64,
-        image_mime: imageMime,
-        machine_id: context.machineId || undefined,
-        work_order_id: context.workOrderId || undefined
-      }),
+      body: JSON.stringify(requestPayload),
       signal: signal || undefined
     });
 
-    if (backendStreamRes.ok && backendStreamRes.body) {
-      const reader = backendStreamRes.body.getReader();
+    if (streamResponse.ok && streamResponse.body) {
+      const reader = streamResponse.body.getReader();
       const decoder = new TextDecoder();
-      let accumulatedText = '';
       let buffer = '';
-      let backendError = null;
+      let streamErrorMessage = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -697,16 +184,17 @@ ${isDoubtOrClarification ? `
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop();
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr) {
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('data: ')) {
+            const dataString = trimmedLine.slice(6).trim();
+            if (dataString) {
               try {
-                const parsed = JSON.parse(jsonStr);
+                const parsed = JSON.parse(dataString);
                 if (parsed.error) {
-                  backendError = parsed.error;
+                  streamErrorMessage = parsed.error;
                 }
                 if (parsed.text) {
                   accumulatedText += parsed.text;
@@ -715,440 +203,110 @@ ${isDoubtOrClarification ? `
                     onChunk(parsed.text, accumulatedText);
                   }
                 }
-              } catch (e) {
-                // partial json chunk
+                if (parsed.sources && Array.isArray(parsed.sources)) {
+                  finalSources = parsed.sources;
+                }
+                if (parsed.model) {
+                  returnedModel = parsed.model;
+                }
+              } catch (_) {
+                // Partial line parse error, continue
               }
             }
           }
         }
       }
 
-      if (backendError && !accumulatedText.trim()) {
-        throw new Error(backendError);
+      if (streamErrorMessage && !accumulatedText.trim()) {
+        throw new Error(streamErrorMessage);
       }
 
       if (accumulatedText.trim()) {
         return buildCopilotResult({
           text: accumulatedText,
-          provider: effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`,
-          model: effectiveModel,
-          realtime: true,
-          hasVision: Boolean(imageBase64),
-          groundedSource: `${effectiveProvider === 'openai' ? 'OpenAI' : 'Gemini'} ${effectiveModel} + Plant Grounding (Real-Time)`,
+          provider: `Google Gemini (${returnedModel})`,
+          model: returnedModel,
+          sources: finalSources,
           isStreamed: true
         });
       }
-    } else if (backendStreamRes.status === 401 || backendStreamRes.status === 403) {
-      const errJson = await backendStreamRes.json().catch(() => ({}));
-      throw new Error(errJson.detail || 'Authentication failed. Please check your API key in Configure AI Key.');
+    } else if (streamResponse.status >= 400) {
+      const errorJson = await streamResponse.json().catch(() => ({}));
+      const errorDetail = errorJson.detail || errorJson.message || `Server returned error ${streamResponse.status}`;
+      throw new Error(errorDetail);
     }
-  } catch (backendStreamErr) {
-    if (signal?.aborted || backendStreamErr.name === 'AbortError') {
-      throw backendStreamErr;
+  } catch (streamErr) {
+    if (signal?.aborted || streamErr.name === 'AbortError') {
+      throw streamErr;
     }
-    if (backendStreamErr.message && (
-      backendStreamErr.message.includes('API key') ||
-      backendStreamErr.message.includes('Authentication') ||
-      backendStreamErr.message.includes('quota')
-    )) {
-      throw backendStreamErr;
-    }
-    console.warn('[EquipFixAI] Backend SSE stream proxy attempt failed, falling back to direct connection:', backendStreamErr.message);
-  }
-
-  // If tokens were already streamed directly, do not cascade into fallback strategies
-  if (hasStreamedAnyToken) {
-    return;
-  }
-
-  // STRATEGY 2A: Direct Real-Time Streaming from OpenAI API (SSE Fallback)
-  if (effectiveProvider === 'openai') {
-    const openAiMessages = [
-      { role: 'system', content: systemPrompt }
-    ];
-    if (Array.isArray(history)) {
-      for (const h of history) {
-        if (h.id === 'welcome' || String(h.id || '').startsWith('sys-') || String(h.id || '').startsWith('ai-err-')) continue;
-        const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'assistant';
-        const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
-        if (text) openAiMessages.push({ role, content: text });
-      }
-    }
-
-    if (imageBase64) {
-      const dataUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:${imageMime || 'image/jpeg'};base64,${imageBase64}`;
-      openAiMessages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: dataUrl } }
-        ]
-      });
-    } else {
-      openAiMessages.push({ role: 'user', content: prompt });
-    }
-
-    try {
-      const openAiController = new AbortController();
-      const openAiTimeout = setTimeout(() => openAiController.abort(), 8000);
-
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: effectiveModel,
-          messages: openAiMessages,
-          stream: true,
-          temperature: 0.2,
-          max_tokens: 2048
-        }),
-        signal: openAiController.signal
-      });
-      clearTimeout(openAiTimeout);
-
-      if (res.ok && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedText = '';
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed === 'data: [DONE]') {
-              reader.cancel().catch(() => {});
-              break;
-            }
-            if (trimmed.startsWith('data: ')) {
-              const jsonStr = trimmed.slice(6).trim();
-              if (jsonStr) {
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  const chunk = parsed.choices?.[0]?.delta?.content || '';
-                  if (chunk) {
-                    accumulatedText += chunk;
-                    hasStreamedAnyToken = true;
-                    if (onChunk) onChunk(chunk, accumulatedText);
-                  }
-                } catch (e) {}
-              }
-            }
-          }
-        }
-
-        if (accumulatedText.trim()) {
-          return buildCopilotResult({
-            text: accumulatedText,
-            provider: `OpenAI (${effectiveModel})`,
-            model: effectiveModel,
-            realtime: true,
-            hasVision: Boolean(imageBase64),
-            groundedSource: `OpenAI ${effectiveModel} Live Stream`,
-            isStreamed: true
-          });
-        }
-      } else if (res.status === 401 || res.status === 403) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(`OpenAI Authentication Failed: ${errData.error?.message || 'Invalid API key'}`);
-      } else if (res.status === 429) {
-        throw new Error('OpenAI rate limit or quota exceeded. Please check your OpenAI account credits.');
-      }
-    } catch (openAiErr) {
-      if (openAiErr.message && (openAiErr.message.includes('Authentication Failed') || openAiErr.message.includes('quota exceeded'))) {
-        throw openAiErr;
-      }
-      console.warn('[EquipFixAI] Direct OpenAI fetch bypassed (CORS/network), switching to backend stream proxy.');
-    }
-  }
-
-  // STRATEGY 1B: Direct High-Speed Streaming from Google Gemini API (SSE)
-  if (effectiveProvider === 'gemini') {
-    const groundedPrompt = `[SYSTEM INSTRUCTIONS & PLANT SAFETY PROTOCOLS]\n${systemPrompt}\n\n[TECHNICIAN DIAGNOSTIC QUERY]\n${prompt}`;
-
-    const contents = [];
-    if (Array.isArray(history) && history.length > 0) {
-      for (const h of history) {
-        const role = (h.role === 'user' || h.sender === 'user') ? 'user' : 'model';
-        const text = (typeof h.content === 'string' ? h.content : (h.text || '')).trim();
-        if (text) {
-          if (contents.length > 0 && contents[contents.length - 1].role === role) {
-            contents[contents.length - 1].parts[0].text += `\n\n${text}`;
-          } else {
-            contents.push({ role, parts: [{ text }] });
-          }
-        }
-      }
-    }
-    while (contents.length > 0 && contents[0].role !== 'user') {
-      contents.shift();
-    }
-
-    const currentParts = [];
-    if (imageBase64) {
-      const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+]+;base64,/, '');
-      currentParts.push({
-        inlineData: {
-          mimeType: imageMime || 'image/jpeg',
-          data: cleanBase64
-        }
-      });
-    }
-    currentParts.push({ text: groundedPrompt });
-
-    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-      contents[contents.length - 1].parts.push(...currentParts);
-    } else {
-      contents.push({ role: 'user', parts: currentParts });
-    }
-
-    let accumulatedText = '';
-    const candidateKeys = parseCandidateApiKeys(apiKey);
-    const keysToTry = candidateKeys.length > 0 ? candidateKeys : [apiKey];
-
-    for (const curKey of keysToTry) {
-      if (hasStreamedAnyToken) break;
-      const cleanList = resolveGeminiCandidateModels(effectiveModel);
-
-      for (const curModel of cleanList) {
-        if (hasStreamedAnyToken) break;
-        accumulatedText = '';
-        const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:streamGenerateContent?key=${encodeURIComponent(curKey)}&alt=sse`;
-        const directEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${encodeURIComponent(curKey)}`;
-        const payload = {
-          contents,
-          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
-        };
-
-        try {
-          const streamController = new AbortController();
-          const streamTimeout = setTimeout(() => streamController.abort(), 6000);
-
-          let res = await fetch(streamEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: streamController.signal
-          });
-          clearTimeout(streamTimeout);
-
-          if (res.ok && res.body) {
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let streamDone = false;
-
-            while (!streamDone) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop();
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const jsonStr = line.slice(6).trim();
-                  if (jsonStr) {
-                    try {
-                      const parsed = JSON.parse(jsonStr);
-                      if (parsed.error) {
-                        reader.cancel().catch(() => {});
-                        const errMsg = parsed.error.message || 'Stream error';
-                        const errLower = errMsg.toLowerCase();
-                        if (parsed.error.code === 429 || errLower.includes('quota') || errLower.includes('exhausted') || errLower.includes('high demand')) {
-                          break;
-                        }
-                        if (errLower.includes('no longer available') || errLower.includes('not found') || errLower.includes('not supported')) {
-                          break;
-                        }
-                      }
-                      const cand = parsed.candidates?.[0];
-                      const chunk = cand?.content?.parts?.map((p) => p.text).join('') || '';
-                      if (chunk) {
-                        accumulatedText += chunk;
-                        hasStreamedAnyToken = true;
-                        if (onChunk) onChunk(chunk, accumulatedText);
-                      }
-                      if (cand?.finishReason) {
-                        streamDone = true;
-                        reader.cancel().catch(() => {});
-                        break;
-                      }
-                    } catch (e) {
-                      // ignore json chunk error
-                    }
-                  }
-                }
-              }
-            }
-
-            if (accumulatedText.trim()) {
-              return buildCopilotResult({
-                text: accumulatedText,
-                provider: `Google Gemini (${curModel})`,
-                model: curModel,
-                realtime: true,
-                hasVision: Boolean(imageBase64),
-                groundedSource: `Gemini ${curModel} Live Stream`,
-                isStreamed: true
-              });
-            }
-          }
-
-          if (res.status === 400 || res.status === 404 || res.status === 429 || res.status === 503) {
-            if (res.status === 400) {
-              const errData = await res.json().catch(() => ({}));
-              const errMsg = (errData.error?.message || '').toLowerCase();
-              if (errMsg.includes('api key not valid') || errMsg.includes('api_key_invalid')) {
-                break;
-              }
-            }
-            continue;
-          }
-
-          // Direct generateContent fast fallback
-          const directController = new AbortController();
-          const directTimeout = setTimeout(() => directController.abort(), 6000);
-
-          const directRes = await fetch(directEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: directController.signal
-          });
-          clearTimeout(directTimeout);
-
-          if (directRes.ok) {
-            const data = await directRes.json();
-            const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
-            if (text.trim()) {
-              hasStreamedAnyToken = true;
-              if (onChunk) onChunk(text, text);
-              return buildCopilotResult({
-                text,
-                provider: `Google Gemini (${curModel})`,
-                model: curModel,
-                realtime: true,
-                hasVision: Boolean(imageBase64),
-                groundedSource: `Gemini ${curModel} Direct High-Speed`,
-                isStreamed: false
-              });
-            }
-          } else if (directRes.status === 400 || directRes.status === 429 || directRes.status === 404 || directRes.status === 503) {
-            if (directRes.status === 400) {
-              const errData = await directRes.json().catch(() => ({}));
-              const errMsg = (errData.error?.message || '').toLowerCase();
-              if (errMsg.includes('api key not valid') || errMsg.includes('api_key_invalid')) {
-                break;
-              }
-            }
-            continue;
-          }
-        } catch (streamErr) {
-          if (hasStreamedAnyToken && accumulatedText.trim()) {
-            return buildCopilotResult({
-              text: accumulatedText,
-              provider: `Google Gemini (${curModel})`,
-              model: curModel,
-              realtime: true,
-              hasVision: Boolean(imageBase64),
-              groundedSource: `Gemini ${curModel} Live Stream`,
-              isStreamed: true
-            });
-          }
-          continue;
-        }
-      }
-    }
-
+    // If tokens already arrived, return what was accumulated rather than throwing
     if (hasStreamedAnyToken && accumulatedText.trim()) {
       return buildCopilotResult({
         text: accumulatedText,
-        provider: 'Google Gemini',
-        model: 'gemini',
-        realtime: true,
-        hasVision: Boolean(imageBase64),
-        groundedSource: 'Gemini Direct Live Stream',
+        provider: `Google Gemini (${returnedModel})`,
+        model: returnedModel,
+        sources: finalSources,
         isStreamed: true
       });
     }
+    // If it's a genuine server error, log and attempt normal non-streaming fallback
+    console.warn('[EquipFixAI] Streaming unavailable, falling back to non-streaming endpoint:', streamErr.message);
   }
 
-  // STRATEGY 3: Backend Non-Streaming Call (/api/ai/chat Fallback)
+  // STRATEGY 2: Backend Standard Chat Endpoint (/api/ai/chat)
   try {
-    const formattedHistory = (history || [])
-      .filter((h) => h.id !== 'welcome' && !String(h.id || '').startsWith('sys-') && !String(h.id || '').startsWith('ai-err-'))
-      .map((h) => ({
-        role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
-        content: typeof h.content === 'string' ? h.content : (h.text || '')
-      }));
+    const res = await aiApi.chat(requestPayload);
+    const data = res.data || {};
+    const responseText = data.message || data.text || '';
 
-    const response = await aiApi.chat({
-      prompt,
-      history: formattedHistory,
-      api_key: apiKey,
-      provider: effectiveProvider,
-      model: effectiveModel,
-      image_base64: imageBase64,
-      image_mime: imageMime,
-      machine_id: context.machineId || undefined,
-      work_order_id: context.workOrderId || undefined
-    });
-
-    if (response.data?.text) {
-      const fullText = response.data.text;
+    if (responseText) {
       if (onChunk) {
-        onChunk(fullText, fullText);
+        onChunk(responseText, responseText);
       }
       return buildCopilotResult({
-        text: fullText,
-        provider: response.data.provider || (effectiveProvider === 'openai' ? `OpenAI (${effectiveModel})` : `Google Gemini (${effectiveModel})`),
-        model: response.data.model || effectiveModel,
-        realtime: true,
-        hasVision: Boolean(imageBase64),
-        groundedSource: response.data.grounded_source || 'Plant Manuals & Vector Store',
+        text: responseText,
+        provider: data.provider || `Google Gemini (${data.model || activeModel})`,
+        model: data.model || activeModel,
+        sources: data.sources || [],
         isStreamed: false
       });
     }
+    throw new Error('Received empty response from AI service.');
   } catch (err) {
-    const groundedText = `<div class="ai-warn">⚠️ <strong>Notice:</strong> Cloud AI quota limit reached on active key. Response synthesized using offline Plant-Grounded Knowledge Base (OEM manuals, SOPs, and OSHA 1910.147). You can configure another API key in <strong>Configure AI Key</strong>.</div>\n\n### ⚡ Industrial Equipment Diagnostics (Plant Grounded Mode)\n<div class="ai-kv"><span class="ai-key">Active Equipment Context</span><span class="ai-val">${context.machineCode || 'Industrial Machinery'}</span></div>\n\n<h3 class="ai-section">🛠️ Recommended Action Steps</h3>\n<ol class="ai-steps">\n  <li>Follow OSHA 1910.147 Lockout/Tagout (LOTO) protocols before opening panels.</li>\n  <li>Inspect mechanical couplings, bearings, and drive belt tension for thermal rise or wear.</li>\n  <li>Verify sensor connections and terminal voltage balance with calibrated multimeter.</li>\n  <li>Check fluid, lubrication, and filter differentials against OEM nominal specifications.</li>\n</ol>`;
-    if (onChunk) onChunk(groundedText, groundedText);
-    return buildCopilotResult({
-      text: groundedText,
-      provider: 'EquipFix Industrial AI (Plant Grounded)',
-      model: effectiveModel,
-      realtime: true,
-      hasVision: Boolean(imageBase64),
-      groundedSource: 'Plant Telemetry & Maintenance SOPs (Offline Grounded Mode)',
-      isStreamed: false
-    });
+    if (signal?.aborted || err.name === 'AbortError') {
+      throw err;
+    }
+    const backendMessage = err.response?.data?.detail || err.response?.data?.message || err.message;
+    throw new Error(backendMessage || 'AI service is temporarily unavailable. Please try again.');
   }
-
-  throw new Error('AI Copilot service is currently unavailable. Please verify your API key and connection.');
 };
 
 /**
- * Industrial Image & Schematic Diagram Generator
- * Supports Google Imagen 3 (via Gemini API), OpenAI DALL-E 3, and Pollinations FLUX
+ * Modern helper function matching the specification in Section 9
+ */
+export const sendAIChatMessage = async ({
+  message,
+  history = [],
+  conversationId = null,
+  machineId = null,
+  onChunk = null,
+  signal = null
+}) => {
+  return askEquipFixCopilot({
+    prompt: message,
+    message,
+    history,
+    conversationId,
+    context: { machineId, conversationId },
+    onChunk,
+    signal
+  });
+};
+
+/**
+ * Industrial Image & Schematic Diagram Generator using Pollinations FLUX Engine
  */
 export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) => {
-  const config = getAIConfig();
-  const { apiKey, provider } = config;
-
-  const effectiveProvider = apiKey && apiKey.startsWith('sk-')
-    ? 'openai'
-    : (apiKey && (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) ? 'gemini' : (provider || 'gemini'));
-
   let enhancedPrompt = prompt;
   if (style === 'schematic') {
     enhancedPrompt = `Detailed engineering schematic technical blueprint, industrial CAD drawing, precise line art, cross-section breakdown, high resolution industrial illustration: ${prompt}`;
@@ -1160,70 +318,6 @@ export const generateIndustrialImage = async ({ prompt, style = 'schematic' }) =
     enhancedPrompt = `OSHA compliant industrial safety warning sign, high contrast safety colors, standard warning icons, crisp vector sign for: ${prompt}`;
   }
 
-  // Option 1: OpenAI DALL-E 3 if OpenAI key is active
-  if (apiKey && effectiveProvider === 'openai') {
-    try {
-      const res = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'dall-e-3',
-          prompt: enhancedPrompt,
-          n: 1,
-          size: '1024x1024',
-          quality: 'standard'
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const imgUrl = data.data?.[0]?.url;
-        if (imgUrl) {
-          return {
-            imageUrl: imgUrl,
-            prompt: enhancedPrompt,
-            provider: 'OpenAI DALL-E 3'
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('DALL-E 3 call failed, falling back to Pollinations FLUX engine', err);
-    }
-  }
-
-  // Option 2: Google Imagen 3 via Gemini API if Gemini key is active
-  if (apiKey && effectiveProvider === 'gemini') {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            instances: [{ prompt: enhancedPrompt }],
-            parameters: { sampleCount: 1, aspectRatio: '4:3', outputMimeType: 'image/jpeg' }
-          })
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const base64Bytes = data.predictions?.[0]?.bytesBase64Encoded;
-        if (base64Bytes) {
-          return {
-            imageUrl: `data:image/jpeg;base64,${base64Bytes}`,
-            prompt: enhancedPrompt,
-            provider: 'Google Imagen 3 (imagen-3.0-generate-002)'
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Google Imagen 3 call failed, using high-res FLUX fallback', err);
-    }
-  }
-
-  // Option 3: High-definition FLUX engine via Pollinations.ai
   const seed = Math.floor(Date.now() % 1000000);
   const encoded = encodeURIComponent(enhancedPrompt);
   const fluxUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=768&model=flux&seed=${seed}&nologo=true`;

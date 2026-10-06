@@ -83,6 +83,8 @@ class AIChatRequest(BaseModel):
     message: Optional[str] = None
     prompt: Optional[str] = None
     question: Optional[str] = None
+    conversationId: Optional[str] = None
+    conversation_id: Optional[str] = None
     api_key: Optional[str] = None
     provider: Optional[str] = "gemini"
     model: Optional[str] = None
@@ -95,14 +97,28 @@ class AIChatRequest(BaseModel):
     def get_message(self) -> str:
         return (self.message or self.prompt or self.question or "").strip()
 
+    def get_conversation_id(self) -> Optional[str]:
+        return self.conversationId or self.conversation_id
+
 
 class AIChatResponse(BaseModel):
-    text: str
-    provider: str
-    model: str
+    success: bool = True
+    message: str = ""
+    text: str = ""
+    conversationId: Optional[str] = None
+    provider: str = "Google Gemini"
+    model: str = "gemini-flash-lite-latest"
     realtime: bool = True
     grounded_source: Optional[str] = None
+    sources: Optional[List[AICitation]] = []
     query_id: Optional[int] = None
+
+    def __init__(self, **data):
+        if "text" in data and not data.get("message"):
+            data["message"] = data["text"]
+        elif "message" in data and not data.get("text"):
+            data["text"] = data["message"]
+        super().__init__(**data)
 
 
 class AIVerifyKeyRequest(BaseModel):

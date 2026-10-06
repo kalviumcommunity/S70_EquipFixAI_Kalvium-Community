@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # External LLM API Keys
     GEMINI_API_KEY: Union[str, None] = os.getenv("GEMINI_API_KEY", None)
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
     GOOGLE_API_KEY: Union[str, None] = os.getenv("GOOGLE_API_KEY", None)
     OPENAI_API_KEY: Union[str, None] = os.getenv("OPENAI_API_KEY", None)
     LLM_API_KEY: Union[str, None] = os.getenv("LLM_API_KEY", None)

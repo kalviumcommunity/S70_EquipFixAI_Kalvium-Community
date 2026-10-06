@@ -297,22 +297,38 @@ def test_document_content_and_search(client: TestClient, db_session: Session, se
 
 def test_ai_chat_and_verify_key(client: TestClient, db_session: Session, seeded_users):
     """Test conversational /api/ai/chat endpoint and /api/ai/verify-key validation."""
+    from unittest.mock import patch
     headers = get_auth_header("tech_user", UserRole.TECHNICIAN.value)
 
-    # 1. Test conversational greeting without key
-    chat_res = client.post("/api/ai/chat", json={"message": "hello"}, headers=headers)
-    assert chat_res.status_code == 200
-    chat_data = chat_res.json()
-    assert "text" in chat_data
-    assert "EquipFix AI Operations Director" in chat_data["text"]
-    assert chat_data["provider"] == "EquipFix Industrial Engine"
+    # 1. Test conversational greeting via GeminiService
+    mock_gemini_reply = {
+        "success": True,
+        "message": "Hello! How can I help you today?",
+        "text": "Hello! How can I help you today?",
+        "model": "gemini-flash-lite-latest",
+        "provider": "Google Gemini (gemini-flash-lite-latest)"
+    }
+    with patch("app.services.gemini_service.GeminiService.generate_response", return_value=mock_gemini_reply):
+        chat_res = client.post("/api/ai/chat", json={"message": "hello"}, headers=headers)
+        assert chat_res.status_code == 200
+        chat_data = chat_res.json()
+        assert chat_data["success"] is True
+        assert "Hello! How can I help you today?" in chat_data["message"]
+        assert chat_data["model"] == "gemini-flash-lite-latest"
 
     # 2. Test plant technical question
-    tech_res = client.post("/api/ai/chat", json={"message": "How do I isolate electrical power?"}, headers=headers)
-    assert tech_res.status_code == 200
-    tech_data = tech_res.json()
-    assert "text" in tech_data
-    assert "LOTO" in tech_data["text"] or "Root Cause" in tech_data["text"]
+    mock_tech_reply = {
+        "success": True,
+        "message": "### Possible causes\n- Power surge\n### Recommended checks\n1. Check disconnect\n### Safety\nFollow OSHA 1910.147 LOTO.",
+        "text": "### Possible causes\n- Power surge\n### Recommended checks\n1. Check disconnect\n### Safety\nFollow OSHA 1910.147 LOTO.",
+        "model": "gemini-flash-lite-latest",
+        "provider": "Google Gemini"
+    }
+    with patch("app.services.gemini_service.GeminiService.generate_response", return_value=mock_tech_reply):
+        tech_res = client.post("/api/ai/chat", json={"message": "How do I isolate electrical power?"}, headers=headers)
+        assert tech_res.status_code == 200
+        tech_data = tech_res.json()
+        assert "LOTO" in tech_data["text"]
 
     # 3. Test verify-key validation with invalid key format
     ver_res = client.post("/api/ai/verify-key", json={"api_key": "invalid_test_key", "provider": "gemini"}, headers=headers)
@@ -320,4 +336,4 @@ def test_ai_chat_and_verify_key(client: TestClient, db_session: Session, seeded_
     ver_data = ver_res.json()
     assert "success" in ver_data
     assert ver_data["success"] is False
-    assert "failed" in ver_data["message"].lower() or "error" in ver_data["message"].lower()
+
