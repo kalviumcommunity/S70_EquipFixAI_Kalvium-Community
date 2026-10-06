@@ -5,7 +5,7 @@ import {
   Paperclip, Mic, MicOff, Send, X, ExternalLink, Download, Layers, MoreVertical,
   BookOpen, Trash2, ChevronRight, FileText, ChevronDown, CheckCircle2,
   Clock, ArrowRight, RotateCw, Search, Cpu, Pin, HardHat, Eye, RefreshCw, Plus, Settings, Key,
-  HelpCircle, MessageSquare, Square, Zap, Brain
+  HelpCircle, MessageSquare, Square, Zap, Brain, Image as ImageIcon, ZoomIn, Maximize2
 } from 'lucide-react';
 import { aiApi, machinesApi, documentsApi, workOrdersApi, maintenanceApi, incidentsApi } from '../../services/api';
 import {
@@ -14,6 +14,7 @@ import {
 import AIKeyConfigModal from './AIKeyConfigModal';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 import AIThinkingEffect from './AIThinkingEffect';
+import ImageViewerModal from './ImageViewerModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIGHT THEMED RICH HTML RESPONSE STYLES (MATCHING REFERENCE DESIGN)
@@ -636,15 +637,32 @@ export const AITroubleshootingPanel = ({
   const [feedbackCategory, setFeedbackCategory] = useState('Not clear');
   const [feedbackNotes, setFeedbackNotes] = useState('');
 
-  // Voice & Attachments
+  // Voice & Image Attachments
   const [isListening, setIsListening] = useState(false);
-  const [attachedImage, setAttachedImage] = useState(null);
-  const [attachedImageBase64, setAttachedImageBase64] = useState(initialImageBase64 || null);
+  const [attachedImages, setAttachedImages] = useState(
+    initialImageBase64 ? [{ id: 'init-1', dataUrl: initialImageBase64, url: initialImageBase64, data: initialImageBase64, name: 'Machine Photo', size: 'Preloaded' }] : []
+  );
   const fileInputRef = useRef(null);
+  const [imageError, setImageError] = useState(null);
+
+  // High-Resolution Lightbox Image Viewer
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerImages, setViewerImages] = useState([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const openImageViewer = (imagesList, index = 0) => {
+    if (!imagesList || imagesList.length === 0) return;
+    setViewerImages(imagesList);
+    setViewerIndex(index);
+    setViewerOpen(true);
+  };
 
   useEffect(() => {
     if (initialImageBase64) {
-      setAttachedImageBase64(initialImageBase64);
+      setAttachedImages((prev) => {
+        if (prev.some(img => img.dataUrl === initialImageBase64)) return prev;
+        return [{ id: 'init-1', dataUrl: initialImageBase64, url: initialImageBase64, data: initialImageBase64, name: 'Machine Photo', size: 'Preloaded' }, ...prev];
+      });
     }
   }, [initialImageBase64]);
 
@@ -932,39 +950,118 @@ export const AITroubleshootingPanel = ({
     }
   };
 
-  // Image Upload
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAttachedImage(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setAttachedImageBase64(reader.result);
-    reader.readAsDataURL(file);
+  // Image Upload & Inspection Handlers
+  const handleImageFiles = (fileList) => {
+    if (!fileList || fileList.length === 0) return;
+    setImageError(null);
+    const validFiles = [];
+    const maxFiles = 6;
+    const maxSize = 15 * 1024 * 1024; // 15MB
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      if (!file.type || !file.type.startsWith('image/')) {
+        setImageError(`"${file.name}" is not an image. Supported formats: JPG, PNG, WEBP, GIF, HEIC.`);
+        continue;
+      }
+      if (file.size > maxSize) {
+        setImageError(`"${file.name}" exceeds the 15MB size limit.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        setAttachedImages((prev) => {
+          if (prev.length >= maxFiles) return prev;
+          const formattedSize = file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(file.size / 1024)} KB`;
+          return [
+            ...prev,
+            {
+              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              file,
+              dataUrl,
+              url: dataUrl,
+              data: dataUrl,
+              name: file.name,
+              size: formattedSize
+            }
+          ].slice(0, maxFiles);
+        });
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
-  // Submit Prompt with Real-Time Gemini AI Streaming
+  const handleImageChange = (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleImageFiles(files);
+    }
+    if (e.target) e.target.value = '';
+  };
+
+  const handleRemoveAttachedImage = (idToRemove) => {
+    setAttachedImages((prev) => prev.filter((img) => img.id !== idToRemove));
+    if (attachedImages.length <= 1) {
+      setImageError(null);
+    }
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pastedFiles = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) pastedFiles.push(file);
+      }
+    }
+    if (pastedFiles.length > 0) {
+      handleImageFiles(pastedFiles);
+    }
+  };
+
+  // Submit Prompt with Real-Time Gemini AI Streaming & Vision Multimodal Inspection
   const handleSendPrompt = async (overridePrompt = null) => {
     const p = (overridePrompt || question).trim();
-    if (!p && !attachedImageBase64) return;
+    if (!p && attachedImages.length === 0) return;
     if (loading || isSendingRef.current) return;
     isSendingRef.current = true;
 
-    // Immediately clear input box & attached image
+    // Immediately clear input box & attached images
     setQuestion('');
     if (textareaRef.current) {
       textareaRef.current.value = '';
       textareaRef.current.style.height = 'auto';
     }
-    const currentImg = attachedImageBase64;
-    setAttachedImage(null);
-    setAttachedImageBase64(null);
+    const currentImages = [...attachedImages];
+    setAttachedImages([]);
+    setImageError(null);
+
+    const messageImages = currentImages.map(img => ({
+      data: img.dataUrl,
+      url: img.dataUrl,
+      name: img.name,
+      size: img.size,
+      mime_type: img.file?.type || 'image/jpeg'
+    }));
 
     const userMsg = {
       id: `usr-${Date.now()}`,
       role: 'user',
-      content: p,
+      content: p || (messageImages.length > 0 ? 'Equipment diagnostic inspection requested for uploaded photo(s).' : ''),
       author: 'JD',
-      image: currentImg || null,
+      image: messageImages[0]?.data || null,
+      images: messageImages,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -973,17 +1070,32 @@ export const AITroubleshootingPanel = ({
 
     abortControllerRef.current = new AbortController();
     setThinkingElapsed('0.0');
-    setThinkingStage('Analyzing equipment telemetry & fault signals...');
+
+    // Dynamic Multi-Stage AI Vision & Diagnostics Indicator
+    const hasImages = messageImages.length > 0;
+    setThinkingStage(hasImages ? '🔍 Analyzing machine image...' : 'Analyzing equipment telemetry & fault signals...');
     const startTime = Date.now();
     if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
     thinkingTimerRef.current = setInterval(() => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       setThinkingElapsed(elapsed);
       const sec = parseFloat(elapsed);
-      if (sec > 2.0) {
-        setThinkingStage('Formulating precision diagnostic procedure...');
-      } else if (sec > 0.8) {
-        setThinkingStage('Synthesizing OEM machinery manuals & LOTO safety...');
+      if (hasImages) {
+        if (sec > 5.0) {
+          setThinkingStage('🛠️ Preparing precision diagnosis & safety precautions...');
+        } else if (sec > 3.6) {
+          setThinkingStage('📚 Searching maintenance documentation & OEM manuals...');
+        } else if (sec > 2.2) {
+          setThinkingStage('🔎 Checking visible issues & error codes...');
+        } else if (sec > 1.0) {
+          setThinkingStage('⚙️ Identifying equipment & components...');
+        }
+      } else {
+        if (sec > 2.0) {
+          setThinkingStage('Formulating precision diagnostic procedure...');
+        } else if (sec > 0.8) {
+          setThinkingStage('Synthesizing OEM machinery manuals & LOTO safety...');
+        }
       }
     }, 100);
 
@@ -999,7 +1111,8 @@ export const AITroubleshootingPanel = ({
       const res = await askEquipFixCopilot({
         prompt: p,
         history: historyList,
-        imageBase64: userMsg.image,
+        images: messageImages,
+        imageBase64: messageImages[0]?.data || null,
         signal: abortControllerRef.current.signal,
         context: {
           machineCode: activeMachineCode,
@@ -1911,13 +2024,97 @@ export const AITroubleshootingPanel = ({
                       maxWidth: '560px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                     }}>
-                      {m.image && (
-                        <img
-                          src={m.image}
-                          alt="Attached Equipment"
-                          style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', marginBottom: '8px', display: 'block' }}
-                        />
-                      )}
+                      {/* Attached Equipment Photos (Clickable for High-Resolution Lightbox) */}
+                      {((m.images && m.images.length > 0) || m.image) && (() => {
+                        const messageImages = m.images && m.images.length > 0
+                          ? m.images
+                          : [{ url: m.image, data: m.image, name: 'Equipment Photo' }];
+                        const isSingle = messageImages.length === 1;
+
+                        return (
+                          <div style={{
+                            marginBottom: '10px',
+                            display: 'grid',
+                            gridTemplateColumns: isSingle ? '1fr' : 'repeat(auto-fit, minmax(130px, 1fr))',
+                            gap: '8px',
+                            maxWidth: isSingle ? '380px' : '480px'
+                          }}>
+                            {messageImages.map((imgObj, idx) => {
+                              const src = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.data || '');
+                              const name = imgObj.name || `Machine photo ${idx + 1}`;
+                              return (
+                                <div
+                                  key={idx}
+                                  onClick={() => openImageViewer(messageImages, idx)}
+                                  title="Click to inspect in high resolution (Zoom & Pan)"
+                                  style={{
+                                    position: 'relative',
+                                    borderRadius: '10px',
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    border: '1px solid rgba(226, 232, 240, 0.9)',
+                                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                                    backgroundColor: '#0f172a',
+                                    maxHeight: isSingle ? '260px' : '150px'
+                                  }}
+                                >
+                                  <img
+                                    src={src}
+                                    alt={name}
+                                    style={{
+                                      width: '100%',
+                                      height: isSingle ? 'auto' : '100%',
+                                      maxHeight: isSingle ? '260px' : '150px',
+                                      objectFit: isSingle ? 'contain' : 'cover',
+                                      display: 'block',
+                                      transition: 'transform 0.2s ease'
+                                    }}
+                                  />
+                                  {/* Hover Inspection Overlay */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0.15) 60%, transparent 100%)',
+                                      display: 'flex',
+                                      alignItems: 'flex-end',
+                                      justifyContent: 'space-between',
+                                      padding: '8px 10px',
+                                      color: '#ffffff',
+                                      opacity: 0.95
+                                    }}
+                                  >
+                                    <span style={{
+                                      fontSize: '0.72rem',
+                                      fontWeight: 600,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: '70%',
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+                                    }}>
+                                      {name}
+                                    </span>
+                                    <div style={{
+                                      backgroundColor: 'rgba(37, 99, 235, 0.9)',
+                                      borderRadius: '4px',
+                                      padding: '3px 6px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 700
+                                    }}>
+                                      <ZoomIn size={12} />
+                                      <span>Inspect</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                       {m.content}
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -2225,10 +2422,10 @@ export const AITroubleshootingPanel = ({
             );
           })}
 
-          {/* Subtle Modern ChatGPT-Style Analyzing Indicator */}
+          {/* Modern Multi-Stage AI Analyzing Indicator */}
           {loading && (
             <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px', marginBottom: '10px' }}>
-              <AIThinkingEffect label="Analyzing..." onStop={handleStopGenerating} />
+              <AIThinkingEffect label={thinkingStage || 'Analyzing...'} onStop={handleStopGenerating} />
             </div>
           )}
 
@@ -2309,10 +2506,145 @@ export const AITroubleshootingPanel = ({
             flexDirection: 'column',
             gap: '8px'
           }}>
+            {/* Attached Images Thumbnail Preview Strip */}
+            {attachedImages.length > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                overflowX: 'auto',
+                paddingBottom: '8px',
+                borderBottom: '1px solid #f1f5f9',
+                marginBottom: '2px'
+              }}>
+                {attachedImages.map((img, idx) => (
+                  <div
+                    key={img.id}
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      padding: '4px 8px 4px 4px',
+                      flexShrink: 0,
+                      maxWidth: '220px'
+                    }}
+                  >
+                    <div
+                      onClick={() => openImageViewer(attachedImages.map(a => ({ url: a.dataUrl, name: a.name })), idx)}
+                      title="Click to inspect photo in high resolution"
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        backgroundColor: '#0f172a',
+                        flexShrink: 0,
+                        position: 'relative'
+                      }}
+                    >
+                      <img
+                        src={img.dataUrl}
+                        alt={img.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+                      <span style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        color: '#1e293b',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {img.name}
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                        {img.size}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAttachedImage(img.id)}
+                      title="Remove image"
+                      style={{
+                        background: '#e2e8f0',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#475569',
+                        cursor: 'pointer',
+                        marginLeft: '4px'
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+
+                {attachedImages.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px dashed #93c5fd',
+                      color: '#2563eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Plus size={13} />
+                    <span>Add Photo</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {imageError && (
+              <div style={{
+                color: '#dc2626',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>{imageError}</span>
+                <button
+                  type="button"
+                  onClick={() => setImageError(null)}
+                  style={{ background: 'none', border: 'none', color: '#991b1b', cursor: 'pointer' }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={(e) => {
                 if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
                   e.preventDefault();
@@ -2321,7 +2653,7 @@ export const AITroubleshootingPanel = ({
                   }
                 }
               }}
-              placeholder="Ask EquipFixAI anything... (Press Enter to send, Shift+Enter for new line)"
+              placeholder={attachedImages.length > 0 ? "Ask a question about the attached equipment image(s), or press Enter to analyze..." : "Ask EquipFixAI anything... (Press Enter to send, Shift+Enter for new line)"}
               rows={1}
               style={{
                 width: '100%',
@@ -2340,7 +2672,8 @@ export const AITroubleshootingPanel = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
+                  multiple
                   style={{ display: 'none' }}
                   onChange={handleImageChange}
                 />
@@ -2350,18 +2683,19 @@ export const AITroubleshootingPanel = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: (attachedImage || attachedImageBase64) ? '#2563eb' : '#64748b',
+                    color: attachedImages.length > 0 ? '#2563eb' : '#64748b',
                     fontSize: '0.78rem',
                     fontWeight: 600,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
+                    gap: '5px',
                     padding: 0
                   }}
+                  title="Upload machine photo(s) for AI visual inspection (JPG, PNG, WEBP, GIF, HEIC)"
                 >
-                  <Paperclip size={14} />
-                  <span>{(attachedImage || attachedImageBase64) ? 'Image Attached' : 'Attach'}</span>
+                  <ImageIcon size={15} />
+                  <span>{attachedImages.length > 0 ? `${attachedImages.length} Photo${attachedImages.length > 1 ? 's' : ''}` : 'Attach Photo'}</span>
                 </button>
 
                 <button
@@ -2392,15 +2726,15 @@ export const AITroubleshootingPanel = ({
                 <button
                   type="button"
                   onClick={() => handleSendPrompt()}
-                  disabled={loading || (!question.trim() && !attachedImageBase64)}
+                  disabled={loading || (!question.trim() && attachedImages.length === 0)}
                   style={{
                     width: '34px',
                     height: '34px',
                     borderRadius: '8px',
-                    backgroundColor: loading || (!question.trim() && !attachedImageBase64) ? '#94a3b8' : '#2563eb',
+                    backgroundColor: loading || (!question.trim() && attachedImages.length === 0) ? '#94a3b8' : '#2563eb',
                     color: '#ffffff',
                     border: 'none',
-                    cursor: loading || (!question.trim() && !attachedImageBase64) ? 'not-allowed' : 'pointer',
+                    cursor: loading || (!question.trim() && attachedImages.length === 0) ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -3076,6 +3410,14 @@ export const AITroubleshootingPanel = ({
           </div>
         </div>
       )}
+
+      {/* High-Resolution Inspection Lightbox Modal */}
+      <ImageViewerModal
+        isOpen={viewerOpen}
+        images={viewerImages}
+        initialIndex={viewerIndex}
+        onClose={() => setViewerOpen(false)}
+      />
     </div>
   );
 };

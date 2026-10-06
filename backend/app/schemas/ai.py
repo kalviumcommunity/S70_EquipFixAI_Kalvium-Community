@@ -93,12 +93,32 @@ class AIChatRequest(BaseModel):
     history: Optional[List[AIChatMessage]] = []
     image_base64: Optional[str] = None
     image_mime: Optional[str] = "image/jpeg"
+    images: Optional[List[dict]] = None
 
     def get_message(self) -> str:
         return (self.message or self.prompt or self.question or "").strip()
 
     def get_conversation_id(self) -> Optional[str]:
         return self.conversationId or self.conversation_id
+
+    def get_images_list(self) -> List[dict]:
+        """Extract and normalize all attached images (single or multiple)."""
+        result = []
+        if self.images and isinstance(self.images, list):
+            for img in self.images:
+                if isinstance(img, dict):
+                    data = img.get("data") or img.get("image_base64") or img.get("url") or ""
+                    mime = img.get("mime_type") or img.get("type") or "image/jpeg"
+                    if data:
+                        result.append({"data": data, "mime_type": mime})
+                elif isinstance(img, str) and img.strip():
+                    result.append({"data": img.strip(), "mime_type": "image/jpeg"})
+        if not result and self.image_base64:
+            result.append({
+                "data": self.image_base64,
+                "mime_type": self.image_mime or "image/jpeg"
+            })
+        return result
 
 
 class AIChatResponse(BaseModel):
