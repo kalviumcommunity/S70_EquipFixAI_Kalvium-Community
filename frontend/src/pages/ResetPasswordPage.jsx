@@ -120,18 +120,16 @@ export const ResetPasswordPage = () => {
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none', marginBottom: '14px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              backgroundColor: '#2563eb',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white'
-            }}>
-              <Wrench size={20} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                objectFit: 'contain'
+              }}
+            />
             <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
               EquipFix<span style={{ color: '#38bdf8' }}>AI</span>
             </span>

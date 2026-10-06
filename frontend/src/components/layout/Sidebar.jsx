@@ -304,21 +304,17 @@ export const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
               style={{
                 width: '36px',
                 height: '36px',
-                borderRadius: '9px',
-                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                boxShadow: '0 0 16px rgba(37, 99, 235, 0.45)',
+                borderRadius: '8px',
+                objectFit: 'contain',
+                boxShadow: '0 0 16px rgba(37, 99, 235, 0.35)',
               }}
-            >
-              <Wrench size={19} />
-            </div>
+            />
             <div>
               <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
                 EquipFix<span style={{ color: '#38bdf8' }}>AI</span>
