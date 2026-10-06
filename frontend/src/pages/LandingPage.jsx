@@ -5,7 +5,7 @@ import { authApi } from '../services/api';
 import {
   Wrench, Shield, ArrowRight, Sparkles, HardHat,
   UserCheck, Factory, Zap, Activity, Cpu, CheckCircle2,
-  Radio, Layers, Compass, BookOpen, ExternalLink, ShieldCheck,
+  Radio, Layers, Compass, ExternalLink, ShieldCheck,
   Package, FileText, Check, Clock, ChevronRight
 } from 'lucide-react';
 
@@ -186,71 +186,8 @@ export const LandingPage = () => {
               </div>
             </div>
           </Link>
-
-          {/* Quick Nav Links */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <Link
-              to="/documents"
-              style={{
-                color: '#cbd5e1',
-                textDecoration: 'none',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'color 0.15s ease'
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.color = '#38bdf8'; }}
-              onMouseOut={(e) => { e.currentTarget.style.color = '#cbd5e1'; }}
-            >
-              <BookOpen size={15} color="#38bdf8" />
-              <span>OEM Manuals &amp; Schematics</span>
-            </Link>
-
-            <Link
-              to="/documents?type=SAFETY"
-              style={{
-                color: '#cbd5e1',
-                textDecoration: 'none',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'color 0.15s ease'
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.color = '#34d399'; }}
-              onMouseOut={(e) => { e.currentTarget.style.color = '#cbd5e1'; }}
-            >
-              <ShieldCheck size={15} color="#34d399" />
-              <span>OSHA 1910.147 LOTO</span>
-            </Link>
-          </div>
-
-          {/* Telemetry Indicator & Actions */}
+          {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 14px',
-              borderRadius: '20px',
-              backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              fontSize: '0.75rem',
-              color: '#34d399',
-              fontWeight: 700
-            }}>
-              <span style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: '#10b981',
-                boxShadow: '0 0 10px #10b981'
-              }} />
-              <span>Fleet Online: {plantStats.total_machines} Units Nominal</span>
-            </div>
 
             {user ? (
               <button
