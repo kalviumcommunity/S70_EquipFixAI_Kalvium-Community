@@ -6,7 +6,7 @@ export const AIAssistantPage = () => {
     <div style={{
       height: 'calc(100vh - 60px)',
       width: '100%',
-      backgroundColor: '#080c16',
+      backgroundColor: '#f8fafc',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
