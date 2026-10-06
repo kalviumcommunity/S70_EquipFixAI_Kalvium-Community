@@ -903,17 +903,19 @@ export const AITroubleshootingPanel = ({
     };
   }, [machines, incidents]);
 
-  // Polite auto-scroll: keep bottom visible unless user is reading older messages
+  // Polite auto-scroll: keep bottom visible inside chat container only
   const scrollToBottom = (behavior = 'smooth') => {
     const el = chatScrollRef.current;
-    if (!el) {
-      messagesEndRef.current?.scrollIntoView({ behavior });
-      return;
-    }
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 180;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 280;
     if (isNearBottom || isSendingRef.current) {
       requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior });
+        if (el) {
+          el.scrollTo({
+            top: el.scrollHeight,
+            behavior
+          });
+        }
       });
     }
   };
@@ -1722,25 +1724,25 @@ export const AITroubleshootingPanel = ({
           </div>
         </div>
 
-        {/* 2. Chat Feed Container */}
+        {/* 2. Scrollable Chat Feed Container */}
         <div
           ref={chatScrollRef}
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
-            padding: '24px 28px',
-            display: 'flex',
-            flexDirection: 'column',
+            overflowX: 'hidden',
             backgroundColor: '#f8fafc'
           }}
         >
           <div style={{
-            maxWidth: '960px',
+            maxWidth: '920px',
             width: '100%',
             margin: '0 auto',
+            padding: '20px 24px 28px 24px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '20px'
+            gap: '18px'
           }}>
           {/* Current Equipment Context Card (MATCHING SCREENSHOT) */}
           <div style={{
@@ -2425,13 +2427,23 @@ export const AITroubleshootingPanel = ({
             </div>
           )}
 
-          <div ref={messagesEndRef} style={{ height: '1px', flexShrink: 0 }} />
+          <div ref={messagesEndRef} style={{ height: '4px', flexShrink: 0 }} />
         </div>
+      </div>
 
-        {/* 3. Action Pills Bar + Floating Prompt Input */}
+      {/* 3. Pinned Bottom Composer Bar (Fixed at bottom of screen, never bounces up/down) */}
+      <div style={{
+        flexShrink: 0,
+        backgroundColor: '#ffffff',
+        borderTop: '1px solid #e2e8f0',
+        padding: '12px 24px 16px 24px',
+        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)',
+        zIndex: 10
+      }}>
         <div style={{
-          padding: '12px 24px 20px 24px',
-          backgroundColor: '#f8fafc',
+          maxWidth: '920px',
+          width: '100%',
+          margin: '0 auto',
           display: 'flex',
           flexDirection: 'column',
           gap: '10px'
@@ -2639,7 +2651,11 @@ export const AITroubleshootingPanel = ({
             <textarea
               ref={textareaRef}
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              onChange={(e) => {
+                setQuestion(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+              }}
               onPaste={handlePaste}
               onKeyDown={(e) => {
                 if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
