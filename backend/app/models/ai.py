@@ -42,3 +42,19 @@ class AISource(Base):
     query = relationship("AIQuery", back_populates="sources")
     document = relationship("Document")
     chunk = relationship("DocumentChunk")
+
+
+class AIChatFeedback(Base):
+    __tablename__ = "ai_chat_feedbacks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    conversation_id = Column(String(100), nullable=True, index=True)
+    message_id = Column(String(100), nullable=False, index=True)
+    reaction = Column(String(30), nullable=False)
+    category = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User")

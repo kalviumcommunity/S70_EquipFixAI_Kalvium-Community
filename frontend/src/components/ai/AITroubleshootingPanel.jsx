@@ -12,6 +12,8 @@ import {
   getAIConfig, saveAIConfig, askEquipFixCopilot, generateIndustrialImage
 } from '../../services/aiCopilotService';
 import AIKeyConfigModal from './AIKeyConfigModal';
+import SafeMarkdownRenderer from './SafeMarkdownRenderer';
+import AIThinkingEffect from './AIThinkingEffect';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIGHT THEMED RICH HTML RESPONSE STYLES (MATCHING REFERENCE DESIGN)
@@ -559,18 +561,8 @@ function formatAIContentToHtml(content) {
 }
 
 export const FormattedAIMessage = ({ content }) => {
-  useEffect(() => { injectAIStyles(); }, []);
   if (!content) return null;
-
-  const html = formatAIContentToHtml(content);
-
-  return (
-    <div
-      className="ai-response-root"
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <SafeMarkdownRenderer content={content} />;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -640,6 +632,9 @@ export const AITroubleshootingPanel = ({
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [copiedId, setCopiedId] = useState(null);
   const [feedback, setFeedback] = useState({});
+  const [activeNegativeFeedbackId, setActiveNegativeFeedbackId] = useState(null);
+  const [feedbackCategory, setFeedbackCategory] = useState('Not clear');
+  const [feedbackNotes, setFeedbackNotes] = useState('');
 
   // Voice & Attachments
   const [isListening, setIsListening] = useState(false);
@@ -886,17 +881,19 @@ export const AITroubleshootingPanel = ({
     };
   }, [machines, incidents]);
 
-  // Scoped smooth scroll inside chat feed only
+  // Polite auto-scroll: keep bottom visible unless user is reading older messages
   const scrollToBottom = (behavior = 'smooth') => {
-    requestAnimationFrame(() => {
+    const el = chatScrollRef.current;
+    if (!el) {
       messagesEndRef.current?.scrollIntoView({ behavior });
-      if (chatScrollRef.current) {
-        chatScrollRef.current.scrollTo({
-          top: chatScrollRef.current.scrollHeight,
-          behavior
-        });
-      }
-    });
+      return;
+    }
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 180;
+    if (isNearBottom || isSendingRef.current) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior });
+      });
+    }
   };
 
   useEffect(() => {
@@ -1076,7 +1073,11 @@ export const AITroubleshootingPanel = ({
         setMessages((prev) =>
           prev.map((m) =>
             m.id === asstId
-              ? { ...m, content: `${m.content}\n\n<div class="ai-warn">⚠️ <strong>Notice:</strong> ${err.message || 'Stream finalized.'}</div>` }
+              ? {
+                  ...m,
+                  content: `${m.content}\n\n*Sorry, the response was interrupted. Please retry if needed.*`,
+                  retryPrompt: p
+                }
               : m
           )
         );
@@ -1089,7 +1090,7 @@ export const AITroubleshootingPanel = ({
             isError: true,
             retryPrompt: p,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            content: `<div class="ai-warn">⚠️ <strong>Error:</strong> ${err.message || 'Unable to execute query. Please try again.'}</div>`
+            content: "Sorry, I couldn't process that request."
           }
         ]);
       }
@@ -1132,10 +1133,69 @@ export const AITroubleshootingPanel = ({
 
   // Copy handler
   const handleCopy = (text, id) => {
-    const clean = text.replace(/<[^>]*>/g, '').trim();
-    navigator.clipboard.writeText(clean);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    let clean = (text || '').trim();
+    if (typeof document !== 'undefined') {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = clean;
+      clean = tempDiv.innerText || tempDiv.textContent || clean;
+    }
+    navigator.clipboard.writeText(clean).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {
+      navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
+  // Feedback Handlers (Helpful / Not Helpful)
+  const handleFeedback = async (msgId, reaction) => {
+    if (reaction === 'thumbs_up') {
+      setActiveNegativeFeedbackId(null);
+      setFeedback((prev) => ({ ...prev, [msgId]: { reaction: 'thumbs_up' } }));
+      try {
+        await aiApi.submitChatFeedback({
+          message_id: String(msgId),
+          reaction: 'thumbs_up',
+          conversation_id: currentChatId
+        });
+      } catch (err) {
+        console.warn('Feedback save warning:', err);
+      }
+    } else if (reaction === 'thumbs_down') {
+      if (activeNegativeFeedbackId === msgId) {
+        setActiveNegativeFeedbackId(null);
+      } else {
+        setActiveNegativeFeedbackId(msgId);
+        setFeedbackCategory('Not clear');
+        setFeedbackNotes('');
+      }
+    }
+  };
+
+  const handleSaveNegativeFeedback = async (msgId) => {
+    setFeedback((prev) => ({
+      ...prev,
+      [msgId]: {
+        reaction: 'thumbs_down',
+        category: feedbackCategory,
+        notes: feedbackNotes
+      }
+    }));
+    setActiveNegativeFeedbackId(null);
+
+    try {
+      await aiApi.submitChatFeedback({
+        message_id: String(msgId),
+        reaction: 'thumbs_down',
+        category: feedbackCategory,
+        notes: feedbackNotes || undefined,
+        conversation_id: currentChatId
+      });
+    } catch (err) {
+      console.warn('Feedback save warning:', err);
+    }
   };
 
   // Clear Chat Handler
@@ -1952,423 +2012,223 @@ export const AITroubleshootingPanel = ({
                 )}
 
                 {/* Actions row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9', marginTop: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9', marginTop: '6px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Helpful */}
                     <button
                       type="button"
-                      onClick={() => setFeedback((prev) => ({ ...prev, [m.id]: 'helpful' }))}
+                      onClick={() => handleFeedback(m.id, 'thumbs_up')}
+                      title="Helpful"
                       style={{
-                        background: feedback[m.id] === 'helpful' ? '#dcfce7' : '#f8fafc',
-                        border: '1px solid #e2e8f0',
+                        background: feedback[m.id]?.reaction === 'thumbs_up' ? '#dcfce7' : '#f8fafc',
+                        border: '1px solid',
+                        borderColor: feedback[m.id]?.reaction === 'thumbs_up' ? '#86efac' : '#e2e8f0',
                         borderRadius: '6px',
                         padding: '4px 10px',
-                        fontSize: '0.72rem',
+                        fontSize: '0.74rem',
                         fontWeight: 600,
-                        color: feedback[m.id] === 'helpful' ? '#15803d' : '#64748b',
+                        color: feedback[m.id]?.reaction === 'thumbs_up' ? '#15803d' : '#64748b',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '5px',
+                        transition: 'all 0.15s ease'
                       }}
                     >
                       <ThumbsUp size={12} />
                       <span>Helpful</span>
                     </button>
 
+                    {/* Not Helpful */}
                     <button
                       type="button"
-                      onClick={() => setFeedback((prev) => ({ ...prev, [m.id]: 'unhelpful' }))}
+                      onClick={() => handleFeedback(m.id, 'thumbs_down')}
+                      title="Not helpful"
                       style={{
-                        background: feedback[m.id] === 'unhelpful' ? '#fee2e2' : '#f8fafc',
-                        border: '1px solid #e2e8f0',
+                        background: feedback[m.id]?.reaction === 'thumbs_down' ? '#fee2e2' : '#f8fafc',
+                        border: '1px solid',
+                        borderColor: feedback[m.id]?.reaction === 'thumbs_down' ? '#fca5a5' : '#e2e8f0',
                         borderRadius: '6px',
                         padding: '4px 10px',
-                        fontSize: '0.72rem',
+                        fontSize: '0.74rem',
                         fontWeight: 600,
-                        color: feedback[m.id] === 'unhelpful' ? '#991b1b' : '#64748b',
+                        color: feedback[m.id]?.reaction === 'thumbs_down' ? '#991b1b' : '#64748b',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '5px',
+                        transition: 'all 0.15s ease'
                       }}
                     >
                       <ThumbsDown size={12} />
                       <span>Not helpful</span>
                     </button>
+
+                    {/* Explain differently */}
+                    <button
+                      type="button"
+                      onClick={() => handleSendPrompt('Explain the previous answer in simpler terms.')}
+                      disabled={loading}
+                      title="Explain previous answer in simpler terms"
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        color: '#475569',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                    >
+                      <Sparkles size={12} color="#2563eb" />
+                      <span>Explain differently</span>
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(m.content, m.id)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {/* Copy */}
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(m.content, m.id)}
+                      title="Copy response text"
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {copiedId === m.id ? <Check size={12} color="#16a34a" /> : <Copy size={12} />}
+                      <span>{copiedId === m.id ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline Negative Feedback Interface (Requirement 11) */}
+                {activeNegativeFeedbackId === m.id && (
+                  <div
                     style={{
-                      background: '#f8fafc',
+                      marginTop: '8px',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      backgroundColor: '#f8fafc',
                       border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      padding: '4px 10px',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      color: '#64748b',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
+                      animation: 'fadeInUp 0.18s ease-out'
                     }}
                   >
-                    {copiedId === m.id ? <Check size={12} color="#16a34a" /> : <Copy size={12} />}
-                    <span>{copiedId === m.id ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155' }}>
+                        What's wrong with this answer?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveNegativeFeedbackId(null)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
 
-                {/* Ask a Doubt / Clarification Bar */}
-                <div style={{
-                  marginTop: '10px',
-                  padding: '10px 14px',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <HelpCircle size={13} color="#2563eb" /> Didn't understand something? Ask a doubt:
-                    </span>
-                    <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>Direct Gemini Response</span>
-                  </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                      {['Incorrect information', 'Not clear', 'Too long', 'Not relevant', 'Missing information', 'Other'].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setFeedbackCategory(cat)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '14px',
+                            fontSize: '0.72rem',
+                            fontWeight: 500,
+                            border: '1px solid',
+                            borderColor: feedbackCategory === cat ? '#2563eb' : '#cbd5e1',
+                            backgroundColor: feedbackCategory === cat ? '#eff6ff' : '#ffffff',
+                            color: feedbackCategory === cat ? '#1d4ed8' : '#475569',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleSendPrompt('Can you explain the previous diagnostic response in simpler, beginner-friendly terms with clearer practical guidance?')}
-                      disabled={loading}
+                    <textarea
+                      value={feedbackNotes}
+                      onChange={(e) => setFeedbackNotes(e.target.value)}
+                      placeholder="Tell us what could be improved... (optional)"
+                      rows={2}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        backgroundColor: '#ffffff',
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
                         border: '1px solid #cbd5e1',
-                        borderRadius: '16px',
-                        padding: '4px 10px',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        color: '#1e293b',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.15s ease'
+                        fontSize: '0.78rem',
+                        resize: 'none',
+                        marginBottom: '8px',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#ffffff'
                       }}
-                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
-                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                    >
-                      <span>💡 Explain Simpler</span>
-                    </button>
+                    />
 
-                    <button
-                      type="button"
-                      onClick={() => handleSendPrompt('Could you clarify the exact step-by-step procedure and specify which tools and torque limits to use?')}
-                      disabled={loading}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '16px',
-                        padding: '4px 10px',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        color: '#1e293b',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
-                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                    >
-                      <span>🔧 Clarify Steps & Tools</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuestion('Regarding the previous answer, I have a doubt: ');
-                        textareaRef.current?.focus();
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        backgroundColor: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '16px',
-                        padding: '4px 10px',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        color: '#2563eb',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dbeafe'; }}
-                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
-                    >
-                      <MessageSquare size={11} />
-                      <span>Type Custom Doubt</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveNegativeFeedbackId(null)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: '#ffffff',
+                          color: '#64748b',
+                          fontSize: '0.74rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveNegativeFeedback(m.id)}
+                        style={{
+                          padding: '5px 14px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: '#2563eb',
+                          color: '#ffffff',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Submit feedback
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
 
-          {/* Assistant Live Diagnostic Analyzing Effect */}
+          {/* Subtle Modern ChatGPT-Style Analyzing Indicator */}
           {loading && (
-            <div
-              style={{
-                display: 'inline-flex',
-                flexDirection: 'column',
-                backgroundColor: '#ffffff',
-                border: '1px solid rgba(56, 189, 248, 0.45)',
-                borderRadius: '14px',
-                boxShadow: '0 8px 24px -4px rgba(2, 132, 199, 0.16), 0 0 16px rgba(56, 189, 248, 0.1)',
-                overflow: 'hidden',
-                maxWidth: '520px',
-                animation: 'analyzingPulseGlow 2.5s infinite ease-in-out',
-                marginBottom: '6px',
-                position: 'relative'
-              }}
-            >
-              {/* Laser Scanning Beam Top Line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '2.5px',
-                  background: 'linear-gradient(90deg, transparent, #0284c7, #38bdf8, #06b6d4, #6366f1, transparent)',
-                  animation: 'analyzingScanBeam 1.8s linear infinite'
-                }}
-              />
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '14px',
-                  padding: '12px 16px',
-                  backgroundColor: '#ffffff'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {/* Active Sonar Radar Scanner */}
-                  <div
-                    style={{
-                      position: 'relative',
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                      border: '1.5px solid rgba(14, 165, 233, 0.45)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 0 12px rgba(14, 165, 233, 0.25)',
-                      flexShrink: 0,
-                      overflow: 'hidden'
-                    }}
-                    title="Active AI Diagnostic Radar"
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'conic-gradient(from 0deg, rgba(14, 165, 233, 0.6) 0deg, transparent 60deg, transparent 360deg)',
-                        animation: 'analyzingRadarSweep 1.8s linear infinite'
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: '14px',
-                        height: '14px',
-                        borderRadius: '50%',
-                        border: '1px dashed rgba(14, 165, 233, 0.6)',
-                        zIndex: 1
-                      }}
-                    />
-                    <Sparkles size={11} color="#0284c7" style={{ position: 'relative', zIndex: 2 }} />
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span
-                        style={{
-                          fontSize: '0.675rem',
-                          fontWeight: 800,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          color: '#0284c7',
-                          backgroundColor: '#e0f2fe',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          border: '1px solid #bae6fd'
-                        }}
-                      >
-                        ANALYZING
-                      </span>
-                      <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
-                        EquipFix AI Diagnostic Engine
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: '#475569',
-                        marginTop: '2px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        maxWidth: '280px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px'
-                      }}
-                    >
-                      <span style={{
-                        display: 'inline-block',
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        backgroundColor: '#0284c7',
-                        animation: 'telemetryChipPulse 1.4s ease-in-out infinite'
-                      }} />
-                      <span>{thinkingStage || 'Analyzing equipment telemetry & root cause...'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side: Equalizer Waveform + Monospace Latency + Stop Button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                  {/* Dynamic 5-Bar Frequency Waveform */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-end',
-                      gap: '2.5px',
-                      height: '18px',
-                      padding: '2px',
-                      backgroundColor: '#f0f9ff',
-                      borderRadius: '4px',
-                      border: '1px solid #bae6fd'
-                    }}
-                    title="Real-time telemetry signal streaming"
-                  >
-                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar1 0.9s ease-in-out infinite' }} />
-                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar2 1.1s ease-in-out infinite' }} />
-                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar3 0.8s ease-in-out infinite' }} />
-                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar4 1.2s ease-in-out infinite' }} />
-                    <span style={{ width: '3px', backgroundColor: '#0284c7', borderRadius: '1px', animation: 'telemetryBar5 1.0s ease-in-out infinite' }} />
-                  </div>
-
-                  {/* Monospace Latency Timer */}
-                  <span
-                    style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      fontFamily: 'monospace',
-                      color: '#0284c7',
-                      backgroundColor: '#f0f9ff',
-                      padding: '2px 6px',
-                      borderRadius: '5px',
-                      border: '1px solid #bae6fd'
-                    }}
-                    title="Diagnostic processing elapsed time"
-                  >
-                    {thinkingElapsed}s
-                  </span>
-
-                  {/* Interactive Stop Button */}
-                  <button
-                    onClick={handleStopGenerating}
-                    type="button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      padding: '4px 9px',
-                      borderRadius: '7px',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      color: '#475569',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      flexShrink: 0
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#fee2e2';
-                      e.currentTarget.style.color = '#dc2626';
-                      e.currentTarget.style.borderColor = '#fca5a5';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f8fafc';
-                      e.currentTarget.style.color = '#475569';
-                      e.currentTarget.style.borderColor = '#cbd5e1';
-                    }}
-                    title="Stop generating response"
-                  >
-                    <Square size={10} style={{ fill: 'currentColor' }} />
-                    <span>Stop</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Bottom Telemetry Scanning Status Ribbon */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  backgroundColor: '#f8fafc',
-                  borderTop: '1px solid #f1f5f9',
-                  fontSize: '0.68rem',
-                  color: '#64748b'
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: '#0369a1',
-                    fontWeight: 600,
-                    animation: 'telemetryChipPulse 2s ease-in-out infinite'
-                  }}
-                >
-                  <Zap size={11} color="#0284c7" />
-                  <span>Telemetry Scanning</span>
-                </span>
-                <span>•</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <Brain size={11} color="#6366f1" />
-                  <span>1,400+ OEM Schematics</span>
-                </span>
-                <span>•</span>
-                <span style={{ color: '#059669', fontWeight: 600 }}>OSHA / ISO Verified</span>
-                {machineCode && (
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      color: '#2563eb',
-                      fontWeight: 700,
-                      fontFamily: 'monospace'
-                    }}
-                  >
-                    Station: {machineCode}
-                  </span>
-                )}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px', marginBottom: '10px' }}>
+              <AIThinkingEffect label="Analyzing..." onStop={handleStopGenerating} />
             </div>
           )}
 
@@ -2456,7 +2316,9 @@ export const AITroubleshootingPanel = ({
               onKeyDown={(e) => {
                 if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
                   e.preventDefault();
-                  handleSendPrompt();
+                  if (!loading && !isSendingRef.current) {
+                    handleSendPrompt();
+                  }
                 }
               }}
               placeholder="Ask EquipFixAI anything... (Press Enter to send, Shift+Enter for new line)"

@@ -187,6 +187,7 @@ export const documentsApi = {
 export const aiApi = {
   query: (data) => api.post('/ai/query', data),
   chat: (data) => api.post('/ai/chat', data),
+  submitChatFeedback: (data) => api.post('/chat/feedback', data),
   verifyKey: (data) => api.post('/ai/verify-key', data),
   getModels: (params) => api.get('/ai/models', { params }),
   feedback: (queryId, data) => api.post(`/ai/queries/${queryId}/feedback`, data),

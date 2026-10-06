@@ -1,4 +1,5 @@
 import os
+import time
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -336,4 +337,44 @@ def test_ai_chat_and_verify_key(client: TestClient, db_session: Session, seeded_
     ver_data = ver_res.json()
     assert "success" in ver_data
     assert ver_data["success"] is False
+
+
+def test_ai_chat_feedback_persistence_and_update(client: TestClient, db_session: Session, seeded_users):
+    """Verify chat feedback is recorded and updating reaction (👍 -> 👎) updates the existing record without duplicates."""
+    headers = get_auth_header("tech_user", UserRole.TECHNICIAN.value)
+    from app.models.ai import AIChatFeedback
+
+    msg_id = f"test-asst-{int(time.time())}"
+
+    # 1. Post initial thumbs up
+    fb1 = client.post("/api/chat/feedback", json={
+        "message_id": msg_id,
+        "reaction": "thumbs_up",
+        "conversation_id": "chat-cnc04"
+    }, headers=headers)
+    assert fb1.status_code == 200
+    assert fb1.json()["success"] is True
+
+    records_count = db_session.query(AIChatFeedback).filter(AIChatFeedback.message_id == msg_id).count()
+    assert records_count == 1
+    rec = db_session.query(AIChatFeedback).filter(AIChatFeedback.message_id == msg_id).first()
+    assert rec.reaction == "thumbs_up"
+
+    # 2. Change reaction to thumbs down with category and notes
+    fb2 = client.post("/api/chat/feedback", json={
+        "message_id": msg_id,
+        "reaction": "thumbs_down",
+        "category": "Not clear",
+        "notes": "Please provide clearer practical guidance.",
+        "conversation_id": "chat-cnc04"
+    }, headers=headers)
+    assert fb2.status_code == 200
+
+    # Ensure updated rather than duplicated
+    records_count_after = db_session.query(AIChatFeedback).filter(AIChatFeedback.message_id == msg_id).count()
+    assert records_count_after == 1
+    rec_updated = db_session.query(AIChatFeedback).filter(AIChatFeedback.message_id == msg_id).first()
+    assert rec_updated.reaction == "thumbs_down"
+    assert rec_updated.category == "Not clear"
+    assert "clearer practical guidance" in rec_updated.notes
 
