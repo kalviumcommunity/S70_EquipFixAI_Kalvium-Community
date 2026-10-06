@@ -735,11 +735,11 @@ export const Navbar = ({ onToggleSidebar }) => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
               ) : (
-                user?.full_name ? (user.full_name.includes(' ') ? `${user.full_name.split(' ')[0][0]}${user.full_name.split(' ')[1][0]}` : user.full_name[0]) : 'JD'
+                user?.full_name ? (user.full_name.includes(' ') ? `${user.full_name.split(' ')[0][0]}${user.full_name.split(' ')[1][0]}` : user.full_name[0]) : (user?.username?.[0] || 'U').toUpperCase()
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: isAiAssistant ? '#ffffff' : '#0f172a' }}>{user?.full_name || 'John Doe'}</span>
+              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: isAiAssistant ? '#ffffff' : '#0f172a' }}>{user?.full_name || user?.username || 'User'}</span>
               <span style={{
                 fontSize: '0.65rem',
                 fontWeight: 700,

@@ -536,19 +536,17 @@ export const LoginPage = () => {
         {/* Brand Header */}
         <div style={{ position: 'relative', zIndex: 1 }}>
           <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', textDecoration: 'none' }}>
-            <div style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              boxShadow: '0 0 22px rgba(14, 165, 233, 0.45)'
-            }}>
-              <Wrench size={24} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
+              style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '12px',
+                objectFit: 'contain',
+                boxShadow: '0 0 22px rgba(14, 165, 233, 0.45)'
+              }}
+            />
             <div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 EquipFix<span style={{ color: '#38bdf8' }}>AI</span>

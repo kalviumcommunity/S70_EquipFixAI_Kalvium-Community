@@ -83,19 +83,17 @@ export const ForgotPasswordPage = () => {
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none', marginBottom: '16px' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              boxShadow: '0 0 20px rgba(14, 165, 233, 0.35)'
-            }}>
-              <Wrench size={22} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '12px',
+                objectFit: 'contain',
+                boxShadow: '0 0 20px rgba(14, 165, 233, 0.35)'
+              }}
+            />
             <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff' }}>
               EquipFix<span style={{ color: '#38bdf8' }}>AI</span>
             </span>

@@ -146,19 +146,17 @@ export const LandingPage = () => {
         }}>
           {/* Brand */}
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              boxShadow: '0 0 16px rgba(14, 165, 233, 0.5)'
-            }}>
-              <Wrench size={22} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                objectFit: 'contain',
+                boxShadow: '0 0 16px rgba(14, 165, 233, 0.4)'
+              }}
+            />
             <div>
               <div style={{
                 fontSize: '1.35rem',
@@ -884,19 +882,17 @@ export const LandingPage = () => {
           gap: '16px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              boxShadow: '0 0 12px rgba(14, 165, 233, 0.4)'
-            }}>
-              <Wrench size={18} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="EquipFix AI"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                objectFit: 'contain',
+                boxShadow: '0 0 12px rgba(14, 165, 233, 0.3)'
+              }}
+            />
             <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#ffffff' }}>
               EquipFix<span style={{ color: '#38bdf8' }}>AI</span>
             </span>
