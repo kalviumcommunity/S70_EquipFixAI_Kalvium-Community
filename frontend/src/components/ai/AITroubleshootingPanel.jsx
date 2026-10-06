@@ -716,9 +716,19 @@ export const AITroubleshootingPanel = ({
   };
 
   useEffect(() => {
+    const handleViewerEvent = (e) => {
+      if (e.detail?.url) {
+        setViewerImages([{ url: e.detail.url, name: e.detail.name || 'Industrial Equipment View' }]);
+        setViewerIndex(0);
+        setViewerOpen(true);
+      }
+    };
+    window.addEventListener('equipfix:open-image-viewer', handleViewerEvent);
+
     return () => {
       if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
+      window.removeEventListener('equipfix:open-image-viewer', handleViewerEvent);
     };
   }, []);
 
@@ -1079,14 +1089,30 @@ export const AITroubleshootingPanel = ({
 
     // Dynamic Multi-Stage AI Vision & Diagnostics Indicator
     const hasImages = messageImages.length > 0;
-    setThinkingStage(hasImages ? '🔍 Analyzing machine image...' : 'Analyzing equipment telemetry & fault signals...');
+    const isImageRequest = /\b(generate|create|render|visualize|draw|show\s+me)\b.*\b(image|picture|photo|diagram|illustration|schematic|view)\b/i.test(p) ||
+      /^(show\s+me|visualize\s+it|generate\s+it|generate\s+an?\s+image)$/i.test(p.trim());
+
+    if (isImageRequest) {
+      setThinkingStage('🎨 Generating photorealistic industrial visualization...');
+    } else if (hasImages) {
+      setThinkingStage('🔍 Analyzing machine image with multimodal vision...');
+    } else {
+      setThinkingStage('Analyzing equipment telemetry & fault signals...');
+    }
+
     const startTime = Date.now();
     if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
     thinkingTimerRef.current = setInterval(() => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       setThinkingElapsed(elapsed);
       const sec = parseFloat(elapsed);
-      if (hasImages) {
+      if (isImageRequest) {
+        if (sec > 3.0) {
+          setThinkingStage('✨ Rendering high-detail industrial machinery & fault geometry...');
+        } else if (sec > 1.2) {
+          setThinkingStage('⚙️ Formulating technical schematic & realistic materials...');
+        }
+      } else if (hasImages) {
         if (sec > 5.0) {
           setThinkingStage('🛠️ Preparing precision diagnosis & safety precautions...');
         } else if (sec > 3.6) {
@@ -1111,7 +1137,9 @@ export const AITroubleshootingPanel = ({
     try {
       const historyList = messages.map((m) => ({
         role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content
+        content: m.content,
+        images: m.images || (m.image ? [{ data: m.image, mime_type: 'image/jpeg' }] : []),
+        image: m.image || null
       }));
 
       const res = await askEquipFixCopilot({

@@ -156,7 +156,8 @@ export const askEquipFixCopilot = async ({
     .filter((h) => h && h.id !== 'welcome' && !String(h.id || '').startsWith('sys-') && !String(h.id || '').startsWith('err-'))
     .map((h) => ({
       role: (h.role === 'user' || h.sender === 'user') ? 'user' : 'model',
-      content: typeof h.content === 'string' ? h.content : (h.text || h.message || '')
+      content: typeof h.content === 'string' ? h.content : (h.text || h.message || ''),
+      images: Array.isArray(h.images) && h.images.length ? h.images : (h.image ? [{ data: h.image, mime_type: 'image/jpeg' }] : undefined)
     }));
 
   const requestPayload = {
