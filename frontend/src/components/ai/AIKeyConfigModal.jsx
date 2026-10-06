@@ -57,7 +57,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     } else if (clean.startsWith('AIza') || clean.startsWith('AQ.')) {
       if (provider !== 'gemini') {
         setProvider('gemini');
-        setModel('gemini-3.8-flash');
+        setModel('gemini-2.5-flash');
       }
     }
   };
@@ -75,7 +75,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
     } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
-      effectiveModel = 'gemini-3.8-flash';
+      effectiveModel = 'gemini-2.5-flash';
     }
 
     if (effectiveModel === 'custom' && !customModel.trim()) {
@@ -122,7 +122,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
     if (detectedProvider === 'openai' && (effectiveModel.startsWith('gemini') || effectiveModel === 'custom')) {
       effectiveModel = 'gpt-4o-mini';
     } else if (detectedProvider === 'gemini' && (effectiveModel.startsWith('gpt') || effectiveModel.startsWith('o1') || effectiveModel.startsWith('o3'))) {
-      effectiveModel = 'gemini-3.8-flash';
+      effectiveModel = 'gemini-2.5-flash';
     }
 
     saveAIConfig({ apiKey: cleanKey, provider: detectedProvider, model: effectiveModel, customModel });
@@ -449,7 +449,7 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => handleKeyChange(e.target.value)}
-                placeholder={provider === 'gemini' ? 'AIzaSy... or AQ.Ab...' : 'sk-...'}
+                placeholder={provider === 'gemini' ? 'AIzaSy... or AQ.Ab... (Paste one or multiple keys separated by commas)' : 'sk-... (Paste one or multiple keys)'}
                 style={{
                   width: '100%',
                   padding: '11px 44px 11px 14px',
@@ -480,8 +480,8 @@ export const AIKeyConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
                 {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '6px' }}>
-              Keys are stored securely in your workstation browser's local sandbox storage.
+            <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
+              💡 <strong>Multi-Key Support:</strong> You can enter single or multiple backup keys (separated by commas). If a key reaches its cloud quota, EquipFixAI will automatically rotate to the next key or fall back to local plant-grounded diagnostics!
             </p>
           </div>
 

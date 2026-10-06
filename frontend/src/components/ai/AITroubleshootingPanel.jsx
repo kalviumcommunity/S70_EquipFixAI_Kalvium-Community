@@ -1925,8 +1925,8 @@ export const AITroubleshootingPanel = ({
 
                 <FormattedAIMessage content={m.content} />
 
-                {m.needsKey && (
-                  <div style={{ marginTop: '8px' }}>
+                {(m.needsKey || (typeof m.content === 'string' && (m.content.includes('Configure AI Key') || m.content.includes('Quota Exceeded')))) && (
+                  <div style={{ marginTop: '10px' }}>
                     <button
                       type="button"
                       onClick={() => setShowConfigModal(true)}
@@ -1946,7 +1946,7 @@ export const AITroubleshootingPanel = ({
                       }}
                     >
                       <Key size={14} />
-                      <span>Configure Google Gemini API Key</span>
+                      <span>Configure / Switch API Key</span>
                     </button>
                   </div>
                 )}

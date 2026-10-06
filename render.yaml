@@ -46,6 +46,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://equipfixai-backend.onrender.com/api
+      - key: VITE_GEMINI_API_KEY
+        sync: false
 
 databases:
   # -------------------------------------------------------------
