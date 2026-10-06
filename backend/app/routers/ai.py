@@ -12,13 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.user import User
-from app.models.ai import AIQuery, AISource
+from app.models.ai import AIQuery, AISource, AIChatFeedback
 from app.models.machine import Machine
 from app.models.enums import AuditAction, GroundingStatus
 from app.auth.deps import get_current_user, get_current_user_optional
 from app.schemas.ai import (
     AIQueryRequest, AIQueryResponse, AIFeedbackRequest, AIQueryHistoryItem, AICitation, AIPreviousRepair,
-    AIChatRequest, AIChatResponse, AIVerifyKeyRequest, AIVerifyKeyResponse, AIModelItem
+    AIChatRequest, AIChatResponse, AIVerifyKeyRequest, AIVerifyKeyResponse, AIModelItem,
+    AIChatFeedbackRequest, AIChatFeedbackResponse
 )
 from app.rag.tools import StructuredTools
 from app.rag.retriever import RAGRetriever
@@ -214,6 +215,67 @@ def submit_query_feedback(
 
     db.commit()
     return {"status": "SUCCESS", "message": "Feedback submitted successfully."}
+
+
+@router.post("/chat/feedback", response_model=AIChatFeedbackResponse)
+def submit_chat_feedback(
+    fb_in: AIChatFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Store or update user reaction/feedback on an AI chat response.
+    Updates existing reaction if user changes 👍 <-> 👎, preventing duplicates.
+    """
+    user_id = current_user.id if current_user else None
+
+    # Check for existing feedback record for this message
+    existing_query = db.query(AIChatFeedback).filter(
+        AIChatFeedback.message_id == fb_in.message_id
+    )
+    if user_id:
+        existing_query = existing_query.filter(AIChatFeedback.user_id == user_id)
+    existing_record = existing_query.first()
+
+    if existing_record:
+        existing_record.reaction = fb_in.reaction
+        if fb_in.category is not None:
+            existing_record.category = fb_in.category
+        if fb_in.notes is not None:
+            existing_record.notes = fb_in.notes
+        existing_record.updated_at = datetime.utcnow()
+        feedback_id = existing_record.id
+    else:
+        new_feedback = AIChatFeedback(
+            user_id=user_id,
+            conversation_id=fb_in.conversation_id,
+            message_id=fb_in.message_id,
+            reaction=fb_in.reaction,
+            category=fb_in.category,
+            notes=fb_in.notes
+        )
+        db.add(new_feedback)
+        db.flush()
+        feedback_id = new_feedback.id
+
+    if user_id:
+        try:
+            AuditService.log_action(
+                db=db,
+                action=AuditAction.AI_FEEDBACK_RECORDED,
+                entity_type="ai_chat_feedback",
+                entity_id=feedback_id,
+                user_id=user_id,
+                new_value={"reaction": fb_in.reaction, "category": fb_in.category, "notes": fb_in.notes}
+            )
+        except Exception:
+            pass
+
+    db.commit()
+    return AIChatFeedbackResponse(
+        success=True,
+        message="Feedback recorded successfully.",
+        feedback_id=feedback_id
+    )
 
 
 @router.post("/queries/{query_id}/export")

@@ -141,3 +141,17 @@ class AIModelItem(BaseModel):
     description: Optional[str] = None
     supported_generation_methods: Optional[List[str]] = []
     is_default: bool = False
+
+
+class AIChatFeedbackRequest(BaseModel):
+    message_id: str
+    reaction: str  # 'thumbs_up' | 'thumbs_down' | 'helpful' | 'unhelpful'
+    conversation_id: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AIChatFeedbackResponse(BaseModel):
+    success: bool = True
+    message: str = "Feedback recorded successfully."
+    feedback_id: Optional[int] = None
